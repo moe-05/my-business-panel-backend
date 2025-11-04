@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { jwtSecret } from '@/common/constants';
 import { JwtService } from '@nestjs/jwt';
-import { IRequestWithCookies } from '../interfaces/request_with_cookies.interface';
+import { IRequestWithCookies } from '@/common/interfaces/request_with_cookies.interface';
 
 @Injectable()
 export class AuthenticationGuard implements CanActivate {
