@@ -29,4 +29,7 @@ export class NewClientDto {
 
   @IsString()
   address!: string;
+
+  @IsNumber()
+  customer_segment_type!: number;
 }
