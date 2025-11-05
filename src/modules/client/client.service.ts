@@ -26,7 +26,7 @@ export class ClientsService {
    * @returns: Client
    */
   async findClientById(clientId: string) {
-    const client = await this.db.query(queries.client.byId, [clientId]);
+    const client = await this.db.query(queries.client.getInfo, [clientId]);
 
     if (!client || client.rows.length === 0) {
       throw new NotFoundException('Client not found');
@@ -53,7 +53,7 @@ export class ClientsService {
       const exist = await this.db.query(queries.client.byEmail, [
         clientData.email,
       ]);
-      if (exist) {
+      if (exist.rows.length > 0) {
         console.log('Client with this email already exists');
       }
 
@@ -67,6 +67,7 @@ export class ClientsService {
         phone,
         birthdate,
         address,
+        customer_segment_type
       } = clientData;
 
       const newClient = await this.db.query(queries.client.create, [
@@ -79,6 +80,7 @@ export class ClientsService {
         phone,
         birthdate,
         address,
+        customer_segment_type
       ]);
       return newClient.rows[0];
     } catch (error) {
@@ -122,7 +124,7 @@ export class ClientsService {
 
     const queryString = `
       UPDATE core.tenant_customer
-      SET ${setString}, updated_at = NOW()
+      SET ${setString}
       WHERE tenant_customer_id = $${index}
       RETURNING *
     `;
