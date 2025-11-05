@@ -7,8 +7,10 @@ import {
   Get,
   NotFoundException,
   Param,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import { Response } from 'express';
 
 // @UseGuards(AuthorizationGuard)
 @Controller('document')
@@ -16,22 +18,34 @@ export class DocumentTypeController {
   constructor(private readonly documentTypeService: DocumentTypeService) {}
 
   @Get()
-  find(): DocumentType[] {
-    return this.documentTypeService.findAll();
+  find() {
+    const documentTypes = this.documentTypeService.findAll();
+    return documentTypes;
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string): DocumentType {
-    return this.documentTypeService.findById(id);
-  }
-
-  @Delete(':id')
-  delete(@Param('id') id: string): void {
+  findOne(@Param('id') id: string, @Res() res: Response) {
     const documentType = this.documentTypeService.findById(id);
     if (!documentType) {
       throw new NotFoundException(`Document type with ID ${id} not found`);
     }
-    this.documentTypeService.delete(id);
-    console.log(`Document type with ID ${id} deleted`);
+    return res.json({ documentType });
+  }
+
+  @Delete(':id')
+  delete(@Param('id') id: string, @Res() res: Response) {
+    const documentType = this.documentTypeService.findById(id);
+    if (!documentType) {
+      throw new NotFoundException(`Document type with ID ${id} not found`);
+    }
+    const deleted = this.documentTypeService.delete(id);
+    if (!deleted) {
+      return res
+        .json({ message: `Error deleting document type with ID ${id}` })
+        .status(500);
+    }
+    return res
+      .json({ message: `Document type with ID ${id} deleted` })
+      .status(204);
   }
 }

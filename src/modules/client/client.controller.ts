@@ -5,6 +5,7 @@ import {
   Controller,
   Delete,
   Get,
+  InternalServerErrorException,
   Param,
   Post,
   Res,
@@ -19,48 +20,80 @@ import { UpdateClientDto } from './dto/updateClient.dto';
 export class ClientsController {
   constructor(private readonly clientsService: ClientsService) {}
 
-  //TODO: Implement the logic with db connection
   @Get()
-  findAll(): Client[] {
-    return this.clientsService.getAllClients();
+  async findAll() {
+    try {
+      const allClients = await this.clientsService.getAllClients();
+      return allClients;
+    } catch (error) {
+      throw new InternalServerErrorException('Error fetching clients');
+    }
   }
 
   @Get(':id')
-  findOneClient(@Param('id') id: string, @Res() response: Response) {
-    const client = this.clientsService.findClientById(id);
-    if (!client) {
-      response.status(404).send({ message: 'Client not found' });
+  async findOneClient(@Param('id') id: string, @Res() response: Response) {
+    try {
+      const client = await this.clientsService.findClientById(id);
+      if (!client) {
+        response.status(404).send({ message: 'Client not found' });
+      }
+      return response.json(client);
+    } catch (error) {
+      throw new InternalServerErrorException('Error fetching client');
     }
-    return response.json({ client });
   }
 
-  @Post('new')
-  createClient(
-    @Body() request: NewClientDto,
-    @Res() response: Response,
-  ) {
-    const client = this.clientsService.createClient(request);
+  @Post()
+  async createClient(@Body() request: NewClientDto, @Res() response: Response) {
+    try {
+      const client = await this.clientsService.createClient(request);
 
-    if (!client) {
-      return response.status(400).send({ message: 'Error creating client' });
+      if (!client) {
+        return response.status(400).send({ message: 'Error creating client' });
+      }
+
+      return response
+        .json({ message: 'Client created successfully', client })
+        .status(201);
+    } catch (error) {
+      throw new InternalServerErrorException('Error creating client');
     }
-
-    return response
-      .json({ message: 'Client created successfully', client })
-      .status(201);
   }
 
   @Post('update/:id')
-  updateClient(
+  async updateClient(
     @Param('id') id: string,
     @Body()
     request: UpdateClientDto,
-  ): Client {
-    return this.clientsService.updateClient(id, request);
+    @Res() response: Response,
+  ) {
+    try {
+      const updatedClient = await this.clientsService.updateClient(id, request);
+      if (!updatedClient) {
+        return response.status(400).send({ message: 'Error updating client' });
+      }
+      return response.json({
+        message: 'Client updated successfully',
+        client: updatedClient,
+      });
+    } catch (error) {
+      throw new InternalServerErrorException('Error updating client');
+    }
   }
 
   @Delete(':id')
-  deleteClient(@Param('id') id: string): void {
-    this.clientsService.deleteClient(id);
+  async deleteClient(@Param('id') id: string, @Res() response: Response) {
+    try {
+      const deletedClient = await this.clientsService.deleteClient(id);
+      if (!deletedClient) {
+        return response.status(400).send({ message: 'Error deleting client' });
+      }
+      return response.json({
+        message: 'Client deleted successfully',
+        client: deletedClient,
+      });
+    } catch (error) {
+      throw new InternalServerErrorException('Error deleting client');
+    }
   }
 }

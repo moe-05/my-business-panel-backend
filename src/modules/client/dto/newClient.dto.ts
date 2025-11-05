@@ -1,7 +1,8 @@
-import { IsDate, IsString } from 'class-validator';
+import { IsDate, IsNumber, IsString, IsUUID } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class NewClientDto {
-  @IsString()
+  @IsUUID()
   tenant_id!: string;
 
   @IsString()
@@ -10,7 +11,11 @@ export class NewClientDto {
   @IsString()
   last_name!: string;
 
+  @IsNumber()
   document_type_id!: number;
+
+  @IsString()
+  document_number!: string;
 
   @IsString()
   email!: string;
@@ -18,8 +23,9 @@ export class NewClientDto {
   @IsString()
   phone!: string;
 
-  @IsString()
-  birthdate!: string;
+  @Type(() => Date)
+  @IsDate()
+  birthdate!: Date;
 
   @IsString()
   address!: string;
