@@ -1,26 +1,30 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import Database from '@lodestar-official/database';
+import { DATABASE } from '@/modules/db/db.provider';
+import { IUserResult } from '@/modules/user/interfaces/user_result.interface';
+import { queries } from '@/queries';
 
 @Injectable()
 export class UserService {
-  create(createUserDto: CreateUserDto) {
-    return 'This action adds a new user';
+  constructor(@Inject(DATABASE) private readonly db: Database) {}
+
+  async getUserByUsername(email: string): Promise<IUserResult | null> {
+    const fetchedData = await this.db.query(queries.user.byEmail, [email]);
+    console.log(fetchedData.rows, fetchedData.rows.length);
+    if (fetchedData.rows.length === 0) return null;
+    // ! Delete
+    return {
+      tenant_id: 'tenant-123',
+      users_id: 'user-123',
+      email: email,
+      password_hash: 'this_is_hashed',
+      role_id: 1,
+    };
   }
 
-  findAll() {
-    return `This action returns all user`;
-  }
-
-  findOne(id: number) {
-    return `This action returns a #${id} user`;
-  }
-
-  update(id: number, updateUserDto: UpdateUserDto) {
-    return `This action updates a #${id} user`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} user`;
+  async createUser(createUserDto: CreateUserDto) {
+    const newUser = await this.db.query(queries.user.create, []);
   }
 }

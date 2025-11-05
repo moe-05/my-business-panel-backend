@@ -1,27 +1,39 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { LoginDto } from './dto/login.dto';
 import { InvalidCredentialsError } from '@/common/errors/invalid_credentials';
 import { IUserSession } from '@/common/interfaces/user_session.interface';
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from '@/modules/user/user.service';
+import { DATABASE } from '@/modules/db/db.provider';
+import Database from '@lodestar-official/database';
+import { IUserResult } from '@/modules/user/user.module';
+import { queries } from '@/queries';
 
 @Injectable()
 export class AuthService {
   constructor(
+    @Inject(DATABASE) private readonly db: Database,
     private readonly jwtService: JwtService,
     private readonly usersService: UserService,
   ) {}
-  private temporalStorage = new Map<string, string>([
-    ['user1', 'password1'],
-    ['user2', 'password2'],
-  ]); // username -> password
+
+  private async validatePassword(
+    hashedPassword: string,
+    plainPassword: string,
+  ): Promise<boolean> {
+    // ! Delete
+    return (hashedPassword === plainPassword) as unknown as Promise<boolean>;
+  }
 
   async login(loginDto: LoginDto) {
     const { username, password } = loginDto;
-    const storedPassword = this.temporalStorage.get(username);
-    if (!storedPassword) throw InvalidCredentialsError;
+    const storedUser = await this.usersService.getUserByUsername(username);
+    if (!storedUser) throw InvalidCredentialsError;
 
-    const validPassword = storedPassword === password;
+    const validPassword = await this.validatePassword(
+      storedUser.password_hash,
+      password,
+    );
     if (!validPassword) throw InvalidCredentialsError;
 
     const userSession: IUserSession = {

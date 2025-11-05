@@ -1,6 +1,16 @@
 import { createQueries } from '@lodestar-official/database';
 
 export const queries = createQueries({
+  user: {
+    all: 'SELECT * FROM core.users',
+    byEmail: 'SELECT * FROM core.users WHERE email = $1',
+    create: `
+      INSERT INTO core.users 
+      (tenant_id, email, password_hash, role_id, created_at, updated_at) 
+      VALUES ($1, $2, $3, $4, NOW(), NOW()) 
+      RETURNING *
+    `,
+  },
   document_type: {
     all: 'SELECT * FROM core.document_type',
     byId: 'SELECT * FROM core.document_type WHERE id = $1',
