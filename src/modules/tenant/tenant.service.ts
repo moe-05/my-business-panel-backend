@@ -74,7 +74,7 @@ export class TenantService {
 
     const queryString = `
       UPDATE core.tenant
-      SET ${setString}, updated_at = NOW()
+      SET ${setString}
       WHERE tenant_id = $${index}
       RETURNING *
     `;

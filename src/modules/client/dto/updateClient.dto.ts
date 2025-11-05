@@ -8,4 +8,5 @@ export class UpdateClientDto {
   phone?: string;
   birthdate?: string;
   address?: string;
+  customer_segment_id?: number;
 }
