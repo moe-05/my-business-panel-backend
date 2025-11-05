@@ -4,6 +4,7 @@ export const queries = createQueries({
   user: {
     all: 'SELECT * FROM core.users',
     byEmail: 'SELECT * FROM core.users WHERE email = $1',
+    byTenant: 'SELECT * FROM core.users WHERE tenant_id = $1',
     create: `
       INSERT INTO core.users 
       (tenant_id, email, password_hash, role_id, created_at, updated_at) 

@@ -1,13 +1,11 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { LoginDto } from './dto/login.dto';
-import { InvalidCredentialsError } from '@/common/errors/invalid_credentials';
+import { InvalidCredentialsError } from '@/common/errors/invalid_credentials.error';
 import { IUserSession } from '@/common/interfaces/user_session.interface';
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from '@/modules/user/user.service';
 import { DATABASE } from '@/modules/db/db.provider';
 import Database from '@lodestar-official/database';
-import { IUserResult } from '@/modules/user/user.module';
-import { queries } from '@/queries';
 
 @Injectable()
 export class AuthService {
@@ -27,7 +25,7 @@ export class AuthService {
 
   async login(loginDto: LoginDto) {
     const { username, password } = loginDto;
-    const storedUser = await this.usersService.getUserByUsername(username);
+    const storedUser = await this.usersService.getUserByEmail(username);
     if (!storedUser) throw InvalidCredentialsError;
 
     const validPassword = await this.validatePassword(
