@@ -6,12 +6,15 @@ import { DATABASE } from '@/modules/db/db.provider';
 import { IUserResult } from '@/modules/user/interfaces/user_result.interface';
 import { queries } from '@/queries';
 import { hash } from 'bcrypt';
-import { passwordSaltRounds } from '@/common/constants';
+import { StateService } from '../state/state.service';
 import { UserCreationError } from '@/common/errors/user_create_error.error';
 
 @Injectable()
 export class UserService {
-  constructor(@Inject(DATABASE) private readonly db: Database) {}
+  constructor(
+    @Inject(DATABASE) private readonly db: Database,
+    private readonly state: StateService,
+  ) {}
 
   async getUserByEmail(email: string): Promise<IUserResult | null> {
     const fetchedData = await this.db.query(queries.user.byEmail, [email]);
@@ -27,7 +30,7 @@ export class UserService {
   async createUser(createUserDto: CreateUserDto) {
     const password_hash = await hash(
       createUserDto.password,
-      passwordSaltRounds,
+      this.state.getConstant<number>('PASSWORD_SALT_ROUNDS'),
     );
     const { tenant_id, email, role_id } = createUserDto;
     const newUser = await this.db.query(queries.user.create, [
@@ -40,5 +43,10 @@ export class UserService {
       throw new UserCreationError(email);
     }
     return { message: 'user created successfully!' };
+  }
+
+  async assignRole(user_id: string, role_id: number) {
+    await this.db.query(queries.user.assignRole, [role_id, user_id]);
+    return { message: 'role assigned successfully!' };
   }
 }

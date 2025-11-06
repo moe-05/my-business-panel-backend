@@ -11,6 +11,10 @@ export const queries = createQueries({
       VALUES ($1, $2, $3, $4, NOW(), NOW()) 
       RETURNING *
     `,
+    assignRole: 'UPDATE core.users SET role_id = $1 WHERE users_id = $2',
+  },
+  role: {
+    all: 'SELECT * FROM core.role',
   },
   document_type: {
     all: 'SELECT * FROM core.document_type',

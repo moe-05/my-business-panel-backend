@@ -3,16 +3,26 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthService } from '@/modules/auth/auth.service';
 import { AuthController } from '@/modules/auth/auth.controller';
 import { UserModule } from '@/modules/user/user.module';
+import { StateService } from '@/modules/state/state.service';
+import { StateModule } from '../state/state.module';
 
 @Module({
   imports: [
-    JwtModule.register({
+    JwtModule.registerAsync({
       global: true,
-      // ! CHANGE IN PROD
-      secret: 'jwt_secret',
-      signOptions: { expiresIn: '1d' },
+      inject: [StateService],
+      useFactory: async (stateService: StateService) => {
+        await stateService.waitForInitialization();
+        return {
+          secret: stateService.getConstant<string>('JWT_SECRET'),
+          signOptions: {
+            expiresIn: stateService.getConstant('JWT_EXPIRES_IN'),
+          },
+        };
+      },
     }),
     UserModule,
+    StateModule,
   ],
   providers: [AuthService],
   controllers: [AuthController],
