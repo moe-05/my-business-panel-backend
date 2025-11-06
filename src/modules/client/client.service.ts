@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { Client } from './interface/client.interface';
 import { NewClientDto } from './dto/newClient.dto';
-import { AuthorizationGuard } from '@/common/guards/authorization.guard';
+import { LevelAuthorizationGuard } from '@/common/guards/level_authorization.guard';
 import { DATABASE } from '../db/db.provider';
 import Database from '@lodestar-official/database/dist/components/Database';
 import { queries } from '@/queries';
@@ -67,7 +67,7 @@ export class ClientsService {
         phone,
         birthdate,
         address,
-        customer_segment_type
+        customer_segment_type,
       } = clientData;
 
       const newClient = await this.db.query(queries.client.create, [
@@ -80,7 +80,7 @@ export class ClientsService {
         phone,
         birthdate,
         address,
-        customer_segment_type
+        customer_segment_type,
       ]);
       return newClient.rows[0];
     } catch (error) {
