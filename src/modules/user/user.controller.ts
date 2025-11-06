@@ -20,10 +20,11 @@ export class UserController {
   async createUser(@Body() createUserDto: CreateUserDto) {
     return this.userService.createUser(createUserDto);
   }
+
   @Get()
-  async getUsersByTenant(@Query('tenant_id') tenant_id: string) {
+  getUsersByTenant(@Query('tenant_id') tenant_id: string) {
     // Placeholder for fetching users by tenant
-    return [];
+    return this.userService.getUsersByTenant(tenant_id);
   }
 
   @Get(':email')

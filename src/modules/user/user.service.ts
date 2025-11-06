@@ -15,20 +15,12 @@ export class UserService {
 
   async getUserByEmail(email: string): Promise<IUserResult | null> {
     const fetchedData = await this.db.query(queries.user.byEmail, [email]);
-    console.log(fetchedData.rows, fetchedData.rows.length);
     if (fetchedData.rows.length === 0) return null;
-    // ! Delete
-    return {
-      tenant_id: 'tenant-123',
-      users_id: 'user-123',
-      email: email,
-      password_hash: 'this_is_hashed',
-      role_id: 1,
-    };
+    return fetchedData.rows[0];
   }
 
   async getUsersByTenant(tenant_id: string): Promise<IUserResult[]> {
-    const fetchedData = await this.db.query(queries.user.all, []);
+    const fetchedData = await this.db.query(queries.user.byTenant, [tenant_id]);
     return fetchedData.rows;
   }
 
@@ -47,6 +39,6 @@ export class UserService {
     if (newUser.rows.length === 0) {
       throw new UserCreationError(email);
     }
-    return newUser.rows[0];
+    return { message: 'user created successfully!' };
   }
 }

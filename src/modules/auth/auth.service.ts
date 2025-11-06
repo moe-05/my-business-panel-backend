@@ -6,6 +6,7 @@ import { JwtService } from '@nestjs/jwt';
 import { UserService } from '@/modules/user/user.service';
 import { DATABASE } from '@/modules/db/db.provider';
 import Database from '@lodestar-official/database';
+import { compare } from 'bcrypt';
 
 @Injectable()
 export class AuthService {
@@ -19,24 +20,28 @@ export class AuthService {
     hashedPassword: string,
     plainPassword: string,
   ): Promise<boolean> {
-    // ! Delete
-    return (hashedPassword === plainPassword) as unknown as Promise<boolean>;
+    return compare(plainPassword, hashedPassword);
   }
 
   async login(loginDto: LoginDto) {
-    const { username, password } = loginDto;
-    const storedUser = await this.usersService.getUserByEmail(username);
+    const { email, password } = loginDto;
+    const storedUser = await this.usersService.getUserByEmail(email);
     if (!storedUser) throw InvalidCredentialsError;
 
     const validPassword = await this.validatePassword(
       storedUser.password_hash,
       password,
     );
+    console.log(
+      `Password ${password} for user ${email} is ${validPassword ? 'valid' : 'invalid'}`,
+    );
     if (!validPassword) throw InvalidCredentialsError;
 
     const userSession: IUserSession = {
-      user_id: 'some-unique-user-id', // ? This should be fetched from a database in a real scenario
-      username,
+      user_id: storedUser.users_id,
+      username: email,
+      tenant_id: storedUser.tenant_id,
+      role_id: storedUser.role_id,
     };
     const token = await this.jwtService.signAsync(userSession);
     return token;
