@@ -33,10 +33,10 @@ export class UserService {
     return this.state.getRoles();
   }
 
-  getSelfInfo({ user_id, email, role_id, tenant_id }: IUserSession) {
+  getSelfInfo({ email, role_id, tenant_id }: IUserSession) {
     const role = this.state.getRole(role_id);
     const tenant = this.state.getTenant(tenant_id);
-    return {};
+    return { email, role, tenant };
   }
 
   async createUser(createUserDto: CreateUserDto) {

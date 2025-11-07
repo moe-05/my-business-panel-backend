@@ -6,6 +6,8 @@ import { DATABASE } from '../db/db.provider';
 import Database from '@lodestar-official/database';
 import { queries } from '@/queries';
 import { InvalidRoleError } from '@/common/errors/invalid_role.error';
+import { ITenant } from '@/common/interfaces/tenant.interface';
+import { InvalidTenantError } from '@/common/errors/invalid_tenant.error';
 
 dotenvConfig();
 
@@ -14,7 +16,7 @@ export class StateService implements OnModuleInit {
   private readonly constants: Map<string, any> = new Map();
   private readonly roles: Map<number, IRole> = new Map();
   private readonly tokenBlacklist: Map<string, string> = new Map();
-  private readonly tenants: Map<string, string> = new Map();
+  private readonly tenants: Map<string, ITenant> = new Map();
   private isInitialized: boolean = false;
 
   private readonly initPromise: Promise<void>;
@@ -41,6 +43,7 @@ export class StateService implements OnModuleInit {
   async loadState() {
     this.loadConstants();
     await this.loadRoles();
+    await this.loadTenants();
   }
 
   private async loadRoles() {
@@ -59,7 +62,21 @@ export class StateService implements OnModuleInit {
     return role;
   }
 
-  private async loadTenants() {}
+  private async loadTenants() {
+    const fetchedData = await this.db.query(queries.tenant.all);
+    const tenants = fetchedData.rows;
+    tenants.forEach((tenant) => this.tenants.set(tenant.tenant_id, tenant));
+  }
+
+  getTenants(): ITenant[] {
+    return [...this.tenants.values()];
+  }
+
+  getTenant(key: string): ITenant {
+    const tenant = this.tenants.get(key);
+    if (!tenant) throw new InvalidTenantError(key);
+    return tenant;
+  }
 
   private loadConstants() {
     this.constants.set('JWT_SECRET', process.env.JWT_SECRET);

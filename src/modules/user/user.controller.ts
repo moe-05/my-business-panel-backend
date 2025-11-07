@@ -42,7 +42,7 @@ export class UserController {
 
   @Get()
   getSelfInfo(@Session() session: IUserSession) {
-    return session;
+    return this.userService.getSelfInfo(session);
   }
 
   @Get()
