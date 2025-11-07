@@ -4,6 +4,7 @@ import { DATABASE } from '../db/db.provider';
 import { NewMarginDto } from './dto/newMargin.dto';
 import { queries } from '@/queries';
 import { UpdateMarginDto } from './dto/updateMargin.dto';
+import { CustomerSegmentMargin } from './interface/customer_segment_margin.interface';
 
 @Injectable()
 export class CustomerSegmentMarginService {
@@ -71,9 +72,17 @@ export class CustomerSegmentMarginService {
     }
   }
 
-  async getMarginInfo() {
-    const marginInfo = await this.db.query(queries.customer_segment_margin.getInfo);
-    return marginInfo.rows;
+  /**
+  * @returns: CustomerSegmentMargin[]
+  */
+  async getMarginInfo(): Promise<CustomerSegmentMargin[]> {
+    const marginInfo = await this.db.query(queries.customer_segment_margin.all);
+    return marginInfo.rows
+  }
+
+  async getTenantMarginsInfo(tenantId: string): Promise<CustomerSegmentMargin[]> {
+    const info = await this.db.query(queries.customer_segment_margin.getInfo, [tenantId])
+    return info.rows
   }
 
   async deleteMargin(id: string) {

@@ -8,6 +8,10 @@ import { DbModule } from '@/modules/db/db.module';
 import { TenantModule } from '@/modules/tenant/tenant.module';
 import { ProductCategoryModule } from '@/modules/product_category/product_category.module';
 import { CustomerSegmentMarginModule } from '@/modules/customer_segment_margin/customer_segment_margin.module';
+import { StripeModule } from '@/modules/stripe/stripe.module';
+import { ProductModule } from '@/modules/product/product.module';
+import { CustomerPaymentModule } from '@/modules/customer_payment/customer_payment.module';
+require('dotenv').config();
 
 @Module({
   imports: [
@@ -17,7 +21,12 @@ import { CustomerSegmentMarginModule } from '@/modules/customer_segment_margin/c
     DbModule,
     TenantModule,
     ProductCategoryModule,
-    CustomerSegmentMarginModule
+    CustomerSegmentMarginModule,
+    ProductModule,
+    CustomerPaymentModule,
+    StripeModule.forRoot(process.env.STRIPE_API_KEY || '', {
+      apiVersion: '2025-10-29.clover',
+    }),
   ],
   controllers: [AppController],
   providers: [AppService],
