@@ -6,12 +6,15 @@ import {
   Param,
   Post,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import { CustomerSegmentMarginService } from './customer_segment_margin.service';
 import { NewMarginDto } from './dto/newMargin.dto';
 import { Response } from 'express';
 import { UpdateMarginDto } from './dto/updateMargin.dto';
+import { AuthorizationGuard } from '@/common/guards/authorization.guard';
 
+// ? UseGuards(AuthorizationGuard)
 //Lets try to think about a better name for the route
 @Controller('customer-segment-margin')
 export class CustomerSegmentMarginController {

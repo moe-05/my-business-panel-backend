@@ -9,7 +9,7 @@ export class DocumentTypeService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
   //Delete this when the database is implemented
 
-  async findAll() {
+  async findAll(): Promise<DocumentType[]> {
     try {
       const query = await this.db.query(queries.document_type.all);
       return query.rows;
@@ -23,7 +23,7 @@ export class DocumentTypeService {
    * @param id: string
    * @returns: DocumentType | undefined
    */
-  async findById(id: string) {
+  async findById(id: string): Promise<DocumentType> {
     try {
       const document = await this.db.query(queries.document_type.byId, [id]);
       return document.rows[0];

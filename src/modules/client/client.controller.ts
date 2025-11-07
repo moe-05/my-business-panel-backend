@@ -14,7 +14,7 @@ import { Response } from 'express';
 import { NewClientDto } from './dto/newClient.dto';
 import { UpdateClientDto } from './dto/updateClient.dto';
 
-//TODO: Implement AuthGuard
+// ? Implement AuthGuard
 //UseGuards(AuthGuard)
 @Controller('clients')
 export class ClientsController {
