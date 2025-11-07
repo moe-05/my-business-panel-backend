@@ -39,7 +39,7 @@ export class AuthService {
 
     const userSession: IUserSession = {
       user_id: storedUser.users_id,
-      username: email,
+      email: email,
       tenant_id: storedUser.tenant_id,
       role_id: storedUser.role_id,
     };

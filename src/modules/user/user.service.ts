@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { CreateUserDto } from './dto/create-user.dto';
+import { CreateUserDto } from './dto/create_user.dto';
 // import { UpdateUserDto } from './dto/update-user.dto';
 import Database from '@lodestar-official/database';
 import { DATABASE } from '@/modules/db/db.provider';
@@ -7,7 +7,9 @@ import { IUserResult } from '@/modules/user/interfaces/user_result.interface';
 import { queries } from '@/queries';
 import { hash } from 'bcrypt';
 import { StateService } from '../state/state.service';
-import { UserCreationError } from '@/common/errors/user_create_error.error';
+import { UserCreationError } from '@/common/errors/user_create.error';
+import { AssignRoleDto } from '@/modules/user/dto/assign_role.dto';
+import { IUserSession } from '@/common/interfaces/user_session.interface';
 
 @Injectable()
 export class UserService {
@@ -25,6 +27,16 @@ export class UserService {
   async getUsersByTenant(tenant_id: string): Promise<IUserResult[]> {
     const fetchedData = await this.db.query(queries.user.byTenant, [tenant_id]);
     return fetchedData.rows;
+  }
+
+  getUserRoles() {
+    return this.state.getRoles();
+  }
+
+  getSelfInfo({ user_id, email, role_id, tenant_id }: IUserSession) {
+    const role = this.state.getRole(role_id);
+    const tenant = this.state.getTenant(tenant_id);
+    return {};
   }
 
   async createUser(createUserDto: CreateUserDto) {
@@ -45,8 +57,11 @@ export class UserService {
     return { message: 'user created successfully!' };
   }
 
-  async assignRole(user_id: string, role_id: number) {
-    await this.db.query(queries.user.assignRole, [role_id, user_id]);
+  async assignRole(assignRoleDto: AssignRoleDto) {
+    await this.db.query(queries.user.assignRole, [
+      assignRoleDto.role_id,
+      assignRoleDto.user_id,
+    ]);
     return { message: 'role assigned successfully!' };
   }
 }

@@ -1,13 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
-import {
-  CanActivate,
-  ExecutionContext,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { IRequestWithCookies } from '@/common/interfaces/request_with_cookies.interface';
 import { StateService } from '@/modules/state/state.service';
+import { InvalidSessionError } from '@/common/errors/invalid_session.error';
 
 @Injectable()
 export class AuthenticationGuard implements CanActivate {
@@ -20,8 +16,7 @@ export class AuthenticationGuard implements CanActivate {
     const request = context.switchToHttp().getRequest() as IRequestWithCookies;
     const token = request.cookies['auth_token'];
 
-    if (!token)
-      throw new UnauthorizedException('Authentication token not found');
+    if (!token) throw new InvalidSessionError();
     try {
       await this.jwtService.verifyAsync(token, {
         secret: this.stateService.getConstant<string>('JWT_SECRET'),
@@ -33,7 +28,7 @@ export class AuthenticationGuard implements CanActivate {
 
       return true;
     } catch {
-      throw new UnauthorizedException('Invalid authentication token');
+      throw new InvalidSessionError('UNAUTHORIZED');
     }
   }
 }

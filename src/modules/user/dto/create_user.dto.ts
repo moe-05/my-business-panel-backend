@@ -5,11 +5,14 @@ const passwordRegexp =
 
 export class CreateUserDto {
   @IsString()
+  @IsNotEmpty()
   tenant_id!: string; // ? Maybe change to fetch from state, and switch to enum
 
   @IsString()
+  @IsNotEmpty()
   role_id!: number; // ? Maybe change to fetch from state, and switch to enum
 
+  @IsNotEmpty()
   @IsString()
   email!: string;
 

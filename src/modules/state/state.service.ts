@@ -5,6 +5,7 @@ import { config as dotenvConfig } from 'dotenv';
 import { DATABASE } from '../db/db.provider';
 import Database from '@lodestar-official/database';
 import { queries } from '@/queries';
+import { InvalidRoleError } from '@/common/errors/invalid_role.error';
 
 dotenvConfig();
 
@@ -13,6 +14,7 @@ export class StateService implements OnModuleInit {
   private readonly constants: Map<string, any> = new Map();
   private readonly roles: Map<number, IRole> = new Map();
   private readonly tokenBlacklist: Map<string, string> = new Map();
+  private readonly tenants: Map<string, string> = new Map();
   private isInitialized: boolean = false;
 
   private readonly initPromise: Promise<void>;
@@ -46,6 +48,18 @@ export class StateService implements OnModuleInit {
     const roles = fetchedData.rows as IRole[];
     roles.forEach((role) => this.roles.set(role.role_id, role));
   }
+
+  getRoles(): IRole[] {
+    return [...this.roles.values()];
+  }
+
+  getRole(key: number): IRole {
+    const role = this.roles.get(key);
+    if (!role) throw new InvalidRoleError(key);
+    return role;
+  }
+
+  private async loadTenants() {}
 
   private loadConstants() {
     this.constants.set('JWT_SECRET', process.env.JWT_SECRET);

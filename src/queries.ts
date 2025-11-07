@@ -3,6 +3,7 @@ import { createQueries } from '@lodestar-official/database';
 export const queries = createQueries({
   user: {
     all: 'SELECT * FROM core.users',
+    byId: 'SELECT * FROM core.users WHERE users_id = $1 LIMIT 1',
     byEmail: 'SELECT * FROM core.users WHERE email = $1 LIMIT 1',
     byTenant: 'SELECT * FROM core.users WHERE tenant_id = $1',
     create: `
