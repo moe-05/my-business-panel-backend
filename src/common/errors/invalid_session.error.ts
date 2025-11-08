@@ -9,7 +9,10 @@ export class InvalidSessionError extends HttpException {
         super({ error: `Session is invalid` }, HttpStatus.UNAUTHORIZED);
         break;
       case 'UNAUTHORIZED':
-        super({ error: `Session is not found` }, HttpStatus.UNAUTHORIZED);
+        super(
+          { error: `User is not authorized to perform this operation` },
+          HttpStatus.UNAUTHORIZED,
+        );
         break;
       default:
         super({ error: `Session is unauthorized` }, HttpStatus.UNAUTHORIZED);
