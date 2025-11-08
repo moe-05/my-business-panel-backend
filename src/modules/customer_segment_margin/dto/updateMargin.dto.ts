@@ -1,18 +1,5 @@
+import { PartialType } from '@nestjs/mapped-types';
 import { IsNumber } from 'class-validator';
+import { NewMarginDto } from './newMargin.dto';
 
-export class UpdateMarginDto {
-  @IsNumber()
-  customer_segment_id?: number;
-
-  @IsNumber()
-  customer_segment_margin_type?: number;
-
-  @IsNumber()
-  spending_threshold?: number;
-
-  @IsNumber()
-  seniority_months?: number;
-
-  @IsNumber()
-  frequency_per_months?: number;
-}
+export class UpdateMarginDto extends PartialType(NewMarginDto) {}

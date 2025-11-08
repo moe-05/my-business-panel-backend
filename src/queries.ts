@@ -1,4 +1,5 @@
 import { createQueries } from '@lodestar-official/database';
+import { create } from 'domain';
 
 export const queries = createQueries({
   user: {
@@ -26,8 +27,10 @@ export const queries = createQueries({
     all: 'SELECT * FROM core.tenant_customer',
     byId: 'SELECT * FROM core.tenant_customer WHERE tenant_customer_id = $1',
     getInfo: `
-      SELECT * FROM core.tenant_customer AS tc
-      INNER JOIN core.tenant AS t ON tc.tenant_id = t.tenant_id
+      SELECT tc.first_name, tc.last_name, d.type_name, tc.document_number, t.tenant_name, c.segment_name FROM core.tenant_customer tc
+      INNER JOIN core.tenant t USING(tenant_id)
+      INNER JOIN core.customer_segment c USING(customer_segment_id)
+      INNER JOIN core.document_type d USING(document_type_id)
       WHERE tc.tenant_customer_id = $1
     `,
     create: `
@@ -66,10 +69,43 @@ export const queries = createQueries({
     delete:
       'DELETE FROM core.customer_segment_margin WHERE customer_segment_margin_id = $1',
     getInfo: `
-      SELECT cm.customer_segment_margin_id, t.tenant_name, cs.segment_name, cmt.type_name, cm.spending_threshold, cm.seniority_months, cm.frequency_per_month FROM core.customer_segment_margin AS cm
-      INNER JOIN core.tenant AS t ON cm.tenant_id = t.tenant_id
-      INNER JOIN core.customer_segment AS cs ON cm.customer_segment_id = cs.customer_segment_id
-      INNER JOIN core.customer_segment_margin_type AS cmt ON cm.customer_segment_margin_type_id = cmt.customer_segment_margin_type_id
+      SELECT cm.customer_segment_margin_id, t.tenant_name, cs.segment_name, cmt.type_name, cm.spending_threshold, cm.seniority_months, cm.frequency_per_month FROM core.customer_segment_margin cm
+      INNER JOIN core.tenant t USING(tenant_id)
+      INNER JOIN core.customer_segment cs USING(customer_segment_id)
+      LEFT JOIN core.customer_segment_margin_type cmt USING(customer_segment_margin_type_id)
+      WHERE cm.tenant_id = $1 
+      ORDER BY cm.customer_segment_margin_id
     `,
   },
+  products: {
+    getAll: `
+      SELECT p.sku, p.product_name, p.product_description, p.unit_price, pc.category_name FROM core.product p
+      INNER JOIN core.product_category pc USING(product_category_id)
+    `,
+    create: `
+      INSERT INTO core.product (tenant_id, sku, product_name, product_description, product_category_id, unit_price)
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `,
+    delete: 'DELETE FROM core.products WHERE product_id = $1',
+  },
+  customer_payment: {
+    getPayments: `
+      SELECT cp.payment_amount, pm.name, cp.payment_date, cp.verified, tc.first_name, tc.last_name, c.code FROM pos_module.customer_payment cp
+      INNER JOIN core.tenant_customer tc USING(tenant_customer_id)
+      INNER JOIN core.payment_method pm USING(payment_method_id)
+      INNER JOIN core.currency c USING(currency_id)
+    `,
+    getCustomerPayments: `
+      SELECT cp.payment_amount, pm.name, cp.payment_date, cp.verified, tc.first_name, tc.last_name, c.code FROM pos_module.customer_payment cp
+      INNER JOIN core.tenant_customer tc USING(tenant_customer_id)
+      INNER JOIN core.payment_method pm USING(payment_method_id)
+      INNER JOIN core.currency c USING(currency_id)
+      WHERE core.tenant_customer_id = $1
+    `,
+    createNewPayment: `
+      INSERT INTO pos_module.customer_payment (tenant_customer_id, payment_method_id, payment_amount, payment_date, currency_id, verified)
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `,
+    deletePayment: "DELETE FROM pos_module.customer_payment WHERE customer_payment_id = $1"
+  }
 });

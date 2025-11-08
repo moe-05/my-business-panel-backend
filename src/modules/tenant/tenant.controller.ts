@@ -6,12 +6,15 @@ import {
   Param,
   Post,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import { TenantService } from './tenant.service';
 import { Response } from 'express';
 import { NewTenantDto } from './dto/newTenant.dto';
 import { UpdateTenantDto } from './dto/updateTenant.dto';
+import { AuthorizationGuard } from '@/common/guards/authorization.guard';
 
+// ? UseGuards(AuthorizationGuard)
 @Controller('tenant')
 export class TenantController {
   constructor(private readonly tenantService: TenantService) {}

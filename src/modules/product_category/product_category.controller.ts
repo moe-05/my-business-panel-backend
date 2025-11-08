@@ -6,10 +6,13 @@ import {
   Param,
   Post,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import { ProductCategoryService } from './product_category.service';
 import { Response } from 'express';
+import { AuthorizationGuard } from '@/common/guards/authorization.guard';
 
+// ? UseGuards(AuthorizationGuard)
 @Controller('product-category')
 export class ProductCategoryController {
   constructor(

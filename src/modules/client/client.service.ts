@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Inject,
   Injectable,
   InternalServerErrorException,
@@ -13,19 +14,18 @@ import Database from '@lodestar-official/database/dist/components/Database';
 import { queries } from '@/queries';
 import { UpdateClientDto } from './dto/updateClient.dto';
 
-//Activate when everything is ready
+// ? Activate when everything is ready
 // @UseGuards(AuthorizationGuard)
 @Injectable()
 export class ClientsService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
-  private clients: Client[] = [];
 
   /**
    * Find a client by their ID
    * @param clientId: string
    * @returns: Client
    */
-  async findClientById(clientId: string) {
+  async findClientById(clientId: string): Promise<Client> {
     const client = await this.db.query(queries.client.getInfo, [clientId]);
 
     if (!client || client.rows.length === 0) {
@@ -95,25 +95,24 @@ export class ClientsService {
    * @returns: Client
    */
   async updateClient(clientId: string, clientData: UpdateClientDto) {
-    console.log(clientId, clientData);
+
     const { ...updates } = clientData;
-    console.log(updates);
+
     const updateKeys = Object.keys(updates).filter(
       (key) => updates[key as keyof typeof updates] !== undefined,
     );
-    console.log(updateKeys);
 
     if (updateKeys.length === 0) {
-      throw new Error('No valid fields to update');
+      throw new BadRequestException('No valid fields to update');
     }
 
     let setClause: string[] = [];
-    let paramsArray: any[] = [];
+    let paramsArray: any[] = []; 
     let index = 1;
 
     for (const key of updateKeys) {
       const validKey = key as keyof typeof updates;
-      setClause.push(`${key} = $${index}`);
+      setClause.push(`"${key}" = $${index}`);
       paramsArray.push(updates[validKey]);
       index++;
     }
@@ -128,7 +127,7 @@ export class ClientsService {
       WHERE tenant_customer_id = $${index}
       RETURNING *
     `;
-    console.log('Executing query:', queryString, 'with params:', paramsArray);
+    
     try {
       const res = await this.db.query(queryString, paramsArray);
       return res.rows[0];
