@@ -18,7 +18,7 @@ import { Session } from '@/common/decorators/session.decorator';
 import { IUserSession } from '@/common/interfaces/user_session.interface';
 import { LevelAuthorizationGuard } from '@/common/guards/level_authorization.guard';
 import { RoleAuthorizationGuard } from '@/common/guards/role_authorization.guard';
-import { RequiredRole } from '@/common/decorators/role_metadata.decorator';
+// import { RequiredRole } from '@/common/decorators/role_metadata.decorator';
 import { RequiredLevel } from '@/common/decorators/level_metadata.decorator';
 
 @UseGuards(AuthenticationGuard, LevelAuthorizationGuard, RoleAuthorizationGuard)
@@ -27,19 +27,21 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
+  @RequiredLevel(3)
   @UsePipes(ValidationPipe)
   async createUser(@Body() createUserDto: CreateUserDto) {
     return this.userService.createUser(createUserDto);
   }
 
   @Put()
+  @RequiredLevel(3)
   @UsePipes(ValidationPipe)
   async assignRole(@Body() assignRoleDto: AssignRoleDto) {
     return this.userService.assignRole(assignRoleDto);
   }
 
   @Get('roles')
-  @RequiredLevel(2)
+  @RequiredLevel(4)
   getUserRoles() {
     return this.userService.getUserRoles();
   }
@@ -50,13 +52,13 @@ export class UserController {
   }
 
   @Get('tenant')
-  @RequiredRole('admin')
+  @RequiredLevel(4)
   getUsersByTenant(@Query('tenant_id') tenant_id: string) {
     // Placeholder for fetching users by tenant
     return this.userService.getUsersByTenant(tenant_id);
   }
 
-  @RequiredRole('superuser')
+  @RequiredLevel(3)
   @Get(':email')
   async getUserByEmail(@Param('email') email: string) {
     return this.userService.getUserByEmail(email);
