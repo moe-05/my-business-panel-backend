@@ -2,6 +2,22 @@ import { createQueries } from '@lodestar-official/database';
 import { create } from 'domain';
 
 export const queries = createQueries({
+  user: {
+    all: 'SELECT * FROM core.users',
+    byId: 'SELECT * FROM core.users WHERE users_id = $1 LIMIT 1',
+    byEmail: 'SELECT * FROM core.users WHERE email = $1 LIMIT 1',
+    byTenant: 'SELECT * FROM core.users WHERE tenant_id = $1',
+    create: `
+      INSERT INTO core.users 
+      (tenant_id, email, password_hash, role_id, created_at, updated_at) 
+      VALUES ($1, $2, $3, $4, NOW(), NOW()) 
+      RETURNING *
+    `,
+    assignRole: 'UPDATE core.users SET role_id = $1 WHERE users_id = $2',
+  },
+  role: {
+    all: 'SELECT * FROM core.role',
+  },
   document_type: {
     all: 'SELECT * FROM core.document_type',
     byId: 'SELECT * FROM core.document_type WHERE id = $1',

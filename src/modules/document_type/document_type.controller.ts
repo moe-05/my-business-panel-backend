@@ -1,4 +1,4 @@
-import { AuthorizationGuard } from '@/common/guards/authorization.guard';
+import { LevelAuthorizationGuard } from '@/common/guards/level_authorization.guard';
 import { DocumentTypeService } from './document_type.service';
 import { DocumentType } from './interface/document_type.interface';
 import {
