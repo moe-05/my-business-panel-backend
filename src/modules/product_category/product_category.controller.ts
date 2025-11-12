@@ -10,7 +10,8 @@ import {
 } from '@nestjs/common';
 import { ProductCategoryService } from './product_category.service';
 import { Response } from 'express';
-import { AuthorizationGuard } from '@/common/guards/authorization.guard';
+import { RoleAuthorizationGuard } from '@/common/guards/role_authorization.guard';
+import { LevelAuthorizationGuard } from '@/common/guards/level_authorization.guard';
 
 // ? UseGuards(AuthorizationGuard)
 @Controller('product-category')

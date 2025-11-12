@@ -12,7 +12,8 @@ import { CustomerSegmentMarginService } from './customer_segment_margin.service'
 import { NewMarginDto } from './dto/newMargin.dto';
 import { Response } from 'express';
 import { UpdateMarginDto } from './dto/updateMargin.dto';
-import { AuthorizationGuard } from '@/common/guards/authorization.guard';
+import { RoleAuthorizationGuard } from '@/common/guards/role_authorization.guard';
+import { LevelAuthorizationGuard } from '@/common/guards/level_authorization.guard';
 
 // ? UseGuards(AuthorizationGuard)
 //Lets try to think about a better name for the route

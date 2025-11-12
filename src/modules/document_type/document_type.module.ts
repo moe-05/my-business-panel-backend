@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
 import { DocumentTypeService } from './document_type.service';
 import { DocumentTypeController } from './document_type.controller';
-import { AuthorizationGuard } from '@/common/guards/authorization.guard';
+import { RoleAuthorizationGuard } from '@/common/guards/role_authorization.guard';
+import { LevelAuthorizationGuard } from '@/common/guards/level_authorization.guard';
 
 @Module({
-  providers: [DocumentTypeService],
+  providers: [DocumentTypeService, RoleAuthorizationGuard, LevelAuthorizationGuard],
   controllers: [DocumentTypeController],
 })
 export class DocumentTypeModule {}

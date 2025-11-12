@@ -1,4 +1,5 @@
-import { AuthorizationGuard } from '@/common/guards/authorization.guard';
+import { RoleAuthorizationGuard } from '@/common/guards/role_authorization.guard';
+import { LevelAuthorizationGuard } from '@/common/guards/level_authorization.guard';
 import {
   BadRequestException,
   Body,
@@ -11,9 +12,9 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { CustomerPaymentService } from './customer_payment.service';
+import { CustomerPaymentService } from '@/modules/customer_payment/customer_payment.service';
 import { Response } from 'express';
-import { NewCustomerPaymentDto } from './dto/NewCustomerPayment.dto';
+import { NewCustomerPaymentDto, testdto } from './dto/NewCustomerPayment.dto';
 
 // ? @UseGuards(AuthorizationGuard)
 @Controller('payment')
@@ -63,6 +64,26 @@ export class CustomerPaymentController {
       });
     } catch (error) {
       throw new InternalServerErrorException('Error saving the payment');
+    }
+  }
+
+  @Post('bulk')
+  async bulkInsert(@Body() req: testdto, @Res() res: Response) {
+    if (!Array.isArray(req.payments) || req.payments.length === 0) {
+      throw new BadRequestException('Invalid request data');
+    }
+
+    try {
+      const result = await this.paymentsService.bulkInsert(
+        req.payments,
+        req.sale_id,
+      );
+      return res.json({
+        message: 'Bulk payments processed successfully!',
+        result,
+      });
+    } catch (error) {
+      throw new InternalServerErrorException('Error processing bulk payments');
     }
   }
 
