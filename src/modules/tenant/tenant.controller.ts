@@ -12,7 +12,8 @@ import { TenantService } from './tenant.service';
 import { Response } from 'express';
 import { NewTenantDto } from './dto/newTenant.dto';
 import { UpdateTenantDto } from './dto/updateTenant.dto';
-import { AuthorizationGuard } from '@/common/guards/authorization.guard';
+import { LevelAuthorizationGuard } from '@/common/guards/level_authorization.guard';
+import { RoleAuthorizationGuard } from '@/common/guards/role_authorization.guard';
 
 // ? UseGuards(AuthorizationGuard)
 @Controller('tenant')
@@ -33,7 +34,7 @@ export class TenantController {
     return res.status(200).json(tenant);
   }
 
-  @Post('new')
+  @Post()
   async createTenant(@Body() req: NewTenantDto, @Res() res: Response) {
     const newTenant = await this.tenantService.createTenant(req);
     if (!newTenant) {

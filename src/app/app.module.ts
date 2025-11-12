@@ -11,6 +11,8 @@ import { CustomerSegmentMarginModule } from '@/modules/customer_segment_margin/c
 import { StripeModule } from '@/modules/stripe/stripe.module';
 import { ProductModule } from '@/modules/product/product.module';
 import { CustomerPaymentModule } from '@/modules/customer_payment/customer_payment.module';
+import { SaleModule } from '@/modules/sale/sale.module';
+import { SaleItemModule } from '@/modules/sale-item/sale-item.module';
 require('dotenv').config();
 
 @Module({
@@ -27,6 +29,8 @@ require('dotenv').config();
     StripeModule.forRoot(process.env.STRIPE_API_KEY || '', {
       apiVersion: '2025-10-29.clover',
     }),
+    SaleModule,
+    SaleItemModule,
   ],
   controllers: [AppController],
   providers: [AppService],

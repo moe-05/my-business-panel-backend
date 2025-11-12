@@ -1,7 +1,11 @@
 import { DynamicModule, Module, Provider } from '@nestjs/common';
+import { StripeController } from './stripe.controller';
 import Stripe from 'stripe';
 
-@Module({})
+@Module({
+  controllers: [StripeController],
+  providers: [],
+})
 export class StripeModule {
   static forRoot(
     apiKey: string,
@@ -10,7 +14,7 @@ export class StripeModule {
     const stripe = new Stripe(apiKey, stripeConfig);
 
     const stripeProvider: Provider = {
-      provide: 'STRIPE',
+      provide: "STRIPE",
       useValue: stripe,
     };
 
@@ -18,6 +22,7 @@ export class StripeModule {
       module: StripeModule,
       providers: [stripeProvider],
       exports: [stripeProvider],
+      global: true,
     };
   }
 }

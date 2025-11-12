@@ -106,6 +106,45 @@ export const queries = createQueries({
       INSERT INTO pos_module.customer_payment (tenant_customer_id, payment_method_id, payment_amount, payment_date, currency_id, verified)
       VALUES ($1, $2, $3, $4, $5, $6)
     `,
-    deletePayment: "DELETE FROM pos_module.customer_payment WHERE customer_payment_id = $1"
-  }
+    deletePayment:
+      'DELETE FROM pos_module.customer_payment WHERE customer_payment_id = $1',
+  },
+  sales: {
+    singleSale: `
+      INSERT INTO pos_module.sale (sale_id, branch_id, sale_date, user_id, currency_id, total_amount, is_completed)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING sale_id
+    `,
+  },
+  items: {
+    getItems: 'SELECT * FROM pos_module.sale_item', // ? Fix with proper joins and pagination
+    getItemById: 'SELECT * FROM pos_module.sale_item WHERE sale_item_id = $1',
+    delete: 'DELETE FROM pos_module.sale_item WHERE sale_item_id = $1',
+  },
+  bill: {
+    create: `
+      INSERT INTO pos_module.bill (tenant_customer_id, currency_id, subtotal_amount, tax_amount, total_amount, billed_at)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *
+    `,
+  },
 });
+
+export const bulkItems = [
+  'sale_id',
+  'tenant_id',
+  'product_id',
+  'quantity',
+  'unit_price',
+  'total_price',
+];
+
+export const bulkPayments = [
+  'tenant_customer_id',
+  'sale_id',
+  'payment_method_id',
+  'payment_amount',
+  'payment_date',
+  'currency_id',
+  'verified',
+];
