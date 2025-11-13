@@ -1,14 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
 import Database from '@lodestar-official/database';
-import { FullItem, Item } from './interface/sale-item.interface';
+import { FullItem, Item, ItemFromDb } from './interface/sale-item.interface';
 import { bulkItems, queries } from '@/queries';
 
 @Injectable()
 export class SaleItemService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
-  async getAllItems(): Promise<FullItem[]> {
+  async getAllItems(): Promise<ItemFromDb[]> {
     const items = await this.db.query(queries.items.getItems);
     return items.rows;
   }
