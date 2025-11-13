@@ -5,6 +5,7 @@ import { NewMarginDto } from './dto/newMargin.dto';
 import { queries } from '@/queries';
 import { UpdateMarginDto } from './dto/updateMargin.dto';
 import { CustomerSegmentMargin } from './interface/customer_segment_margin.interface';
+import { UpdateMarginError } from '@/common/errors/update_margin.error';
 
 @Injectable()
 export class CustomerSegmentMarginService {
@@ -31,7 +32,7 @@ export class CustomerSegmentMarginService {
       ],
     );
 
-    return newMargin;
+    return { message: 'Margin created.', newMargin };
   }
 
   async updateMargins(id: string, newMarginData: UpdateMarginDto) {
@@ -65,31 +66,32 @@ export class CustomerSegmentMarginService {
       WHERE customer_segment_margin_id = $${index}
     `;
     try {
-      const result = await this.db.query(qString, paramsArray);
-      return result.rows;
+      await this.db.query(qString, paramsArray);
+      return { message: `Margin with id ${id} updated` };
     } catch (error) {
-      throw new Error('Error updating margin');
+      throw new UpdateMarginError();
     }
   }
 
   /**
-  * @returns: CustomerSegmentMargin[]
-  */
+   * @returns: CustomerSegmentMargin[]
+   */
   async getMarginInfo(): Promise<CustomerSegmentMargin[]> {
     const marginInfo = await this.db.query(queries.customer_segment_margin.all);
-    return marginInfo.rows
+    return marginInfo.rows;
   }
 
-  async getTenantMarginsInfo(tenantId: string): Promise<CustomerSegmentMargin[]> {
-    const info = await this.db.query(queries.customer_segment_margin.getInfo, [tenantId])
-    return info.rows
+  async getTenantMarginsInfo(
+    tenantId: string,
+  ): Promise<CustomerSegmentMargin[]> {
+    const info = await this.db.query(queries.customer_segment_margin.getInfo, [
+      tenantId,
+    ]);
+    return info.rows;
   }
 
   async deleteMargin(id: string) {
-    const deletedMargin = await this.db.query(
-      queries.customer_segment_margin.delete,
-      [id],
-    );
-    return deletedMargin;
+    await this.db.query(queries.customer_segment_margin.delete, [id]);
+    return { message: `Margin with id: ${id} deleted.` };
   }
 }

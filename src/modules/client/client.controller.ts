@@ -22,42 +22,17 @@ export class ClientsController {
 
   @Get()
   async findAll() {
-    try {
-      const allClients = await this.clientsService.getAllClients();
-      return allClients;
-    } catch (error) {
-      throw new InternalServerErrorException('Error fetching clients');
-    }
+    return this.clientsService.getAllClients();
   }
 
   @Get(':id')
-  async findOneClient(@Param('id') id: string, @Res() response: Response) {
-    try {
-      const client = await this.clientsService.findClientById(id);
-      if (!client) {
-        response.status(404).send({ message: 'Client not found' });
-      }
-      return response.json(client);
-    } catch (error) {
-      throw new InternalServerErrorException('Error fetching client');
-    }
+  async findOneClient(@Param('id') id: string) {
+    return this.clientsService.findClientById(id);
   }
 
   @Post()
-  async createClient(@Body() request: NewClientDto, @Res() response: Response) {
-    try {
-      const client = await this.clientsService.createClient(request);
-
-      if (!client) {
-        return response.status(400).send({ message: 'Error creating client' });
-      }
-
-      return response
-        .json({ message: 'Client created successfully', client })
-        .status(201);
-    } catch (error) {
-      throw new InternalServerErrorException('Error creating client');
-    }
+  async createClient(@Body() request: NewClientDto) {
+    return this.clientsService.createClient(request);
   }
 
   @Post('update/:id')
@@ -67,33 +42,11 @@ export class ClientsController {
     request: UpdateClientDto,
     @Res() response: Response,
   ) {
-    try {
-      const updatedClient = await this.clientsService.updateClient(id, request);
-      if (!updatedClient) {
-        return response.status(400).send({ message: 'Error updating client' });
-      }
-      return response.json({
-        message: 'Client updated successfully',
-        client: updatedClient,
-      });
-    } catch (error) {
-      throw new InternalServerErrorException('Error updating client');
-    }
+    return this.clientsService.updateClient(id, request);
   }
 
   @Delete(':id')
-  async deleteClient(@Param('id') id: string, @Res() response: Response) {
-    try {
-      const deletedClient = await this.clientsService.deleteClient(id);
-      if (!deletedClient) {
-        return response.status(400).send({ message: 'Error deleting client' });
-      }
-      return response.json({
-        message: 'Client deleted successfully',
-        client: deletedClient,
-      });
-    } catch (error) {
-      throw new InternalServerErrorException('Error deleting client');
-    }
+  async deleteClient(@Param('id') id: string) {
+    return this.clientsService.deleteClient(id);
   }
 }
