@@ -82,14 +82,11 @@ export class CustomerPaymentService {
       ],
     );
 
-    return newPayment;
+    return { message: 'Payment created', newPayment };
   }
 
   async deleteCustomerPayment(customerId: string) {
-    const deletedPayment = await this.db.query(
-      queries.customer_payment.deletePayment,
-      [customerId],
-    );
-    return deletedPayment;
+    await this.db.query(queries.customer_payment.deletePayment, [customerId]);
+    return { message: 'Payment deleted' };
   }
 }

@@ -13,6 +13,7 @@ import { DATABASE } from '../db/db.provider';
 import Database from '@lodestar-official/database/dist/components/Database';
 import { queries } from '@/queries';
 import { UpdateClientDto } from './dto/updateClient.dto';
+import { ClientCreateError } from '@/common/errors/client_create.error';
 
 // ? Activate when everything is ready
 // @UseGuards(AuthorizationGuard)
@@ -49,43 +50,34 @@ export class ClientsService {
    * @returns: Client
    */
   async createClient(clientData: NewClientDto) {
-    try {
-      const exist = await this.db.query(queries.client.byEmail, [
-        clientData.email,
-      ]);
-      if (exist.rows.length > 0) {
-        console.log('Client with this email already exists');
-      }
+    const {
+      tenant_id,
+      first_name,
+      last_name,
+      document_type_id,
+      document_number,
+      email,
+      phone,
+      birthdate,
+      address,
+      customer_segment_type,
+    } = clientData;
 
-      const {
-        tenant_id,
-        first_name,
-        last_name,
-        document_type_id,
-        document_number,
-        email,
-        phone,
-        birthdate,
-        address,
-        customer_segment_type,
-      } = clientData;
+    const newClient = await this.db.query(queries.client.create, [
+      tenant_id,
+      first_name,
+      last_name,
+      document_type_id,
+      document_number,
+      email,
+      phone,
+      birthdate,
+      address,
+      customer_segment_type,
+    ]);
 
-      const newClient = await this.db.query(queries.client.create, [
-        tenant_id,
-        first_name,
-        last_name,
-        document_type_id,
-        document_number,
-        email,
-        phone,
-        birthdate,
-        address,
-        customer_segment_type,
-      ]);
-      return newClient.rows[0];
-    } catch (error) {
-      throw new InternalServerErrorException(error);
-    }
+    if (newClient.rows.length == 0) throw new ClientCreateError(email);
+    return { message: 'Client created', client: newClient };
   }
 
   /**
@@ -95,7 +87,6 @@ export class ClientsService {
    * @returns: Client
    */
   async updateClient(clientId: string, clientData: UpdateClientDto) {
-
     const { ...updates } = clientData;
 
     const updateKeys = Object.keys(updates).filter(
@@ -107,7 +98,7 @@ export class ClientsService {
     }
 
     let setClause: string[] = [];
-    let paramsArray: any[] = []; 
+    let paramsArray: any[] = [];
     let index = 1;
 
     for (const key of updateKeys) {
@@ -127,7 +118,7 @@ export class ClientsService {
       WHERE tenant_customer_id = $${index}
       RETURNING *
     `;
-    
+
     try {
       const res = await this.db.query(queryString, paramsArray);
       return res.rows[0];

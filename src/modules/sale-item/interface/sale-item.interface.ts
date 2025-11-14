@@ -11,3 +11,11 @@ export interface FullItem extends Item {
   sale_item_id: string;
   sale_id: string;
 }
+
+export interface ItemFromDb {
+  product_name: string;
+  sku: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+}
