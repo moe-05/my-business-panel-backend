@@ -54,7 +54,6 @@ export class UserController {
   @Get('tenant')
   @RequiredLevel(4)
   getUsersByTenant(@Query('tenant_id') tenant_id: string) {
-    // Placeholder for fetching users by tenant
     return this.userService.getUsersByTenant(tenant_id);
   }
 
