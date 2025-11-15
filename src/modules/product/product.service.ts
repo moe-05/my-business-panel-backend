@@ -39,7 +39,7 @@ export class ProductService {
       unit_price,
     ]);
 
-    return newProduct;
+    return { message: "Product created successfully!" };
   }
 
   async updateProduct(data: UpdateProductDto, productId: string) {
@@ -77,7 +77,7 @@ export class ProductService {
 
     try {
       const res = await this.db.query(queryString, paramsArray);
-      return res.rows[0];
+      return { message: "Product updated successfully!", product: res.rows[0] };
     } catch (error) {
       console.error('Error updating product:', error);
       throw new InternalServerErrorException(error);
@@ -86,6 +86,6 @@ export class ProductService {
 
   async deleteProduct(productId: string) {
     const deleted = await this.db.query(queries.products.delete, [productId]);
-    return deleted;
+    return { message: `Product with id ${productId} deleted` };
   }
 }

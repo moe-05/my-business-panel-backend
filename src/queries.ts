@@ -90,7 +90,7 @@ export const queries = createQueries({
   },
   customer_payment: {
     getPayments: `
-      SELECT cp.payment_amount, pm.name, cp.payment_date, cp.verified, tc.first_name, tc.last_name, c.code FROM pos_module.customer_payment cp
+      SELECT cp.payment_amount, pm.name, cp.payment_date, cp.verified, tc.first_name, tc.last_name, c.symbol FROM pos_module.customer_payment cp
       INNER JOIN core.tenant_customer tc USING(tenant_customer_id)
       INNER JOIN core.payment_method pm USING(payment_method_id)
       INNER JOIN core.currency c USING(currency_id)
@@ -117,7 +117,11 @@ export const queries = createQueries({
     `,
   },
   items: {
-    getItems: 'SELECT * FROM pos_module.sale_item', // ? Fix with proper joins and pagination
+    getItems: `
+      SELECT p.product_name, p.sku, si.quantity, si.unit_price, si.total_price FROM pos_module.sale_item si
+      INNER JOIN core.product p USING(product_id)
+      WHERE si.sale_id = $1
+    `, // ? add pagination
     getItemById: 'SELECT * FROM pos_module.sale_item WHERE sale_item_id = $1',
     delete: 'DELETE FROM pos_module.sale_item WHERE sale_item_id = $1',
   },
@@ -127,7 +131,27 @@ export const queries = createQueries({
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
     `,
+    getBills: `
+      SELECT t.tenant_name, tc.first_name, tc.last_name, tc.document_number, tc.email, b.subtotal_amount, b.total_amount, b.billed_at FROM pos_module.bill b
+      INNER JOIN core.tenant_customer tc USING(tenant_customer_id)
+      INNER JOIN core.currency c USING(currency_id)
+      INNER JOIN core.tenant t USING(tenant_id)
+      WHERE t.tenant_id = $1
+    `,
+    getCustomerBills: `
+      SELECT t.tenant_name, tc.first_name, tc.last_name, tc.document_number, tc.email, b.subtotal_amount, b.total_amount, b.billed_at FROM pos_module.bill b
+      INNER JOIN core.tenant_customer tc USING(tenant_customer_id)
+      INNER JOIN core.currency c USING(currency_id)
+      INNER JOIN core.tenant t USING(tenant_id)
+      WHERE t.tenant_id = $1 AND tc.document_number = $2
+    `,
+    delete: 'DELETE FROM pos_module.bill WHERE bill_id = $1 RETURNING bill_id',
   },
+  returns: {
+    getReturns: `
+      
+    `
+  }
 });
 
 export const bulkItems = [
