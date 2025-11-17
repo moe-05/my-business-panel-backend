@@ -15,8 +15,8 @@ import { Product } from './interface/product.interface';
 export class ProductService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
-  async getAllProducts(): Promise<Product[]> {
-    const products = await this.db.query(queries.products.getAll);
+  async getAllProducts(tenantId: string): Promise<Product[]> {
+    const products = await this.db.query(queries.products.getAll, [tenantId]);
     return products.rows;
   }
 
@@ -39,7 +39,7 @@ export class ProductService {
       unit_price,
     ]);
 
-    return { message: "Product created successfully!" };
+    return { message: "Product created successfully!", product: newProduct.rows[0] };
   }
 
   async updateProduct(data: UpdateProductDto, productId: string) {
