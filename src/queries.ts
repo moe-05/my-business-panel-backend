@@ -1,5 +1,4 @@
 import { createQueries } from '@lodestar-official/database';
-import { create } from 'domain';
 
 export const queries = createQueries({
   user: {
@@ -150,8 +149,19 @@ export const queries = createQueries({
   returns: {
     getReturns: `
       
-    `
-  }
+    `,
+  },
+  cash_register: {
+    all: `SELECT * FROM pos_module.cash_register`,
+    byId: `SELECT * FROM pos_module.cash_register WHERE cash_register_id = $1 LIMIT 1`,
+    byBranch: `SELECT * FROM pos_module.cash_register WHERE branch_id = $1`,
+    create: `INSERT INTO pos_module.cash_register (branch_id, is_active, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) RETURNING *`,
+    startSession: `INSERT INTO pos_module.cash_register_session (cash_register_id, opened_at, opening_amount, user_id, is_active) VALUES ($1, $2, $3, $4, true) RETURNING *`,
+    getSessionById: `SELECT * FROM pos_module.cash_register_session WHERE cash_register_session_id = $1 LIMIT 1`,
+    getSessionsByCashRegister: `SELECT * FROM pos_module.cash_register_session WHERE cash_register_id = $1 ORDER BY opened_at DESC`,
+    closeSession: `UPDATE pos_module.cash_register_session SET closed_at = $1, closing_amount = $2, is_active = false WHERE cash_register_session_id = $3 RETURNING *`,
+    delete: `DELETE FROM pos_module.cash_register WHERE cash_register_id = $1 RETURNING *`,
+  },
 });
 
 export const bulkItems = [

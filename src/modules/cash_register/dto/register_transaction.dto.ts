@@ -1,22 +1,22 @@
 import {
-  IsUUID,
+  IsDateString,
   IsDecimal,
   IsNotEmpty,
   IsPositive,
-  IsDateString,
+  IsUUID,
 } from 'class-validator';
 
-export class StartCashRegisterSessionDto {
+export class RegisterTransactionDto {
   @IsNotEmpty()
   @IsUUID()
-  cash_register_id!: string;
+  cash_register_session_id!: string;
 
   @IsNotEmpty()
   @IsDecimal()
   @IsPositive()
-  opening_amount!: number;
+  amount!: number;
 
   @IsNotEmpty()
   @IsDateString()
-  opened_at!: string;
+  transaction_time!: string;
 }
