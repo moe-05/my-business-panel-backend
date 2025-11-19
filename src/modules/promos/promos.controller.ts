@@ -17,6 +17,11 @@ export class PromosController {
     return this.promosService.getPromoInfo(promo);
   }
 
+  @Get()
+  getPromoTypes() {
+    return this.promosService.getPromoTypes();
+  }
+
   @Post()
   createPromoWithRule(@Body() newPromoDto: NewPromoDto) {
     return this.promosService.createPromoWithRule(newPromoDto);
