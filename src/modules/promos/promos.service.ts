@@ -205,4 +205,9 @@ export class PromosService {
 
     return { queryString, paramsArray };
   }
+
+  async getPromoTypes() {
+    const promoType = await this.db.query(queries.promo_types.getPromoTypes);
+    return promoType.rows;
+  }
 }

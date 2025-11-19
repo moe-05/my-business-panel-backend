@@ -155,7 +155,7 @@ export const queries = createQueries({
   },
   promotions: {
     getPromos: `
-      SELECT p.promotion_name, p.promotion_code, c.segment_name, p.promotion_start_date, p.promotion_end_date, p.is_active FROM pos_module.promotion p
+      SELECT p.promotion_name, p.promotion_code, c.segment_name, p.promotion_start_date, p.promotion_end_date, pt.type_name, p.is_active FROM pos_module.promotion p
       INNER JOIN core.customer_segment c USING(customer_segment_id)
       INNER JOIN pos_module.promotion_type pt USING(promotion_type_id)
       WHERE p.tenant_id = $1
@@ -186,6 +186,25 @@ export const queries = createQueries({
           is_active = $10
       WHERE promotion_id = $1
       RETURNING promotion_id
+    `,
+  },
+  promo_types: {
+    getPromoTypes: `
+      SELECT * FROM pos_module.promotion_type
+    `,
+  },
+  customer_segment: {
+    getSegments: `
+      SELECT customer_segment_id, segment_name, segment_hierarchy FROM core.customer_segment
+    `,
+    newSegments: `
+      INSERT INTO core.customer_segment (segment_name, segment_hierarchy)
+      VALUES ($1, $2)
+      RETURNING customer_segment_id
+    `,
+    deleteSegment: `
+      DELETE FROM core.customer_segment WHERE customer_segment_id = $1
+      RETURNING customer_segment_id
     `
   },
 });
