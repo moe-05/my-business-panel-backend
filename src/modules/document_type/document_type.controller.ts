@@ -18,12 +18,12 @@ export class DocumentTypeController {
   constructor(private readonly documentTypeService: DocumentTypeService) {}
 
   @Get()
-  find() {
+  getAll() {
     return this.documentTypeService.findAll();
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  getOne(@Param('id') id: string) {
     return this.documentTypeService.findById(id);
   }
 

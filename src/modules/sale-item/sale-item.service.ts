@@ -8,8 +8,8 @@ import { bulkItems, queries } from '@/queries';
 export class SaleItemService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
-  async getAllItems(): Promise<ItemFromDb[]> {
-    const items = await this.db.query(queries.items.getItems);
+  async getAllItems(sale_id: string): Promise<ItemFromDb[]> {
+    const items = await this.db.query(queries.items.getItems, [sale_id]);
     return items.rows;
   }
 
@@ -18,9 +18,9 @@ export class SaleItemService {
     return item.rows[0] || null;
   }
 
-  async deleteItem(id: string): Promise<boolean> {
-    const result = await this.db.query(queries.items.delete, [id]);
-    return result ? true : false;
+  async deleteItem(id: string) {
+    await this.db.query(queries.items.delete, [id]);
+    return { message: `Deleted item with id ${id}` };
   }
 
   async bulkInsert(items: Item[], saleId: string) {
@@ -57,7 +57,7 @@ export class SaleItemService {
       VALUES ${placeholders.join(',')}
     `;
 
-    const res = await this.db.query(q, val);
-    return res;
+    await this.db.query(q, val);
+    return { message: `Inserted ${items.length} items for sale ${saleId}` };
   }
 }

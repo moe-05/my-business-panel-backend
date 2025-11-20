@@ -10,49 +10,33 @@ export class TenantService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
   async getAllTenants() {
-    try {
-      const tenants = await this.db.query(queries.tenant.all);
-      return tenants.rows;
-    } catch (error) {
-      console.error('Error fetching tenants:', error);
-      throw new Error('Could not fetch tenants');
-    }
+    const tenants = await this.db.query(queries.tenant.all);
+    return tenants.rows;
   }
 
   async getTenantById(tenantId: string) {
-    try {
-      const tenant = await this.db.query(queries.tenant.byId, [tenantId]);
-      return tenant.rows[0];
-    } catch (error) {
-      console.error('Error fetching tenant by ID:', error);
-      throw new Error('Could not fetch tenant');
-    }
+    const tenant = await this.db.query(queries.tenant.byId, [tenantId]);
+    return tenant.rows[0];
   }
 
   async createTenant(tenantInfo: NewTenantDto) {
     const { tenant_name, contact_email, is_subscribed } = tenantInfo;
 
-    try {
-      const newTenant = await this.db.query(queries.tenant.create, [
-        tenant_name,
-        contact_email,
-        is_subscribed,
-      ]);
-      return newTenant.rows[0];
-    } catch (error) {
-      console.error('Error creating tenant:', error);
-      throw new Error('Could not create tenant');
-    }
+    const newTenant = await this.db.query(queries.tenant.create, [
+      tenant_name,
+      contact_email,
+      is_subscribed,
+    ]);
+    return newTenant.rows[0];
   }
 
   async updateTenant(tenantId: string, tenantData: UpdateTenantDto) {
     const { ...updates } = tenantData;
-    
+
     const updateKeys = Object.keys(updates).filter(
       (key) => updates[key as keyof typeof updates] !== undefined,
     );
 
-    
     if (updateKeys.length === 0) {
       throw new Error('No valid fields to update');
     }
@@ -79,29 +63,23 @@ export class TenantService {
       RETURNING *
     `;
 
-    try {
-      const res = await this.db.query(queryString, paramsArray);
-      return res.rows[0];
-    } catch (error) {
-      console.error('Error updating tenant:', error);
-      throw new Error('Could not update tenant');
-    }
+    const up = await this.db.query(queryString, paramsArray);
+
+    return { message: 'Tenant updated successfully', tenant: up.rows[0] };
   }
 
   async deleteTenant(tenantId: string) {
-    try {
-      const exist = await this.getTenantById(tenantId);
-      if (!exist) {
-        throw new Error('Tenant not found');
-      }
-
-      const deletedTenant = await this.db.query(queries.tenant.delete, [
-        tenantId,
-      ]);
-      return deletedTenant.rows[0];
-    } catch (error) {
-      console.error('Error deleting tenant:', error);
-      throw new Error('Could not delete tenant');
+    const exist = await this.getTenantById(tenantId);
+    if (!exist) {
+      throw new Error('Tenant not found');
     }
+
+    const deletedTenant = await this.db.query(queries.tenant.delete, [
+      tenantId,
+    ]);
+    return {
+      message: 'Tenant deleted successfully',
+      tenant: deletedTenant.rows[0],
+    };
   }
 }
