@@ -1,9 +1,13 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 
 export class InvalidBranchError extends HttpException {
-  constructor() {
+  constructor(branchId?: string) {
     super(
-      { error: 'Error: Invalid branch provided.' },
+      {
+        error: branchId
+          ? `Branch with id ${branchId} does not exists`
+          : 'Error: Invalid branch provided.',
+      },
       HttpStatus.UNPROCESSABLE_ENTITY,
     );
     this.name = 'InvalidBranchError';

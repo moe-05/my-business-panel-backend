@@ -151,6 +151,28 @@ export const queries = createQueries({
       
     `,
   },
+  branch: {
+    all: `SELECT * FROM core.branch`,
+    byId: `SELECT * FROM core.branch WHERE branch_id = $1 LIMIT 1`,
+    byTenant: `SELECT * FROM core.branch WHERE tenant_id = $1`,
+    byName: `SELECT * FROM core.branch WHERE branch_name = $1 LIMIT 1`,
+    update: `
+      UPDATE core.branch SET 
+        branch_name = COALESCE($2, branch_name),
+        address = COALESCE($3, address),
+        contact_email = COALESCE($4, contact_email),
+        is_main_branch = COALESCE($5, is_main_branch),
+        updated_at = NOW()
+      WHERE branch_id = $1
+      RETURNING *
+    `,
+    create: `
+      INSERT INTO core.branch (tenant_id, branch_name, address, contact_email, is_main_branch, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+      RETURNING *
+    `,
+    delete: `DELETE FROM core.branch WHERE branch_id = $1 RETURNING *`,
+  },
   cash_register: {
     all: `SELECT * FROM pos_module.cash_register`,
     byId: `SELECT * FROM pos_module.cash_register WHERE cash_register_id = $1 LIMIT 1`,
