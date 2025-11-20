@@ -1,5 +1,4 @@
 import { createQueries } from '@lodestar-official/database';
-import { create } from 'domain';
 
 export const queries = createQueries({
   user: {
@@ -164,6 +163,38 @@ export const queries = createQueries({
       
     `,
   },
+  branch: {
+    all: `SELECT * FROM core.branch`,
+    byId: `SELECT * FROM core.branch WHERE branch_id = $1 LIMIT 1`,
+    byTenant: `SELECT * FROM core.branch WHERE tenant_id = $1`,
+    byName: `SELECT * FROM core.branch WHERE branch_name = $1 LIMIT 1`,
+    update: `
+      UPDATE core.branch SET 
+        branch_name = COALESCE($2, branch_name),
+        address = COALESCE($3, address),
+        contact_email = COALESCE($4, contact_email),
+        is_main_branch = COALESCE($5, is_main_branch),
+        updated_at = NOW()
+      WHERE branch_id = $1
+      RETURNING *
+    `,
+    create: `
+      INSERT INTO core.branch (tenant_id, branch_name, address, contact_email, is_main_branch, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+      RETURNING *
+    `,
+    delete: `DELETE FROM core.branch WHERE branch_id = $1 RETURNING *`,
+  },
+  cash_register: {
+    all: `SELECT * FROM pos_module.cash_register`,
+    byId: `SELECT * FROM pos_module.cash_register WHERE cash_register_id = $1 LIMIT 1`,
+    byBranch: `SELECT * FROM pos_module.cash_register WHERE branch_id = $1`,
+    create: `INSERT INTO pos_module.cash_register (branch_id, is_active, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) RETURNING *`,
+    startSession: `INSERT INTO pos_module.cash_register_session (cash_register_id, opened_at, opening_amount, user_id, is_active) VALUES ($1, $2, $3, $4, true) RETURNING *`,
+    getSessionById: `SELECT * FROM pos_module.cash_register_session WHERE cash_register_session_id = $1 LIMIT 1`,
+    getSessionsByCashRegister: `SELECT * FROM pos_module.cash_register_session WHERE cash_register_id = $1 ORDER BY opened_at DESC`,
+    closeSession: `UPDATE pos_module.cash_register_session SET closed_at = $1, closing_amount = $2, is_active = false WHERE cash_register_session_id = $3 RETURNING *`,
+    delete: `DELETE FROM pos_module.cash_register WHERE cash_register_id = $1 RETURNING *`,
   promotions: {
     getPromos: `
       SELECT p.promotion_name, p.promotion_code, c.segment_name, p.promotion_start_date, p.promotion_end_date, pt.type_name, p.is_active FROM pos_module.promotion p

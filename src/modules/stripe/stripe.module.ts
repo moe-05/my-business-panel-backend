@@ -14,7 +14,7 @@ export class StripeModule {
     const stripe = new Stripe(apiKey, stripeConfig);
 
     const stripeProvider: Provider = {
-      provide: "STRIPE",
+      provide: 'STRIPE',
       useValue: stripe,
     };
 
