@@ -22,9 +22,9 @@ export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
   // ? Apply pagination
-  @Get()
-  async getAllProducts() {
-    return this.productService.getAllProducts();
+  @Get(':id')
+  async getAllProducts(@Param('id') id: string) {
+    return this.productService.getAllProducts(id);
   }
 
   @Post()

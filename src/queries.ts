@@ -30,7 +30,7 @@ export const queries = createQueries({
       INNER JOIN core.tenant t USING(tenant_id)
       INNER JOIN core.customer_segment c USING(customer_segment_id)
       INNER JOIN core.document_type d USING(document_type_id)
-      WHERE tc.tenant_customer_id = $1
+      WHERE tc.document_number = $1
     `,
     create: `
       INSERT INTO core.tenant_customer (tenant_id, first_name, last_name, document_type_id, document_number, email, phone, birthdate, address, created_at, updated_at)
@@ -54,7 +54,7 @@ export const queries = createQueries({
     all: 'SELECT * FROM core.product_category',
     byId: 'SELECT * FROM core.product_category WHERE product_category_id = $1',
     create:
-      'INSERT INTO core.product_category (category_name, created_at, updated_at) VALUES ($1, NOW(), NOW())',
+      'INSERT INTO core.product_category (category_name, created_at, updated_at) VALUES ($1, NOW(), NOW()) RETURNING *',
     update:
       'UPDATE core.product_category SET category_name = $1 WHERE product_category_id = $2',
     delete: 'DELETE FROM core.product_category WHERE product_category_id = $1',
@@ -80,6 +80,7 @@ export const queries = createQueries({
     getAll: `
       SELECT p.sku, p.product_name, p.product_description, p.unit_price, pc.category_name FROM core.product p
       INNER JOIN core.product_category pc USING(product_category_id)
+      WHERE p.tenant_id = $1
     `,
     create: `
       INSERT INTO core.product (tenant_id, sku, product_name, product_description, product_category_id, unit_price)
@@ -183,6 +184,59 @@ export const queries = createQueries({
     getSessionsByCashRegister: `SELECT * FROM pos_module.cash_register_session WHERE cash_register_id = $1 ORDER BY opened_at DESC`,
     closeSession: `UPDATE pos_module.cash_register_session SET closed_at = $1, closing_amount = $2, is_active = false WHERE cash_register_session_id = $3 RETURNING *`,
     delete: `DELETE FROM pos_module.cash_register WHERE cash_register_id = $1 RETURNING *`,
+  promotions: {
+    getPromos: `
+      SELECT p.promotion_name, p.promotion_code, c.segment_name, p.promotion_start_date, p.promotion_end_date, pt.type_name, p.is_active FROM pos_module.promotion p
+      INNER JOIN core.customer_segment c USING(customer_segment_id)
+      INNER JOIN pos_module.promotion_type pt USING(promotion_type_id)
+      WHERE p.tenant_id = $1
+    `,
+    getPromoInfo: `
+      SELECT p.promotion_name, p.promotion_code, c.segment_name, p.promotion_start_date, p.promotion_end_date, p.is_active FROM pos_module.promotion p
+      INNER JOIN core.customer_segment c USING(customer_segment_id)
+      INNER JOIN pos_module.promotion_type pt USING(promotion_type_id)
+      WHERE p.promotion_id = $1 // ? add more joins tomorrow
+    `,
+    insertPromo: `
+      INSERT INTO pos_module.promotion (tenant_id, promotion_name, promotion_code, promotion_description, promotion_type_id, customer_segment_id, promotion_start_date, promotion_end_date, is_active)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING promotion_id
+    `,
+    deletePromo:
+      'DELETE FROM pos_module.promotion WHERE promotion_id = $1 RETURNING promotion_id',
+    updatePromo: `
+      UPDATE pos_module.promotion
+      SET tenant_id = $2,
+          promotion_name = $3,
+          promotion_code = $4,
+          promotion_description = $5,
+          promotion_type_id = $6,
+          customer_segment_id = $7,
+          promotion_start_date = $8,
+          promotion_end_date = $9,
+          is_active = $10
+      WHERE promotion_id = $1
+      RETURNING promotion_id
+    `,
+  },
+  promo_types: {
+    getPromoTypes: `
+      SELECT * FROM pos_module.promotion_type
+    `,
+  },
+  customer_segment: {
+    getSegments: `
+      SELECT customer_segment_id, segment_name, segment_hierarchy FROM core.customer_segment
+    `,
+    newSegments: `
+      INSERT INTO core.customer_segment (segment_name, segment_hierarchy)
+      VALUES ($1, $2)
+      RETURNING customer_segment_id
+    `,
+    deleteSegment: `
+      DELETE FROM core.customer_segment WHERE customer_segment_id = $1
+      RETURNING customer_segment_id
+    `
   },
 });
 
