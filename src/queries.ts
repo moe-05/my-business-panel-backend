@@ -125,7 +125,7 @@ export const queries = createQueries({
       INNER JOIN core.branch b USING(branch_id)
       INNER JOIN core.currency c USING(currency_id)
       WHERE s.branch_id = $1
-    `
+    `,
   },
   items: {
     getItems: `
@@ -134,7 +134,8 @@ export const queries = createQueries({
       WHERE si.sale_id = $1
     `, // ? add pagination
     getItemById: 'SELECT * FROM pos_module.sale_item WHERE sale_item_id = $1',
-    delete: 'DELETE FROM pos_module.sale_item WHERE sale_item_id = $1 RETURNING sale_item_id',
+    delete:
+      'DELETE FROM pos_module.sale_item WHERE sale_item_id = $1 RETURNING sale_item_id',
   },
   bill: {
     create: `
@@ -195,27 +196,27 @@ export const queries = createQueries({
     getSessionsByCashRegister: `SELECT * FROM pos_module.cash_register_session WHERE cash_register_id = $1 ORDER BY opened_at DESC`,
     closeSession: `UPDATE pos_module.cash_register_session SET closed_at = $1, closing_amount = $2, is_active = false WHERE cash_register_session_id = $3 RETURNING *`,
     delete: `DELETE FROM pos_module.cash_register WHERE cash_register_id = $1 RETURNING *`,
-  promotions: {
-    getPromos: `
+    promotions: {
+      getPromos: `
       SELECT p.promotion_name, p.promotion_code, c.segment_name, p.promotion_start_date, p.promotion_end_date, pt.type_name, p.is_active FROM pos_module.promotion p
       INNER JOIN core.customer_segment c USING(customer_segment_id)
       INNER JOIN pos_module.promotion_type pt USING(promotion_type_id)
       WHERE p.tenant_id = $1
     `,
-    getPromoInfo: `
+      getPromoInfo: `
       SELECT p.promotion_name, p.promotion_code, c.segment_name, p.promotion_start_date, p.promotion_end_date, p.is_active FROM pos_module.promotion p
       INNER JOIN core.customer_segment c USING(customer_segment_id)
       INNER JOIN pos_module.promotion_type pt USING(promotion_type_id)
       WHERE p.promotion_id = $1 // ? add more joins tomorrow
     `,
-    insertPromo: `
+      insertPromo: `
       INSERT INTO pos_module.promotion (tenant_id, promotion_name, promotion_code, promotion_description, promotion_type_id, customer_segment_id, promotion_start_date, promotion_end_date, is_active)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING promotion_id
     `,
-    deletePromo:
-      'DELETE FROM pos_module.promotion WHERE promotion_id = $1 RETURNING promotion_id',
-    updatePromo: `
+      deletePromo:
+        'DELETE FROM pos_module.promotion WHERE promotion_id = $1 RETURNING promotion_id',
+      updatePromo: `
       UPDATE pos_module.promotion
       SET tenant_id = $2,
           promotion_name = $3,
@@ -229,25 +230,26 @@ export const queries = createQueries({
       WHERE promotion_id = $1
       RETURNING promotion_id
     `,
-  },
-  promo_types: {
-    getPromoTypes: `
+    },
+    promo_types: {
+      getPromoTypes: `
       SELECT * FROM pos_module.promotion_type
     `,
-  },
-  customer_segment: {
-    getSegments: `
+    },
+    customer_segment: {
+      getSegments: `
       SELECT customer_segment_id, segment_name, segment_hierarchy FROM core.customer_segment
     `,
-    newSegments: `
+      newSegments: `
       INSERT INTO core.customer_segment (segment_name, segment_hierarchy)
       VALUES ($1, $2)
       RETURNING customer_segment_id
     `,
-    deleteSegment: `
+      deleteSegment: `
       DELETE FROM core.customer_segment WHERE customer_segment_id = $1
       RETURNING customer_segment_id
-    `
+    `,
+    },
   },
 });
 
