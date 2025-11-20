@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Post,
+  Put,
   Res,
   UseGuards,
 } from '@nestjs/common';
@@ -30,7 +31,7 @@ export class ProductCategoryController {
     return this.productCategoryService.createCategory(req.name);
   }
 
-  @Post(':id')
+  @Put(':id')
   async updateCategory(
     @Param('id') id: string,
     @Body() req: { name: string },

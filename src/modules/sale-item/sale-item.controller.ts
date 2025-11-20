@@ -17,45 +17,23 @@ import { TestDto } from './dto/test.dto';
 export class SaleItemController {
   constructor(private readonly itemService: SaleItemService) {}
 
-  @Get()
-  async getItems(@Res() res: Response) {
-    try {
-      const items = await this.itemService.getAllItems();
-      return res.json(items).status(200);
-    } catch (error) {
-      throw new InternalServerErrorException('Error fetching items');
-    }
+  @Get(":sale_id")
+  async getItems(@Param('sale_id') sale_id: string) {
+    return this.itemService.getAllItems(sale_id);
   }
 
   @Post()
-  async createItem(@Body() req: TestDto, @Res() res: Response) {
-    try {
-      const items = await this.itemService.bulkInsert(req.items, req.sale_id);
-      return res
-        .json({ message: 'Items created successfully', items })
-        .status(201);
-    } catch (error) {
-      throw new InternalServerErrorException('Error creating items');
-    }
+  async createItem(@Body() req: TestDto) {
+    return this.itemService.bulkInsert(req.items, req.sale_id);
   }
 
   @Get(':id')
-  async getItem(@Param('id') id: string, @Res() res: Response) {
-    try {
-      const item = await this.itemService.getItemById(id);
-      return res.json(item).status(200);
-    } catch (error) {
-      throw new InternalServerErrorException('Error fetching item');
-    }
+  async getItem(@Param('id') id: string) {
+    return this.itemService.getItemById(id);
   }
 
   @Delete(':id')
-  async deleteItem(@Param('id') id: string, @Res() res: Response) {
-    try {
-      await this.itemService.deleteItem(id);
-      return res.status(204).send();
-    } catch (error) {
-      throw new InternalServerErrorException('Error deleting item');
-    }
+  async deleteItem(@Param('id') id: string) {
+    return this.itemService.deleteItem(id);
   }
 }

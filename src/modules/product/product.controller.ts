@@ -7,6 +7,7 @@ import {
   Get,
   InternalServerErrorException,
   Param,
+  Patch,
   Post,
   Res,
   UseGuards,
@@ -27,12 +28,17 @@ export class ProductController {
     return this.productService.getAllProducts(id);
   }
 
+  @Get('sku/:sku')
+  async getProductBySku(@Param('sku') sku: string) {
+    return this.productService.getProductBySku(sku);
+  }
+
   @Post()
   async createNewProduct(@Body() req: NewProductDto) {
     return this.productService.createProduct(req);
   }
 
-  @Post('update/:id')
+  @Patch(':id')
   async updateProduct(@Param('id') id: string, @Body() req: UpdateProductDto) {
     return this.productService.updateProduct(req, id);
   }

@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Res,
   UseGuards,
@@ -32,11 +33,10 @@ export class CustomerSegmentMarginController {
     return this.csegmentService.createMargins(req);
   }
 
-  @Post(':id')
+  @Patch(':id')
   async updateMargin(
     @Param('id') id: string,
     @Body() req: UpdateMarginDto,
-    @Res() res: Response,
   ) {
     return this.csegmentService.updateMargins(id, req);
   }

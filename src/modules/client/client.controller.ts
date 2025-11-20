@@ -7,6 +7,7 @@ import {
   Get,
   InternalServerErrorException,
   Param,
+  Patch,
   Post,
   Res,
 } from '@nestjs/common';
@@ -21,12 +22,12 @@ export class ClientsController {
   constructor(private readonly clientsService: ClientsService) {}
 
   @Get()
-  async findAll() {
+  async getAll() {
     return this.clientsService.getAllClients();
   }
 
   @Get(':id')
-  async findOneClient(@Param('id') id: string) {
+  async getOneClient(@Param('id') id: string) {
     return this.clientsService.findClientById(id);
   }
 
@@ -35,12 +36,11 @@ export class ClientsController {
     return this.clientsService.createClient(request);
   }
 
-  @Post('update/:id')
+  @Patch(':id')
   async updateClient(
     @Param('id') id: string,
     @Body()
     request: UpdateClientDto,
-    @Res() response: Response,
   ) {
     return this.clientsService.updateClient(id, request);
   }

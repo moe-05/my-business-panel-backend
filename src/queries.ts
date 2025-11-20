@@ -83,6 +83,11 @@ export const queries = createQueries({
       INNER JOIN core.product_category pc USING(product_category_id)
       WHERE p.tenant_id = $1
     `,
+    getBySku: `
+      SELECT p.sku, p.product_name, p.product_description, p.unit_price, pc.category_name FROM core.product p
+      INNER JOIN core.product_category pc USING(product_category_id)
+      WHERE p.sku = $1
+    `,
     create: `
       INSERT INTO core.product (tenant_id, sku, product_name, product_description, product_category_id, unit_price)
       VALUES ($1, $2, $3, $4, $5, $6)
@@ -116,6 +121,12 @@ export const queries = createQueries({
       VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING sale_id
     `,
+    getSalesByBranch: `
+      SELECT s.sale_id, s.sale_date, s.total_amount, s.subtotal_amount, s.tax_amount, s.is_completed, b.branch_id, b.branch_name, c.currency_code, c.symbol FROM pos_module.sale s
+      INNER JOIN core.branch b USING(branch_id)
+      INNER JOIN core.currency c USING(currency_id)
+      WHERE s.branch_id = $1
+    `
   },
   items: {
     getItems: `
@@ -124,7 +135,7 @@ export const queries = createQueries({
       WHERE si.sale_id = $1
     `, // ? add pagination
     getItemById: 'SELECT * FROM pos_module.sale_item WHERE sale_item_id = $1',
-    delete: 'DELETE FROM pos_module.sale_item WHERE sale_item_id = $1',
+    delete: 'DELETE FROM pos_module.sale_item WHERE sale_item_id = $1 RETURNING sale_item_id',
   },
   bill: {
     create: `

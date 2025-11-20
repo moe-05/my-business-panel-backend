@@ -20,6 +20,11 @@ export class ProductService {
     return products.rows;
   }
 
+  async getProductBySku(sku: string): Promise<Product> {
+    const product = await this.db.query(queries.products.getBySku, [sku]);
+    return product.rows[0];
+  }
+
   async createProduct(data: NewProductDto) {
     const {
       tenant_id,
@@ -39,7 +44,10 @@ export class ProductService {
       unit_price,
     ]);
 
-    return { message: "Product created successfully!", product: newProduct.rows[0] };
+    return {
+      message: 'Product created successfully!',
+      product: newProduct.rows[0],
+    };
   }
 
   async updateProduct(data: UpdateProductDto, productId: string) {
@@ -77,7 +85,7 @@ export class ProductService {
 
     try {
       const res = await this.db.query(queryString, paramsArray);
-      return { message: "Product updated successfully!", product: res.rows[0] };
+      return { message: 'Product updated successfully!', product: res.rows[0] };
     } catch (error) {
       console.error('Error updating product:', error);
       throw new InternalServerErrorException(error);
