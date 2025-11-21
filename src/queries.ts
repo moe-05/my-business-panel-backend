@@ -2,10 +2,13 @@ import { createQueries } from '@lodestar-official/database';
 
 export const queries = createQueries({
   user: {
-    all: 'SELECT * FROM core.users',
-    byId: 'SELECT * FROM core.users WHERE users_id = $1 LIMIT 1',
-    byEmail: 'SELECT * FROM core.users WHERE email = $1 LIMIT 1',
-    byTenant: 'SELECT * FROM core.users WHERE tenant_id = $1',
+    all: 'SELECT user_id, email, role_id, tenant_id FROM core.users',
+    byId: 'SELECT user_id, email, role_id FROM core.users WHERE users_id = $1 LIMIT 1',
+    byEmail:
+      'SELECT user_id, email, role_id FROM core.users WHERE email = $1 LIMIT 1',
+    byTenant:
+      'SELECT user_id, email, role_id FROM core.users WHERE tenant_id = $1',
+    byEmailWithPassword: 'SELECT * FROM core.users WHERE email = $1 LIMIT 1',
     create: `
       INSERT INTO core.users 
       (tenant_id, email, password_hash, role_id, created_at, updated_at) 
@@ -191,11 +194,11 @@ export const queries = createQueries({
     byId: `SELECT * FROM pos_module.cash_register WHERE cash_register_id = $1 LIMIT 1`,
     byBranch: `SELECT * FROM pos_module.cash_register WHERE branch_id = $1`,
     create: `INSERT INTO pos_module.cash_register (branch_id, is_active, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) RETURNING *`,
+    delete: `DELETE FROM pos_module.cash_register WHERE cash_register_id = $1 RETURNING *`,
     startSession: `INSERT INTO pos_module.cash_register_session (cash_register_id, opened_at, opening_amount, user_id, is_active) VALUES ($1, $2, $3, $4, true) RETURNING *`,
     getSessionById: `SELECT * FROM pos_module.cash_register_session WHERE cash_register_session_id = $1 LIMIT 1`,
     getSessionsByCashRegister: `SELECT * FROM pos_module.cash_register_session WHERE cash_register_id = $1 ORDER BY opened_at DESC`,
     closeSession: `UPDATE pos_module.cash_register_session SET closed_at = $1, closing_amount = $2, is_active = false WHERE cash_register_session_id = $3 RETURNING *`,
-    delete: `DELETE FROM pos_module.cash_register WHERE cash_register_id = $1 RETURNING *`,
   },
   promotions: {
     getPromos: `
