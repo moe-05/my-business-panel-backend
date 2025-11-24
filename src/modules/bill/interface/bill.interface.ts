@@ -5,11 +5,12 @@ export interface Bill {
   tax_amount: number;
   total_amount: number;
   billed_at: Date;
+  updated_at: Date;
+  sale_id: string;
 }
 
 export interface FullBill extends Bill {
   bill_id: string;
-  updated_at: string;
 }
 
 export interface BillDB {

@@ -27,7 +27,6 @@ export class SaleService {
       data.sale_id,
       data.branch_id,
       data.sale_date,
-      data.user_id,
       data.currency_id,
       data.total_amount,
       data.is_completed,
@@ -47,7 +46,6 @@ export class SaleService {
         sale_id: sale_uuid,
         branch_id: data.branch_id,
         sale_date: new Date(),
-        user_id: data.user_id,
         currency_id: data.currency_id,
         total_amount: data.total_amount,
         is_completed: data.is_completed,
@@ -67,6 +65,8 @@ export class SaleService {
         tax_amount: data.tax_amount,
         total_amount: data.total_amount,
         billed_at: new Date(),
+        updated_at: new Date(),
+        sale_id: sale,
       });
 
       await this.db.query('COMMIT');

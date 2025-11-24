@@ -1,4 +1,3 @@
-import { NewCustomerPaymentDto } from '@/modules/customer_payment/dto/NewCustomerPayment.dto';
 import { Payment } from '@/modules/customer_payment/interface/payments.interface';
 import { Item } from '@/modules/sale-item/interface/sale-item.interface';
 import { Type } from 'class-transformer';
@@ -15,9 +14,6 @@ export class NewSingleSaleDto {
   @IsDate()
   sale_date!: Date;
 
-  @IsUUID()
-  user_id!: string;
-
   @IsNumber()
   currency_id!: number;
 
@@ -31,9 +27,6 @@ export class NewSingleSaleDto {
 export class FullSaleDto {
   @IsUUID()
   branch_id!: string;
-
-  @IsUUID()
-  user_id!: string;
 
   @IsNumber()
   currency_id!: number;

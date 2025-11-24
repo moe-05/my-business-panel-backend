@@ -20,4 +20,19 @@ export class ReturnTransactionDto {
   @Type(() => Date)
   @IsDate()
   return_date!: Date;
+
+  return_products!: ReturnProduct[];
+}
+
+export interface ReturnProduct {
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  sale_item_id: string;
+}
+
+export interface BulkUpdateProducts {
+  sale_item_id: string;
+  quantity: number;
+  total_price: number;
 }

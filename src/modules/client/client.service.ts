@@ -22,13 +22,22 @@ export class ClientsService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
   /**
-   * Find a client by their ID
+   * Find a client by their document ID
    * @param clientId: string
    * @returns: Client
    */
-  async findClientById(clientId: string): Promise<Client> {
+  async findClientByDocumentId(clientId: string): Promise<Client> {
     const client = await this.db.query(queries.client.getInfo, [clientId]);
 
+    if (!client || client.rows.length === 0) {
+      throw new NotFoundException('Client not found');
+    }
+
+    return client.rows[0];
+  }
+
+  async findClientById(clientId: string): Promise<Client> {
+    const client = await this.db.query(queries.client.byId, [clientId]);
     if (!client || client.rows.length === 0) {
       throw new NotFoundException('Client not found');
     }

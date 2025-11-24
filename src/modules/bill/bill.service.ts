@@ -22,6 +22,8 @@ export class BillService {
       tax_amount,
       total_amount,
       billed_at,
+      updated_at,
+      sale_id,
     } = data;
     const res = await this.db.query(queries.bill.create, [
       tenant_customer_id,
@@ -30,6 +32,8 @@ export class BillService {
       tax_amount,
       total_amount,
       billed_at,
+      updated_at,
+      sale_id,
     ]);
     if (res.rows.length == 0) throw new InvalidBill();
     return { message: 'Bill created!', bill: res.rows[0] };
