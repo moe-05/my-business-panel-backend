@@ -1,9 +1,9 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 
 export class InvalidCredentialsError extends HttpException {
-  constructor(username: string) {
+  constructor() {
     super(
-      { error: `User with username '${username}' not found.` },
+      { error: `Provided credentials are invalid` },
       HttpStatus.UNAUTHORIZED,
     );
     this.name = 'InvalidCredentialsError';

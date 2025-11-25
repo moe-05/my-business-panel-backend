@@ -47,12 +47,6 @@ export class UserController {
     return this.userService.getSelfInfo(session);
   }
 
-  @Get('tenant')
-  @RequiredLevel(4)
-  getUsersByTenant(@Query('tenant_id') tenant_id: string) {
-    return this.userService.getUsersByTenant(tenant_id);
-  }
-
   @RequiredLevel(3)
   @Get(':email')
   async getUserByEmail(@Param('email') email: string) {
