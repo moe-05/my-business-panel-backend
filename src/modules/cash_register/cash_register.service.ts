@@ -13,10 +13,15 @@ import { InvalidCashRegisterError } from '@/common/errors/invalid_cash_register.
 import { CashRegister } from '@/modules/cash_register/interfaces/cash_register.interface';
 import { CashRegisterSession } from '@/modules/cash_register/interfaces/cash_register_session.interface';
 import { InvalidCashRegisterSessionError } from '@/common/errors/invalid_cash_register_session.error';
+import { RegisterTransactionDto } from './dto/register_transaction.dto';
+import { BranchService } from '@/modules/branch/branch.service';
 
 @Injectable()
 export class CashRegisterService {
-  constructor(@Inject(DATABASE) private readonly db: Database) {}
+  constructor(
+    @Inject(DATABASE) private readonly db: Database,
+    private readonly branchService: BranchService,
+  ) {}
 
   async findAll(): Promise<{ results: CashRegister[] }> {
     const { rows } = await this.db.query(queries.cash_register.all, []);
@@ -38,41 +43,37 @@ export class CashRegisterService {
     return { results: rows };
   }
 
-  async create(createDto: CreateCashRegisterDto) {
+  async create(tenant_id: string, createDto: CreateCashRegisterDto) {
     const { branch_id, is_active } = createDto;
 
-    // await this.checkBranchId(branch_id);
+    await this.branchService.validateBranch(branch_id, tenant_id);
 
-    return await this.db.query(queries.cash_register.create, [
+    const { rows } = await this.db.query(queries.cash_register.create, [
       branch_id,
       is_active,
     ]);
+    return { created: rows[0] };
   }
 
   async startSession(
-    session: IUserSession,
+    userId: string,
     startSessionDto: StartCashRegisterSessionDto,
   ) {
-    const { user_id } = session;
     const { cash_register_id, opened_at, opening_amount } = startSessionDto;
 
-    await this.checkCashRegisterId(cash_register_id);
+    await this.checkId(cash_register_id);
 
     const { rows } = await this.db.query(queries.cash_register.startSession, [
       cash_register_id,
       opened_at,
       opening_amount,
-      user_id,
+      userId,
     ]);
 
     return { started: rows[0] };
   }
 
-  async closeSession(
-    session: IUserSession,
-    closeSession: CloseCashRegisterSessionDto,
-  ) {
-    const { user_id } = session;
+  async closeSession(closeSession: CloseCashRegisterSessionDto) {
     const { cash_register_session_id, closed_at, closing_amount } =
       closeSession;
 
@@ -82,33 +83,18 @@ export class CashRegisterService {
     const { rows } = await this.db.query(queries.cash_register.closeSession, [
       closed_at,
       closing_amount,
-      user_id,
       cash_register_session_id,
     ]);
     return { closed: rows[0] };
   }
 
-  // async registerTransaction(transactionDto: RegisterTransactionDto) {}
-
   async update(updateDto: UpdateCashRegisterDto) {
-    const fields = [];
-    const values = [];
-    let index = 1;
-
-    for (const [key, value] of Object.entries(updateDto)) {
-      fields.push(`${key} = $${index}`);
-      values.push(value);
-      index++;
-    }
-
-    const query = `
-      UPDATE pos_module.cash_register
-      SET ${fields.join(', ')}, updated_at = NOW()
-      WHERE cash_register_id = $${index}
-      RETURNING *
-    `;
-
-    const { rows } = await this.db.query(query, values);
+    const { branch_id, cash_register_id, is_active } = updateDto;
+    const { rows } = await this.db.query(queries.cash_register.update, [
+      cash_register_id,
+      branch_id,
+      is_active,
+    ]);
     return { updated: rows[0] };
   }
 
@@ -119,18 +105,32 @@ export class CashRegisterService {
     return { deleted: rows[0] };
   }
 
-  private async checkCashRegisterId(cash_register_id: string): Promise<void> {
+  async registerTransaction(
+    session: IUserSession,
+    registerTransactionDto: RegisterTransactionDto,
+  ) {
+    const { user_id } = session;
+    const { cash_register_session_id, amount, transaction_time } =
+      registerTransactionDto;
+
+    const cash_session = await this.getSession(cash_register_session_id);
+    if (!cash_session.is_active) throw new InvalidCashRegisterSessionError();
+
+    const { rows } = await this.db.query(
+      queries.cash_register.registerTransaction,
+      [cash_register_session_id, amount, transaction_time, user_id],
+    );
+
+    return { transaction: rows[0] };
+  }
+
+  private async checkId(cash_register_id: string): Promise<void> {
     const { rowCount } = await this.db.query(queries.cash_register.byId, [
       cash_register_id,
     ]);
     if (rowCount === 0)
       throw new InvalidCashRegisterError('Cash register not found');
   }
-
-  // private async checkBranchId(branch_id: string): Promise<void> {
-  //   const { rowCount } = await this.db.query(queries.branch.byId, [branch_id]);
-  //   if (rowCount === 0) throw new InvalidBranchError();
-  // }
 
   private async getSession(session_id: string): Promise<CashRegisterSession> {
     const { rows, rowCount } = await this.db.query(

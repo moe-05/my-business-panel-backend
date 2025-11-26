@@ -8,6 +8,7 @@ import { queries } from '@/queries';
 import { InvalidBranchError } from '@/common/errors/invalid_branch.error';
 import { InvalidSessionError } from '@/common/errors/invalid_session.error';
 import { StateService } from '@/modules/state/state.service';
+import { InvalidTenantError } from '@/common/errors/invalid_tenant.error';
 
 @Injectable()
 export class BranchService {
@@ -77,8 +78,10 @@ export class BranchService {
     return rows[0];
   }
 
-  async validateBranch(branchId: string): Promise<void> {
+  async validateBranch(branchId: string, tenantId?: string): Promise<void> {
     const branch = await this.findById(branchId);
     if (!branch) throw new InvalidBranchError();
+    if (tenantId && branch.tenant_id !== tenantId)
+      throw new InvalidTenantError(tenantId);
   }
 }

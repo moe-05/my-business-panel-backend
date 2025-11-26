@@ -1,9 +1,10 @@
 import {
   IsUUID,
-  IsDecimal,
   IsNotEmpty,
   IsPositive,
   IsDateString,
+  IsOptional,
+  IsNumber,
 } from 'class-validator';
 
 export class StartCashRegisterSessionDto {
@@ -12,11 +13,11 @@ export class StartCashRegisterSessionDto {
   cash_register_id!: string;
 
   @IsNotEmpty()
-  @IsDecimal()
+  @IsNumber()
   @IsPositive()
   opening_amount!: number;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsDateString()
-  opened_at!: string;
+  opened_at: string = new Date().toISOString();
 }

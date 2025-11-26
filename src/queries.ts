@@ -161,7 +161,7 @@ export const queries = createQueries({
       WHERE t.tenant_id = $1 AND tc.document_number = $2
     `,
     delete: 'DELETE FROM pos_module.bill WHERE bill_id = $1 RETURNING bill_id',
-    updateAmount: `UPDATE pos_module.bill SET total_amount = total_amount - $1 WHERE bill_id = $2`
+    updateAmount: `UPDATE pos_module.bill SET total_amount = total_amount - $1 WHERE bill_id = $2`,
   },
   returns: {
     newTransaction: `
@@ -198,10 +198,12 @@ export const queries = createQueries({
     byBranch: `SELECT * FROM pos_module.cash_register WHERE branch_id = $1`,
     create: `INSERT INTO pos_module.cash_register (branch_id, is_active, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) RETURNING *`,
     delete: `DELETE FROM pos_module.cash_register WHERE cash_register_id = $1 RETURNING *`,
+    update: `UPDATE pos_module.cash_register SET branch_id = COALESCE($2, branch_id), is_active = COALESCE($3, is_active), updated_at = NOW() WHERE cash_register_id = $1 RETURNING *`,
     startSession: `INSERT INTO pos_module.cash_register_session (cash_register_id, opened_at, opening_amount, user_id, is_active) VALUES ($1, $2, $3, $4, true) RETURNING *`,
     getSessionById: `SELECT * FROM pos_module.cash_register_session WHERE cash_register_session_id = $1 LIMIT 1`,
     getSessionsByCashRegister: `SELECT * FROM pos_module.cash_register_session WHERE cash_register_id = $1 ORDER BY opened_at DESC`,
     closeSession: `UPDATE pos_module.cash_register_session SET closed_at = $1, closing_amount = $2, is_active = false WHERE cash_register_session_id = $3 RETURNING *`,
+    registerTransaction: `INSERT INTO cash_register_sale_transaction (cash_register_session_id, amount, transaction_time, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW()) RETURNING *`,
   },
   promotions: {
     getPromos: `

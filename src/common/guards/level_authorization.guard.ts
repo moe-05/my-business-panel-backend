@@ -21,11 +21,19 @@ export class LevelAuthorizationGuard implements CanActivate {
     if (!minimumLevel) return true;
 
     const user: IUserSession = context.switchToHttp().getRequest().user;
-    if (!user) throw new InvalidSessionError('INVALID');
+    if (!user) {
+      console.error('Access denied: no user in session');
+      throw new InvalidSessionError('INVALID');
+    }
 
     const userRole = this.stateService.getRole(user.role_id);
     const validAccess = userRole.role_hierarchy >= minimumLevel;
-    if (!validAccess) throw new InvalidSessionError('UNAUTHORIZED');
+    if (!validAccess) {
+      console.error(
+        `Access denied: required level ${minimumLevel}, user level ${userRole.role_hierarchy}`,
+      );
+      throw new InvalidSessionError('UNAUTHORIZED');
+    }
     return true;
   }
 }

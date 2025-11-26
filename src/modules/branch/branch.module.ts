@@ -7,5 +7,6 @@ import { StateModule } from '../state/state.module';
   imports: [StateModule],
   controllers: [BranchController],
   providers: [BranchService],
+  exports: [BranchService],
 })
 export class BranchModule {}
