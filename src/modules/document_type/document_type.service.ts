@@ -10,12 +10,8 @@ export class DocumentTypeService {
   //Delete this when the database is implemented
 
   async findAll(): Promise<DocumentType[]> {
-    try {
-      const query = await this.db.query(queries.document_type.all);
-      return query.rows;
-    } catch (error) {
-      throw new Error('Error fetching document types');
-    }
+    const query = await this.db.query(queries.document_type.all);
+    return query.rows;
   }
 
   /**
@@ -24,20 +20,12 @@ export class DocumentTypeService {
    * @returns: DocumentType | undefined
    */
   async findById(id: string): Promise<DocumentType> {
-    try {
-      const document = await this.db.query(queries.document_type.byId, [id]);
-      return document.rows[0];
-    } catch (error) {
-      throw new Error('Error fetching document type');
-    }
+    const document = await this.db.query(queries.document_type.byId, [id]);
+    return document.rows[0];
   }
 
   async delete(id: string) {
-    try {
-      const result = await this.db.query(queries.document_type.delete, [id]);
-      return result.rows;
-    } catch (error) {
-      throw new Error('Error deleting document type');
-    }
+    const result = await this.db.query(queries.document_type.delete, [id]);
+    return { message: `Document type with ID ${result.rows[0].document_type_id} deleted successfully` };
   }
 }

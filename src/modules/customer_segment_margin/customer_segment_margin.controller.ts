@@ -24,12 +24,12 @@ export class CustomerSegmentMarginController {
 
   //Tomorrow ill optimize this endpoint
   @Get()
-  async getMarginsInfo(@Res() res: Response) {
+  async getMarginsInfo() {
     return this.csegmentService.getMarginInfo();
   }
 
   @Post()
-  async createNewMargin(@Body() req: NewMarginDto, @Res() res: Response) {
+  async createNewMargin(@Body() req: NewMarginDto, ) {
     return this.csegmentService.createMargins(req);
   }
 
@@ -42,7 +42,7 @@ export class CustomerSegmentMarginController {
   }
 
   @Delete(':id')
-  async deleteMargin(@Param('id') id: string, @Res() res: Response) {
+  async deleteMargin(@Param('id') id: string, ) {
     return this.csegmentService.deleteMargin(id);
   }
 }

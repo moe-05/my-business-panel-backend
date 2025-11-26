@@ -27,8 +27,13 @@ export class ClientsController {
   }
 
   @Get(':id')
-  async getOneClient(@Param('id') id: string) {
+  async getOneClientById(@Param('id') id: string) {
     return this.clientsService.findClientById(id);
+  }
+
+  @Get('/dni/:documentId')
+  async getOneClient(@Param('documentId') documentId: string) {
+    return this.clientsService.findClientByDocumentId(documentId);
   }
 
   @Post()

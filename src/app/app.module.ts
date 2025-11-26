@@ -16,6 +16,7 @@ import { SaleItemModule } from '@/modules/sale-item/sale-item.module';
 import { BillModule } from '@/modules/bill/bill.module';
 import { PromosModule } from '@/modules/promos/promos.module';
 import { SegmentModule } from '@/modules/segment/segment.module';
+import { ReturnsModule } from '@/modules/returns/returns.module';
 import { BranchModule } from '@/modules/branch/branch.module';
 require('dotenv').config();
 
@@ -38,6 +39,7 @@ require('dotenv').config();
     BillModule,
     PromosModule,
     SegmentModule,
+    ReturnsModule
     BranchModule,
   ],
   controllers: [AppController],

@@ -22,8 +22,8 @@ export const queries = createQueries({
   },
   document_type: {
     all: 'SELECT * FROM core.document_type',
-    byId: 'SELECT * FROM core.document_type WHERE id = $1',
-    delete: 'DELETE FROM core.document_type WHERE id = $1',
+    byId: 'SELECT * FROM core.document_type WHERE document_type_id = $1',
+    delete: 'DELETE FROM core.document_type WHERE document_type_id = $1',
   },
   client: {
     all: 'SELECT * FROM core.tenant_customer',
@@ -104,11 +104,11 @@ export const queries = createQueries({
       INNER JOIN core.currency c USING(currency_id)
     `,
     getCustomerPayments: `
-      SELECT cp.payment_amount, pm.name, cp.payment_date, cp.verified, tc.first_name, tc.last_name, c.code FROM pos_module.customer_payment cp
+      SELECT cp.payment_amount, pm.name, cp.payment_date, cp.verified, tc.first_name, tc.last_name, c.currency_code FROM pos_module.customer_payment cp
       INNER JOIN core.tenant_customer tc USING(tenant_customer_id)
       INNER JOIN core.payment_method pm USING(payment_method_id)
       INNER JOIN core.currency c USING(currency_id)
-      WHERE core.tenant_customer_id = $1
+      WHERE cp.tenant_customer_id = $1
     `,
     createNewPayment: `
       INSERT INTO pos_module.customer_payment (tenant_customer_id, payment_method_id, payment_amount, payment_date, currency_id, verified)
@@ -119,8 +119,8 @@ export const queries = createQueries({
   },
   sales: {
     singleSale: `
-      INSERT INTO pos_module.sale (sale_id, branch_id, sale_date, user_id, currency_id, total_amount, is_completed)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO pos_module.sale (sale_id, branch_id, sale_date, currency_id, total_amount, is_completed)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING sale_id
     `,
     getSalesByBranch: `
@@ -142,8 +142,8 @@ export const queries = createQueries({
   },
   bill: {
     create: `
-      INSERT INTO pos_module.bill (tenant_customer_id, currency_id, subtotal_amount, tax_amount, total_amount, billed_at)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO pos_module.bill (tenant_customer_id, currency_id, subtotal_amount, tax_amount, total_amount, billed_at, updated_at, sale_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
     `,
     getBills: `
@@ -161,10 +161,13 @@ export const queries = createQueries({
       WHERE t.tenant_id = $1 AND tc.document_number = $2
     `,
     delete: 'DELETE FROM pos_module.bill WHERE bill_id = $1 RETURNING bill_id',
+    updateAmount: `UPDATE pos_module.bill SET total_amount = total_amount - $1 WHERE bill_id = $2`
   },
   returns: {
-    getReturns: `
-      
+    newTransaction: `
+      INSERT INTO pos_module.return_transaction (bill_id, tenant_customer_id, total_refund_amount, refund_method, return_status_id, return_date)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING return_transaction_id
     `,
   },
   branch: {
@@ -263,6 +266,16 @@ export const bulkItems = [
   'quantity',
   'unit_price',
   'total_price',
+];
+
+export const bulkReturns = [
+  'return_transaction_id',
+  'quantity',
+  'unit_price',
+  'total_price',
+  'created_at',
+  'updated_at',
+  'sale_item_id',
 ];
 
 export const bulkPayments = [
