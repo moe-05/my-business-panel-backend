@@ -11,7 +11,7 @@ import {
   ReturnTransactionDto,
 } from './dto/return_transaction.dto';
 import { bulkReturns, queries } from '@/queries';
-import { UpdateProductDto } from '../product/dto/updateProduct.dto';
+import { FindReturnsDto } from './dto/find_returns.dto';
 
 @Injectable()
 export class ReturnsService {
@@ -67,11 +67,24 @@ export class ReturnsService {
     }
   }
 
+  async findReturns(findReturnsDto: FindReturnsDto) {
+    const { rows } = await this.db.query(queries.returns.find, [
+      findReturnsDto.bill_id,
+      findReturnsDto.tenant_customer_id,
+      findReturnsDto.return_status_id,
+      findReturnsDto.refund_method,
+      findReturnsDto.date_from,
+      findReturnsDto.date_to,
+    ]);
+    return { results: rows };
+  }
+
   bulkInsertReturns(
     products: ReturnProduct[],
     returnTransaction: string,
   ): { query: string; values: any[] } {
-    if (!Array.isArray(products) || products.length === 0) return { query: '', values: [] };
+    if (!Array.isArray(products) || products.length === 0)
+      return { query: '', values: [] };
 
     const values: any[] = [];
     const placeholders: string[] = [];
@@ -102,7 +115,7 @@ export class ReturnsService {
       RETURNING sale_item_id, quantity, total_price
     `;
 
-    console.log("Bulk insert", query, values);
+    console.log('Bulk insert', query, values);
     return { query, values };
   }
 
@@ -126,7 +139,7 @@ export class ReturnsService {
       ) AS data(sale_item_id, quantity, total_price)
       WHERE s.sale_item_id = data.sale_item_id AND (COALESCE(s.quantity, 0) - data.quantity::integer) >= 0
     `;
-    console.log("Bulk update", q, values);
+    console.log('Bulk update', q, values);
     return { query: q, values: values };
   }
 }

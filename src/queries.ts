@@ -169,6 +169,25 @@ export const queries = createQueries({
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING return_transaction_id
     `,
+    find: `
+      SELECT 
+          return_transaction_id,
+          bill_id, 
+          tenant_customer_id, 
+          total_refund_amount, 
+          refund_method, 
+          return_status_id, 
+          return_date
+      FROM 
+          pos_module.return_transaction
+      WHERE 
+          ($1::uuid IS NULL OR bill_id = $1)
+          AND ($2::uuid IS NULL OR tenant_customer_id = $2)
+          AND ($3::int IS NULL OR return_status_id = $3)
+          AND ($4::int IS NULL OR refund_method = $4)
+          AND ($5::timestamp IS NULL OR return_date >= $5) 
+          AND ($6::timestamp IS NULL OR return_date <= $6)
+      ORDER BY return_date DESC`,
   },
   branch: {
     all: `SELECT * FROM core.branch`,
