@@ -13,11 +13,16 @@ import { NewTenantDto } from './dto/newTenant.dto';
 import { UpdateTenantDto } from './dto/updateTenant.dto';
 import { LevelAuthorizationGuard } from '@/common/guards/level_authorization.guard';
 import { RoleAuthorizationGuard } from '@/common/guards/role_authorization.guard';
+import { UserService } from '../user/user.service';
+import { InvalidTenantError } from '@/common/errors/invalid_tenant.error';
 
 // ? UseGuards(AuthorizationGuard)
 @Controller('tenant')
 export class TenantController {
-  constructor(private readonly tenantService: TenantService) {}
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly userService: UserService,
+  ) {}
 
   @Get()
   async getAllTenants() {
@@ -27,6 +32,12 @@ export class TenantController {
   @Get(':id')
   async getSingleTenant(@Param('id') id: string) {
     return this.tenantService.getTenantById(id);
+  }
+
+  @Get(':id/users')
+  async getUsersByTenant(@Param('id') id: string) {
+    if (!id) throw new InvalidTenantError(id);
+    return this.userService.getUsersByTenant(id);
   }
 
   @Post()

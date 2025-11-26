@@ -17,6 +17,7 @@ import { BillModule } from '@/modules/bill/bill.module';
 import { PromosModule } from '@/modules/promos/promos.module';
 import { SegmentModule } from '@/modules/segment/segment.module';
 import { ReturnsModule } from '@/modules/returns/returns.module';
+import { BranchModule } from '@/modules/branch/branch.module';
 require('dotenv').config();
 
 @Module({
@@ -39,6 +40,7 @@ require('dotenv').config();
     PromosModule,
     SegmentModule,
     ReturnsModule
+    BranchModule,
   ],
   controllers: [AppController],
   providers: [AppService],

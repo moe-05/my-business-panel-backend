@@ -1,12 +1,4 @@
-import {
-  Post,
-  Controller,
-  UsePipes,
-  ValidationPipe,
-  Body,
-  Res,
-  UseGuards,
-} from '@nestjs/common';
+import { Post, Controller, Body, Res, UseGuards } from '@nestjs/common';
 import { AuthService } from '@/modules/auth/auth.service';
 import { LoginDto } from './dto/login.dto';
 import { Response } from 'express';
@@ -17,16 +9,15 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('/login')
-  @UsePipes(ValidationPipe)
   async login(@Body() loginDto: LoginDto, @Res() response: Response) {
-    const token = await this.authService.login(loginDto);
+    const { user, token } = await this.authService.login(loginDto);
     response.cookie('auth_token', token, {
       httpOnly: true,
       secure: true,
       maxAge: 24 * 60 * 60 * 1000, // 1 day
       //   sameSite: 'strict',
     });
-    return response.json({ message: 'Login successful' }).status(200);
+    return response.json({ message: 'Login successful', user }).status(200);
   }
 
   @UseGuards(AuthenticationGuard)

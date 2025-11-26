@@ -5,8 +5,6 @@ import {
   Put,
   Param,
   Body,
-  UsePipes,
-  ValidationPipe,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -28,14 +26,12 @@ export class UserController {
 
   @Post()
   @RequiredLevel(3)
-  @UsePipes(ValidationPipe)
   async createUser(@Body() createUserDto: CreateUserDto) {
     return this.userService.createUser(createUserDto);
   }
 
   @Put()
   @RequiredLevel(3)
-  @UsePipes(ValidationPipe)
   async assignRole(@Body() assignRoleDto: AssignRoleDto) {
     return this.userService.assignRole(assignRoleDto);
   }
@@ -49,13 +45,6 @@ export class UserController {
   @Get()
   getSelfInfo(@Session() session: IUserSession) {
     return this.userService.getSelfInfo(session);
-  }
-
-  @Get('tenant')
-  @RequiredLevel(4)
-  getUsersByTenant(@Query('tenant_id') tenant_id: string) {
-    // Placeholder for fetching users by tenant
-    return this.userService.getUsersByTenant(tenant_id);
   }
 
   @RequiredLevel(3)

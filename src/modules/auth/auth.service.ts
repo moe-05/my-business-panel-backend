@@ -23,10 +23,12 @@ export class AuthService {
     return compare(plainPassword, hashedPassword);
   }
 
-  async login(loginDto: LoginDto) {
+  async login(
+    loginDto: LoginDto,
+  ): Promise<{ user: IUserSession; token: string }> {
     const { email, password } = loginDto;
     const storedUser = await this.usersService.getUserByEmail(email);
-    if (!storedUser) throw InvalidCredentialsError;
+    if (!storedUser) throw new InvalidCredentialsError();
 
     const validPassword = await this.validatePassword(
       storedUser.password_hash,
@@ -35,7 +37,7 @@ export class AuthService {
     console.log(
       `Password ${password} for user ${email} is ${validPassword ? 'valid' : 'invalid'}`,
     );
-    if (!validPassword) throw InvalidCredentialsError;
+    if (!validPassword) throw new InvalidCredentialsError();
 
     const userSession: IUserSession = {
       user_id: storedUser.users_id,
@@ -44,6 +46,6 @@ export class AuthService {
       role_id: storedUser.role_id,
     };
     const token = await this.jwtService.signAsync(userSession);
-    return token;
+    return { user: userSession, token };
   }
 }

@@ -10,6 +10,8 @@ import { StateService } from '../state/state.service';
 import { UserCreationError } from '@/common/errors/user_create.error';
 import { AssignRoleDto } from '@/modules/user/dto/assign_role.dto';
 import { IUserSession } from '@/common/interfaces/user_session.interface';
+import { isUUID } from 'class-validator';
+import { InvalidTenantError } from '@/common/errors/invalid_tenant.error';
 
 @Injectable()
 export class UserService {
@@ -19,12 +21,16 @@ export class UserService {
   ) {}
 
   async getUserByEmail(email: string): Promise<IUserResult | null> {
-    const fetchedData = await this.db.query(queries.user.byEmail, [email]);
+    const fetchedData = await this.db.query(queries.user.byEmailWithPassword, [
+      email,
+    ]);
     if (fetchedData.rows.length === 0) return null;
     return fetchedData.rows[0];
   }
 
   async getUsersByTenant(tenant_id: string): Promise<IUserResult[]> {
+    if (isUUID(tenant_id) === false) throw new InvalidTenantError(tenant_id);
+
     const fetchedData = await this.db.query(queries.user.byTenant, [tenant_id]);
     return fetchedData.rows;
   }
