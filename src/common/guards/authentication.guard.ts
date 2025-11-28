@@ -28,6 +28,7 @@ export class AuthenticationGuard implements CanActivate {
 
       return true;
     } catch {
+      console.error('Access denied: invalid or expired token');
       throw new InvalidSessionError('UNAUTHORIZED');
     }
   }

@@ -1,7 +1,8 @@
 import {
   IsDateString,
-  IsDecimal,
   IsNotEmpty,
+  IsNumber,
+  IsOptional,
   IsPositive,
   IsUUID,
 } from 'class-validator';
@@ -12,11 +13,11 @@ export class CloseCashRegisterSessionDto {
   cash_register_session_id!: string;
 
   @IsNotEmpty()
-  @IsDateString()
-  closed_at!: string;
-
-  @IsNotEmpty()
-  @IsDecimal()
+  @IsNumber()
   @IsPositive()
   closing_amount!: number;
+
+  @IsOptional()
+  @IsDateString()
+  closed_at?: string = new Date().toISOString();
 }

@@ -5,7 +5,6 @@ import {
   Put,
   Param,
   Body,
-  Query,
   UseGuards,
 } from '@nestjs/common';
 import { UserService } from '@/modules/user/user.service';
