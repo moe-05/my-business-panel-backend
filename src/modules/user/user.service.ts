@@ -5,7 +5,7 @@ import Database from '@lodestar-official/database';
 import { DATABASE } from '@/modules/db/db.provider';
 import { IUserResult } from '@/modules/user/interfaces/user_result.interface';
 import { queries } from '@/queries';
-import { hash } from 'bcrypt';
+import { hash, hashSync } from 'bcrypt';
 import { StateService } from '../state/state.service';
 import { UserCreationError } from '@/common/errors/user_create.error';
 import { AssignRoleDto } from '@/modules/user/dto/assign_role.dto';
@@ -51,6 +51,10 @@ export class UserService {
       this.state.getConstant<number>('PASSWORD_SALT_ROUNDS'),
     );
     const { tenant_id, email, role_id } = createUserDto;
+
+    const validTenant = isUUID(tenant_id) && this.state.getTenant(tenant_id);
+    if (!validTenant) throw new InvalidTenantError(tenant_id);
+
     const newUser = await this.db.query(queries.user.create, [
       tenant_id,
       email,
@@ -61,6 +65,25 @@ export class UserService {
       throw new UserCreationError(email);
     }
     return { message: 'user created successfully!' };
+  }
+
+  async createUsersBulk(createUserDtos: CreateUserDto[]) {
+    const saltRounts = this.state.getConstant<number>('PASSWORD_SALT_ROUNDS');
+    const values = createUserDtos
+      .map((dto) => {
+        const password_hash = hashSync(dto.password, saltRounts);
+        const validTenant =
+          isUUID(dto.tenant_id) && this.state.getTenant(dto.tenant_id);
+        if (!validTenant) throw new InvalidTenantError(dto.tenant_id);
+
+        return `('${dto.tenant_id}', '${dto.email}', '${password_hash}', ${dto.role_id})`;
+      })
+      .join(', ');
+
+    const finalQuery = `INSERT INTO core.users (tenant_id, email, password_hash, role_id) VALUES ${values};`;
+
+    await this.db.query(finalQuery);
+    return { message: 'users created successfully!', users: finalQuery };
   }
 
   async assignRole(assignRoleDto: AssignRoleDto) {
