@@ -1,0 +1,55 @@
+import { CustomerService } from './customer.service';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  InternalServerErrorException,
+  Param,
+  Patch,
+  Post,
+  Res,
+} from '@nestjs/common';
+import { NewClientDto } from './dto/newClient.dto';
+import { UpdateClientDto } from './dto/updateClient.dto';
+
+// ? Implement AuthGuard
+//UseGuards(AuthGuard)
+@Controller('customers')
+export class CustomerController {
+  constructor(private readonly customerService: CustomerService) {}
+
+  @Get()
+  async getAll() {
+    return this.customerService.getAllCustomers();
+  }
+
+  @Get(':id')
+  async getOneCustomerById(@Param('id') id: string) {
+    return this.customerService.findCustomerById(id);
+  }
+
+  @Get('/dni/:documentId')
+  async getOneCustomer(@Param('documentId') documentId: string) {
+    return this.customerService.findCustomerByDocumentId(documentId);
+  }
+
+  @Post()
+  async createCustomer(@Body() request: NewClientDto) {
+    return this.customerService.createCustomer(request);
+  }
+
+  @Patch(':id')
+  async updateCustomer(
+    @Param('id') id: string,
+    @Body()
+    request: UpdateClientDto,
+  ) {
+    return this.customerService.updateCustomer(id, request);
+  }
+
+  @Delete(':id')
+  async deleteCustomer(@Param('id') id: string) {
+    return this.customerService.deleteCustomer(id);
+  }
+}

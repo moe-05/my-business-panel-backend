@@ -6,8 +6,8 @@ import {
 } from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
 import Database from '@lodestar-official/database';
-import { queries } from '@/queries';
-import { NewProductDto } from './dto/newProduct.dto';
+import { bulkProducts, queries } from '@/queries';
+import { NewProductDto, ProductInsert, ProductInsertDto } from './dto/newProduct.dto';
 import { UpdateProductDto } from './dto/updateProduct.dto';
 import { Product } from './interface/product.interface';
 
@@ -25,29 +25,62 @@ export class ProductService {
     return product.rows[0];
   }
 
-  async createProduct(data: NewProductDto) {
+  async createProduct(data: ProductInsertDto) {
     const {
-      tenant_id,
-      sku,
-      product_name,
-      product_description,
-      product_category_id,
-      unit_price,
+      products
     } = data;
 
-    const newProduct = await this.db.query(queries.products.create, [
-      tenant_id,
-      sku,
-      product_name,
-      product_description,
-      product_category_id,
-      unit_price,
-    ]);
+    const insertData = this.bulkInsertProducts(products);
+
+    const newProducts = await this.db.query(
+      insertData.query,
+      insertData.values,
+    );
 
     return {
-      message: 'Product created successfully!',
-      product: newProduct.rows[0],
+      message: 'Products created successfully!',
+      product: newProducts.rows,
     };
+  }
+
+  bulkInsertProducts(products: ProductInsert[]): {
+    query: string;
+    values: any[];
+  } {
+    if (!Array.isArray(products) || products.length === 0)
+      return { query: '', values: [] };
+
+    const values: any[] = [];
+    const placeholders: string[] = [];
+    let index = 1;
+
+    const tuples = bulkProducts.length;
+
+    products.forEach((p) => {
+      const rowPlaceholder = [];
+
+      for (let i = 0; i < tuples; i++) {
+        rowPlaceholder.push(`$${index++}`);
+      }
+      placeholders.push(`(${rowPlaceholder.join(', ')})`);
+
+      bulkProducts.forEach((k) => {
+        if (k === 'product_description') {
+          if (p[k as keyof ProductInsert] === undefined) values.push(null);
+        } else {
+          values.push(p[k as keyof ProductInsert]);
+        }
+      });
+    });
+
+    const query = `
+        INSERT INTO core.product (${bulkProducts.join(', ')})
+        VALUES ${placeholders.join(', ')}
+        RETURNING product_id
+      `;
+
+    console.log('Bulk insert', query, values);
+    return { query, values };
   }
 
   async updateProduct(data: UpdateProductDto, productId: string) {

@@ -13,8 +13,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ProductService } from './product.service';
-import { Response } from 'express';
-import { NewProductDto } from './dto/newProduct.dto';
+import { ProductInsertDto } from './dto/newProduct.dto';
 import { UpdateProductDto } from './dto/updateProduct.dto';
 
 // ? @UseGuards(AuthorizationGuard)
@@ -34,7 +33,7 @@ export class ProductController {
   }
 
   @Post()
-  async createNewProduct(@Body() req: NewProductDto) {
+  async createNewProduct(@Body() req: ProductInsertDto) {
     return this.productService.createProduct(req);
   }
 

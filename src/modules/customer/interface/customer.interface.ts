@@ -1,5 +1,5 @@
-export interface Client {
-  client_id: string;
+export interface Customer {
+  tenant_customer_id: string;
   tenant_id: string;
   first_name: string;
   last_name: string;

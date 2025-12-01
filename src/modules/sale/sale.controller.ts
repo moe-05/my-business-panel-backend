@@ -17,11 +17,6 @@ export class SaleController {
   }
 
   @Post()
-  async createSingleSale(@Body() data: NewSingleSaleDto) {
-    return this.saleService.createSingleSale(data);
-  }
-
-  @Post('full')
   async createFullSale(@Body() req: FullSaleDto) {
     return this.saleService.createFullSale(req);
   }
