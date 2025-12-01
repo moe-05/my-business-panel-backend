@@ -17,6 +17,7 @@ import { LevelAuthorizationGuard } from '@/common/guards/level_authorization.gua
 import { RoleAuthorizationGuard } from '@/common/guards/role_authorization.guard';
 // import { RequiredRole } from '@/common/decorators/role_metadata.decorator';
 import { RequiredLevel } from '@/common/decorators/level_metadata.decorator';
+import { CreateUserBulkDto } from '@/modules/user/dto/create_user_bulk.dto';
 
 @UseGuards(AuthenticationGuard, LevelAuthorizationGuard, RoleAuthorizationGuard)
 @Controller('user')
@@ -27,6 +28,12 @@ export class UserController {
   @RequiredLevel(3)
   async createUser(@Body() createUserDto: CreateUserDto) {
     return this.userService.createUser(createUserDto);
+  }
+
+  @Post('bulk')
+  @RequiredLevel(3)
+  async createUsersBulk(@Body() createUserDtos: CreateUserBulkDto) {
+    return this.userService.createUsersBulk(createUserDtos.users);
   }
 
   @Put()
