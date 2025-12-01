@@ -25,7 +25,7 @@ export const queries = createQueries({
     byId: 'SELECT * FROM core.document_type WHERE document_type_id = $1',
     delete: 'DELETE FROM core.document_type WHERE document_type_id = $1',
   },
-  client: {
+  customer: {
     all: 'SELECT * FROM core.tenant_customer',
     byId: 'SELECT * FROM core.tenant_customer WHERE tenant_customer_id = $1',
     getInfo: `
@@ -287,3 +287,12 @@ export const bulkPayments = [
   'currency_id',
   'verified',
 ];
+
+export const bulkProducts = [
+  'tenant_id',
+  'sku',
+  'product_name',
+  'product_description',
+  'product_category_id',
+  'unit_price',
+]

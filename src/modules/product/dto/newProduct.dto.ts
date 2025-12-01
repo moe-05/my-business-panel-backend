@@ -1,4 +1,9 @@
-import { IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsArray, IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
+
+export class ProductInsertDto {
+  @IsArray()
+  products!: NewProductDto[];
+}
 
 export class NewProductDto {
   @IsUUID()
@@ -19,4 +24,13 @@ export class NewProductDto {
 
   @IsNumber()
   unit_price!: number;
+}
+
+export interface ProductInsert {
+  tenant_id: string;
+  sku: string;
+  product_name: string;
+  product_description?: string;
+  product_category_id: number;
+  unit_price: number;
 }

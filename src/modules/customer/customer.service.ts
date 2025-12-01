@@ -6,7 +6,7 @@ import {
   NotFoundException,
   UseGuards,
 } from '@nestjs/common';
-import { Client } from './interface/client.interface';
+import { Customer } from './interface/customer.interface';
 import { NewClientDto } from './dto/newClient.dto';
 import { LevelAuthorizationGuard } from '@/common/guards/level_authorization.guard';
 import { DATABASE } from '../db/db.provider';
@@ -18,47 +18,47 @@ import { ClientCreateError } from '@/common/errors/client_create.error';
 // ? Activate when everything is ready
 // @UseGuards(AuthorizationGuard)
 @Injectable()
-export class ClientsService {
+export class CustomerService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
   /**
    * Find a client by their document ID
    * @param clientId: string
-   * @returns: Client
+   * @returns: Customer
    */
-  async findClientByDocumentId(clientId: string): Promise<Client> {
-    const client = await this.db.query(queries.client.getInfo, [clientId]);
+  async findCustomerByDocumentId(clientId: string): Promise<Customer> {
+    const customer = await this.db.query(queries.customer.getInfo, [clientId]);
 
-    if (!client || client.rows.length === 0) {
-      throw new NotFoundException('Client not found');
+    if (!customer || customer.rows.length === 0) {
+      throw new NotFoundException('Customer not found');
     }
 
-    return client.rows[0];
+    return customer.rows[0];
   }
 
-  async findClientById(clientId: string): Promise<Client> {
-    const client = await this.db.query(queries.client.byId, [clientId]);
-    if (!client || client.rows.length === 0) {
-      throw new NotFoundException('Client not found');
+  async findCustomerById(customerId: string): Promise<Customer> {
+    const customer = await this.db.query(queries.customer.byId, [customerId]);
+    if (!customer || customer.rows.length === 0) {
+      throw new NotFoundException('Customer not found');
     }
 
-    return client.rows[0];
+    return customer.rows[0];
   }
 
   /**
-   * @returns: Client[]
+   * @returns: Customer[]
    */
-  async getAllClients(): Promise<Client[]> {
-    const clients = await this.db.query(queries.client.all);
-    return clients.rows;
+  async getAllCustomers(): Promise<Customer[]> {
+    const customers = await this.db.query(queries.customer.all);
+    return customers.rows;
   }
 
   /**
    *
-   * @param clientData: Client
-   * @returns: Client
+   * @param customerData: Customer
+   * @returns: Customer
    */
-  async createClient(clientData: NewClientDto) {
+  async createCustomer(customerData: NewClientDto) {
     const {
       tenant_id,
       first_name,
@@ -69,10 +69,9 @@ export class ClientsService {
       phone,
       birthdate,
       address,
-      customer_segment_type,
-    } = clientData;
+    } = customerData;
 
-    const newClient = await this.db.query(queries.client.create, [
+    const newCustomer = await this.db.query(queries.customer.create, [
       tenant_id,
       first_name,
       last_name,
@@ -82,21 +81,20 @@ export class ClientsService {
       phone,
       birthdate,
       address,
-      customer_segment_type,
     ]);
 
-    if (newClient.rows.length == 0) throw new ClientCreateError(email);
-    return { message: 'Client created', client: newClient };
+    if (newCustomer.rows.length == 0) throw new ClientCreateError(email);
+    return { message: 'Customer created', customer: newCustomer.rows[0] };
   }
 
   /**
-   * Find a client by their ID and updates the information of the client
-   * @param clientId: string
-   * @param clientData: Partial<Omit<Client, 'client_id' | 'created_at' | 'updated_at'>>
-   * @returns: Client
+   * Find a customer by their ID and updates the information of the customer
+   * @param customerId: string
+   * @param customerData: Partial<Omit<Customer, 'customer_id' | 'created_at' | 'updated_at'>>
+   * @returns: Customer
    */
-  async updateClient(clientId: string, clientData: UpdateClientDto) {
-    const { ...updates } = clientData;
+  async updateCustomer(customerId: string, customerData: UpdateClientDto) {
+    const { ...updates } = customerData;
 
     const updateKeys = Object.keys(updates).filter(
       (key) => updates[key as keyof typeof updates] !== undefined,
@@ -117,7 +115,7 @@ export class ClientsService {
       index++;
     }
 
-    paramsArray.push(clientId);
+    paramsArray.push(customerId);
 
     const setString = setClause.join(', ');
 
@@ -132,25 +130,25 @@ export class ClientsService {
       const res = await this.db.query(queryString, paramsArray);
       return res.rows[0];
     } catch (error) {
-      console.error('Error updating client:', error);
+      console.error('Error updating customer:', error);
       throw new InternalServerErrorException(error);
     }
   }
 
   /**
-   * Find a client by their ID and deletes the client
-   * @param clientId: string
+   * Find a customer by their ID and deletes the customer
+   * @param customerId: string
    * @returns: void
    */
-  async deleteClient(clientId: string) {
-    const client = await this.findClientById(clientId);
+  async deleteCustomer(customerId: string) {
+    const customer = await this.findCustomerById(customerId);
 
-    if (!client) {
-      throw new Error('Client not found');
+    if (!customer) {
+      throw new Error('Customer not found');
     }
 
     try {
-      const res = await this.db.query(queries.client.delete, [clientId]);
+      const res = await this.db.query(queries.customer.delete, [customerId]);
       return res.rows[0];
     } catch (error) {
       throw new InternalServerErrorException(error);
