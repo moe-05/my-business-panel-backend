@@ -19,6 +19,7 @@ import { SegmentModule } from '@/modules/segment/segment.module';
 import { ReturnsModule } from '@/modules/returns/returns.module';
 import { BranchModule } from '@/modules/branch/branch.module';
 import { CashRegisterModule } from '@/modules/cash_register/cash_register.module';
+import { LoyalProgramModule } from '@/modules/loyal-program/loyal-program.module';
 require('dotenv').config();
 
 @Module({
@@ -43,6 +44,7 @@ require('dotenv').config();
     ReturnsModule,
     BranchModule,
     CashRegisterModule,
+    LoyalProgramModule,
   ],
   controllers: [AppController],
   providers: [AppService],

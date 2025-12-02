@@ -1,0 +1,62 @@
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { DATABASE } from '../db/db.provider';
+import Database from '@lodestar-official/database';
+import { queries } from '@/queries';
+import { NewLoyalProgramDto } from './dto/newLoyalProgram.dto';
+import { LoyalProgram } from './interface/loyal-program.interface';
+
+@Injectable()
+export class LoyalProgramService {
+  constructor(@Inject(DATABASE) private readonly db: Database) {}
+
+  async getLoyalProgramsByTenant(tenant_id: string): Promise<LoyalProgram[]> {
+    const programs = await this.db.query(queries.loyal_program.all, [
+      tenant_id,
+    ]);
+    return programs.rows;
+  }
+
+  async getLoyalProgramById(program_id: string): Promise<LoyalProgram> {
+    const program = await this.db.query(queries.loyal_program.byId, [
+      program_id,
+    ]);
+
+    if (program.rows.length === 0)
+      throw new NotFoundException(
+        `Loyal Program with id ${program_id} not found.`,
+      );
+
+    return program.rows[0];
+  }
+
+  async createLoyalProgram(data: NewLoyalProgramDto) {
+    const {
+      tenant_id,
+      points_per_dollar,
+      points_per_currency_unit,
+      minimum_purchase_for_points,
+    } = data;
+
+    await this.db.query(queries.loyal_program.create, [
+      tenant_id,
+      points_per_dollar,
+      points_per_currency_unit,
+      minimum_purchase_for_points || 0,
+    ]);
+
+    return { message: 'Loyal Program created successfully' };
+  }
+
+  async deleteLoyalProgram(program_id: string) {
+    const program = await this.db.query(queries.loyal_program.delete, [
+      program_id,
+    ]);
+
+    if (program.rowCount === 0)
+      throw new NotFoundException(
+        `Loyal Program with id ${program_id} not found.`,
+      );
+
+    return { message: 'Loyal Program deleted successfully' };
+  }
+}

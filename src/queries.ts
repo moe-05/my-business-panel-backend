@@ -278,6 +278,21 @@ export const queries = createQueries({
       RETURNING customer_segment_id
     `,
   },
+  loyal_program: {
+    create: `
+      INSERT INTO pos_module.loyalty_program (tenant_id, points_per_dollar, points_per_currency_unit, minimum_purchase_for_points, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, NOW(), NOW())
+    `,
+    all: `
+      SELECT * FROM pos_module.loyalty_program WHERE tenant_id = $1
+    `,
+    delete: `
+      DELETE FROM pos_module.loyalty_program WHERE loyalty_program_id = $1 RETURNING loyalty_program_id
+    `,
+    byId: `
+      SELECT * FROM pos_module.loyalty_program WHERE loyalty_program_id = $1 LIMIT 1
+    `
+  }
 });
 
 export const bulkItems = [
