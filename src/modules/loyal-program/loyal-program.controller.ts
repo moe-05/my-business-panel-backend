@@ -1,0 +1,28 @@
+import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import { LoyalProgramService } from './loyal-program.service';
+import { NewLoyalProgramDto } from './dto/newLoyalProgram.dto';
+
+@Controller('loyal-program')
+export class LoyalProgramController {
+  constructor(private readonly loyalService: LoyalProgramService) {}
+
+  @Get(':tenant_id')
+  async getLoyalProgramsByTenant(@Param('tenant_id') tenant_id: string) {
+    return this.loyalService.getLoyalProgramsByTenant(tenant_id);
+  }
+
+  @Get('program/:id')
+  async getLoyalProgramById(@Param('id') id: string) {
+    return this.loyalService.getLoyalProgramById(id);
+  }
+
+  @Post()
+  async createLoyalProgram(@Body() req: NewLoyalProgramDto) {
+    return this.loyalService.createLoyalProgram(req);
+  }
+
+  @Delete(':id')
+  async deleteLoyalProgram(@Param('id') id: string) {
+    return this.loyalService.deleteLoyalProgram(id);
+  }
+}
