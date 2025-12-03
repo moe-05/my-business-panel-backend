@@ -65,11 +65,9 @@ export class ProductService {
       placeholders.push(`(${rowPlaceholder.join(', ')})`);
 
       bulkProducts.forEach((k) => {
-        if (k === 'product_description') {
-          if (p[k as keyof ProductInsert] === undefined) values.push(null);
-        } else {
-          values.push(p[k as keyof ProductInsert]);
-        }
+        const valInsert = p[k as keyof ProductInsert];
+
+        values.push(valInsert === undefined ? null : valInsert);
       });
     });
 

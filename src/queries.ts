@@ -41,7 +41,7 @@ export const queries = createQueries({
       RETURNING *
     `,
     byEmail: 'SELECT * FROM core.tenant_customer WHERE email = $1',
-    delete: 'DELETE FROM core.tenant_customer WHERE id = $1',
+    delete: 'DELETE FROM core.tenant_customer WHERE tenant_customer_id = $1',
   },
   tenant: {
     all: 'SELECT * FROM core.tenant',
@@ -51,7 +51,17 @@ export const queries = createQueries({
       VALUES ($1, $2, $3, NOW(), NOW())
       RETURNING *
     `,
-    delete: 'DELETE FROM core.tenant WHERE id = $1',
+    delete: 'DELETE FROM core.tenant WHERE tenant_id = $1',
+    updateStripeId:
+      'UPDATE core.tenant SET stripe_id = $1 WHERE tenant_id = $2',
+  },
+  tenant_payment: {
+    all: 'SELECT * FROM core.tenant_payment WHERE tenant_id = $1',
+    create: `
+      INSERT INTO core.tenant_payment (tenant_id, payment_method_id, payment_amount, details)
+      VALUES ($1, $2, $3, $4)
+      RETURNING tenant_payment_id
+    `,
   },
   p_category: {
     all: 'SELECT * FROM core.product_category',
@@ -264,6 +274,10 @@ export const queries = createQueries({
       SELECT * FROM pos_module.promotion_type
     `,
   },
+  subscription: {
+    cancelSubscription:
+      'UPDATE core.tenant SET is_subscribed = false WHERE tenant_id = $1',
+  },
   customer_segment: {
     getSegments: `
       SELECT customer_segment_id, segment_name, segment_hierarchy FROM core.customer_segment
@@ -291,8 +305,8 @@ export const queries = createQueries({
     `,
     byId: `
       SELECT * FROM pos_module.loyalty_program WHERE loyalty_program_id = $1 LIMIT 1
-    `
-  }
+    `,
+  },
 });
 
 export const bulkItems = [
@@ -331,4 +345,4 @@ export const bulkProducts = [
   'product_description',
   'product_category_id',
   'unit_price',
-]
+];

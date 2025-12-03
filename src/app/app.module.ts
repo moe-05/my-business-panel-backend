@@ -20,7 +20,10 @@ import { ReturnsModule } from '@/modules/returns/returns.module';
 import { BranchModule } from '@/modules/branch/branch.module';
 import { CashRegisterModule } from '@/modules/cash_register/cash_register.module';
 import { LoyalProgramModule } from '@/modules/loyal-program/loyal-program.module';
+import { SubscriptionModule } from '@/modules/subscription/subscription.module';
 require('dotenv').config();
+
+console.log('Initializing AppModule with Stripe API Key length:', process.env.STRIPE_API_KEY?.length);
 
 @Module({
   imports: [
@@ -33,9 +36,7 @@ require('dotenv').config();
     CustomerSegmentMarginModule,
     ProductModule,
     CustomerPaymentModule,
-    StripeModule.forRoot(process.env.STRIPE_API_KEY || '', {
-      apiVersion: '2025-10-29.clover',
-    }),
+    StripeModule,
     SaleModule,
     SaleItemModule,
     BillModule,
@@ -45,6 +46,7 @@ require('dotenv').config();
     BranchModule,
     CashRegisterModule,
     LoyalProgramModule,
+    SubscriptionModule,
   ],
   controllers: [AppController],
   providers: [AppService],
