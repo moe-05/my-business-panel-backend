@@ -29,7 +29,7 @@ export class CustomerController {
     return this.customerService.findCustomerById(id);
   }
 
-  @Get('/dni/:documentId')
+  @Get('/doc/:documentId')
   async getOneCustomer(@Param('documentId') documentId: string) {
     return this.customerService.findCustomerByDocumentId(documentId);
   }

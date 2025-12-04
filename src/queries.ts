@@ -170,6 +170,13 @@ export const queries = createQueries({
       INNER JOIN core.tenant t USING(tenant_id)
       WHERE t.tenant_id = $1 AND tc.document_number = $2
     `,
+    getBillById:`
+      SELECT t.tenant_name, tc.first_name, tc.last_name, tc.document_number, tc.email, b.subtotal_amount, b.total_amount, b.billed_at FROM pos_module.bill b
+      INNER JOIN core.tenant_customer tc USING(tenant_customer_id)
+      INNER JOIN core.currency c USING(currency_id)
+      INNER JOIN core.tenant t USING(tenant_id)
+      WHERE b.bill_id = $1 
+    `,
     delete: 'DELETE FROM pos_module.bill WHERE bill_id = $1 RETURNING bill_id',
     updateAmount: `UPDATE pos_module.bill SET total_amount = total_amount - $1 WHERE bill_id = $2`,
   },
@@ -306,6 +313,15 @@ export const queries = createQueries({
     byId: `
       SELECT * FROM pos_module.loyalty_program WHERE loyalty_program_id = $1 LIMIT 1
     `,
+    update: `
+      UPDATE pos_module.loyalty_program
+      SET
+        points_per_dollar = COALESCE($2, points_per_dollar),
+        points_per_currency_unit = COALESCE($3, points_per_currency_unit),
+        minimum_purchase_for_points = COALESCE($4, minimum_purchase_for_points)
+      WHERE loyalty_program_id = $1
+      RETURNING loyalty_program_id
+    `
   },
 });
 
@@ -323,8 +339,6 @@ export const bulkReturns = [
   'quantity',
   'unit_price',
   'total_price',
-  'created_at',
-  'updated_at',
   'sale_item_id',
 ];
 

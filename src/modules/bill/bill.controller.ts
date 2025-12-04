@@ -17,6 +17,11 @@ export class BillController {
     return this.billService.getBills(id);
   }
 
+  @Get("details/:id")
+  async getBillById(@Param('id') id: string) {
+    return this.billService.getBillById(id);
+  }
+
   @Get()
   async getCustomerBills(
     @Query('id') tenantId: string,
