@@ -1,4 +1,4 @@
-import { IsDate, IsNumber, IsString, IsUUID } from 'class-validator';
+import { IsDate, IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class NewClientDto {
@@ -25,7 +25,8 @@ export class NewClientDto {
 
   @Type(() => Date)
   @IsDate()
-  birthdate!: Date;
+  @IsOptional()
+  birthdate?: Date;
 
   @IsString()
   address!: string;

@@ -26,7 +26,7 @@ export const queries = createQueries({
     delete: 'DELETE FROM core.document_type WHERE document_type_id = $1',
   },
   customer: {
-    all: 'SELECT * FROM core.tenant_customer',
+    all: 'SELECT * FROM core.tenant_customer WHERE tenant_id = $1',
     byId: 'SELECT * FROM core.tenant_customer WHERE tenant_customer_id = $1',
     getInfo: `
       SELECT tc.first_name, tc.last_name, d.type_name, tc.document_number, t.tenant_name, c.segment_name FROM core.tenant_customer tc
@@ -67,7 +67,7 @@ export const queries = createQueries({
     all: 'SELECT * FROM core.product_category',
     byId: 'SELECT * FROM core.product_category WHERE product_category_id = $1',
     create:
-      'INSERT INTO core.product_category (category_name, created_at, updated_at) VALUES ($1, NOW(), NOW()) RETURNING *',
+      'INSERT INTO core.product_category (category_name) VALUES ($1) RETURNING *',
     update:
       'UPDATE core.product_category SET category_name = $1 WHERE product_category_id = $2',
     delete: 'DELETE FROM core.product_category WHERE product_category_id = $1',
@@ -104,7 +104,7 @@ export const queries = createQueries({
       INSERT INTO core.product (tenant_id, sku, product_name, product_description, product_category_id, unit_price)
       VALUES ($1, $2, $3, $4, $5, $6)
     `,
-    delete: 'DELETE FROM core.products WHERE product_id = $1',
+    delete: 'DELETE FROM core.product WHERE product_id = $1',
   },
   customer_payment: {
     getPayments: `
@@ -169,6 +169,13 @@ export const queries = createQueries({
       INNER JOIN core.currency c USING(currency_id)
       INNER JOIN core.tenant t USING(tenant_id)
       WHERE t.tenant_id = $1 AND tc.document_number = $2
+    `,
+    getBillById:`
+      SELECT t.tenant_name, tc.first_name, tc.last_name, tc.document_number, tc.email, b.subtotal_amount, b.total_amount, b.billed_at FROM pos_module.bill b
+      INNER JOIN core.tenant_customer tc USING(tenant_customer_id)
+      INNER JOIN core.currency c USING(currency_id)
+      INNER JOIN core.tenant t USING(tenant_id)
+      WHERE b.bill_id = $1 
     `,
     delete: 'DELETE FROM pos_module.bill WHERE bill_id = $1 RETURNING bill_id',
     updateAmount: `UPDATE pos_module.bill SET total_amount = total_amount - $1 WHERE bill_id = $2`,
@@ -245,7 +252,7 @@ export const queries = createQueries({
       SELECT p.promotion_name, p.promotion_code, c.segment_name, p.promotion_start_date, p.promotion_end_date, p.is_active FROM pos_module.promotion p
       INNER JOIN core.customer_segment c USING(customer_segment_id)
       INNER JOIN pos_module.promotion_type pt USING(promotion_type_id)
-      WHERE p.promotion_id = $1 // ? add more joins tomorrow
+      WHERE p.promotion_id = $1 LIMIT 1
     `,
     insertPromo: `
       INSERT INTO pos_module.promotion (tenant_id, promotion_name, promotion_code, promotion_description, promotion_type_id, customer_segment_id, promotion_start_date, promotion_end_date, is_active)
@@ -256,15 +263,15 @@ export const queries = createQueries({
       'DELETE FROM pos_module.promotion WHERE promotion_id = $1 RETURNING promotion_id',
     updatePromo: `
       UPDATE pos_module.promotion
-      SET tenant_id = $2,
-          promotion_name = $3,
-          promotion_code = $4,
-          promotion_description = $5,
-          promotion_type_id = $6,
-          customer_segment_id = $7,
-          promotion_start_date = $8,
-          promotion_end_date = $9,
-          is_active = $10
+      SET tenant_id = COALESCE($2, tenant_id),
+          promotion_name = COALESCE($3, promotion_name),
+          promotion_code = COALESCE($4, promotion_code),
+          promotion_description = COALESCE($5, promotion_description),
+          promotion_type_id = COALESCE($6, promotion_type_id),
+          customer_segment_id = COALESCE($7, customer_segment_id),
+          promotion_start_date = COALESCE($8, promotion_start_date),
+          promotion_end_date = COALESCE($9, promotion_end_date),
+          is_active = COALESCE($10, is_active)
       WHERE promotion_id = $1
       RETURNING promotion_id
     `,
@@ -306,6 +313,15 @@ export const queries = createQueries({
     byId: `
       SELECT * FROM pos_module.loyalty_program WHERE loyalty_program_id = $1 LIMIT 1
     `,
+    update: `
+      UPDATE pos_module.loyalty_program
+      SET
+        points_per_dollar = COALESCE($2, points_per_dollar),
+        points_per_currency_unit = COALESCE($3, points_per_currency_unit),
+        minimum_purchase_for_points = COALESCE($4, minimum_purchase_for_points)
+      WHERE loyalty_program_id = $1
+      RETURNING loyalty_program_id
+    `
   },
 });
 
@@ -323,8 +339,6 @@ export const bulkReturns = [
   'quantity',
   'unit_price',
   'total_price',
-  'created_at',
-  'updated_at',
   'sale_item_id',
 ];
 
