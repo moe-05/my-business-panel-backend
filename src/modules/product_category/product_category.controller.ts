@@ -6,11 +6,9 @@ import {
   Param,
   Post,
   Put,
-  Res,
   UseGuards,
 } from '@nestjs/common';
 import { ProductCategoryService } from './product_category.service';
-import { Response } from 'express';
 import { RoleAuthorizationGuard } from '@/common/guards/role_authorization.guard';
 import { LevelAuthorizationGuard } from '@/common/guards/level_authorization.guard';
 

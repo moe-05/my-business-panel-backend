@@ -1,19 +1,15 @@
 import { RoleAuthorizationGuard } from '@/common/guards/role_authorization.guard';
 import { LevelAuthorizationGuard } from '@/common/guards/level_authorization.guard';
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
-  InternalServerErrorException,
   Param,
   Post,
-  Res,
   UseGuards,
 } from '@nestjs/common';
 import { CustomerPaymentService } from '@/modules/customer_payment/customer_payment.service';
-import { Response } from 'express';
 import { NewCustomerPaymentDto, testdto } from './dto/NewCustomerPayment.dto';
 
 // ? @UseGuards(AuthorizationGuard)

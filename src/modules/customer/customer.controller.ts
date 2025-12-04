@@ -19,9 +19,9 @@ import { UpdateClientDto } from './dto/updateClient.dto';
 export class CustomerController {
   constructor(private readonly customerService: CustomerService) {}
 
-  @Get()
-  async getAll() {
-    return this.customerService.getAllCustomers();
+  @Get(':tenantId')
+  async getAllCustomersForTenant(@Param('tenantId') tenantId: string) {
+    return this.customerService.getAllCustomers(tenantId);
   }
 
   @Get(':id')

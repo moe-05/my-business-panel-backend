@@ -1,13 +1,9 @@
 import {
-  Body,
   Controller,
   Delete,
   Get,
-  InternalServerErrorException,
   Param,
-  Post,
   Query,
-  Res,
 } from '@nestjs/common';
 import { BillService } from './bill.service';
 import { Response } from 'express';
@@ -23,10 +19,10 @@ export class BillController {
 
   @Get()
   async getCustomerBills(
-    @Query('billId') billId: string,
+    @Query('id') tenantId: string,
     @Query('doc') doc: string,
   ) {
-    return this.billService.getCustomerBills(billId, doc);
+    return this.billService.getCustomerBills(tenantId, doc);
   }
 
   @Delete(':id')
