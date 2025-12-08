@@ -33,15 +33,15 @@ export class LoyalProgramService {
   async createLoyalProgram(data: NewLoyalProgramDto) {
     const {
       tenant_id,
-      points_per_dollar,
-      points_per_currency_unit,
+      points_earned_per_currency_unit,
+      points_redeemed_per_currency_unit,
       minimum_purchase_for_points,
     } = data;
 
     await this.db.query(queries.loyal_program.create, [
       tenant_id,
-      points_per_dollar,
-      points_per_currency_unit,
+      points_earned_per_currency_unit,
+      points_redeemed_per_currency_unit,
       minimum_purchase_for_points || 0,
     ]);
 
