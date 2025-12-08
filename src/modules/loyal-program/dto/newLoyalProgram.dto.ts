@@ -5,10 +5,10 @@ export class NewLoyalProgramDto {
   tenant_id!: string;
 
   @IsNumber()
-  points_per_dollar!: number;
+  points_earned_per_currency_unit!: number;
 
   @IsNumber()
-  points_per_currency_unit!: number;
+  points_redeemed_per_currency_unit!: number;
 
   @IsOptional()
   @IsNumber()

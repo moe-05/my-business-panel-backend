@@ -294,7 +294,7 @@ export const queries = createQueries({
   },
   loyal_program: {
     create: `
-      INSERT INTO pos_module.loyalty_program (tenant_id, points_per_dollar, points_per_currency_unit, minimum_purchase_for_points, created_at, updated_at)
+      INSERT INTO pos_module.loyalty_program (tenant_id, points_earned_per_currency_unit, points_redeemed_per_currency_unit, minimum_purchase_for_points, created_at, updated_at)
       VALUES ($1, $2, $3, $4, NOW(), NOW())
     `,
     all: `
