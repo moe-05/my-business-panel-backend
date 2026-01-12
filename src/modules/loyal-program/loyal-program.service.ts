@@ -63,15 +63,11 @@ export class LoyalProgramService {
 
   async updateLoyalProgram(data: UpdateLoyalProgramDto, program_id: string) {
     const {
-      points_per_dollar,
-      points_per_currency_unit,
       minimum_purchase_for_points,
     } = data;
 
     const programUpdated = await this.db.query(queries.loyal_program.update, [
       program_id,
-      points_per_dollar,
-      points_per_currency_unit,
       minimum_purchase_for_points,
     ]);
 

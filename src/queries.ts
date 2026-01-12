@@ -170,7 +170,7 @@ export const queries = createQueries({
       INNER JOIN core.tenant t USING(tenant_id)
       WHERE t.tenant_id = $1 AND tc.document_number = $2
     `,
-    getBillById:`
+    getBillById: `
       SELECT t.tenant_name, tc.first_name, tc.last_name, tc.document_number, tc.email, b.subtotal_amount, b.total_amount, b.billed_at FROM pos_module.bill b
       INNER JOIN core.tenant_customer tc USING(tenant_customer_id)
       INNER JOIN core.currency c USING(currency_id)
@@ -321,8 +321,78 @@ export const queries = createQueries({
         minimum_purchase_for_points = COALESCE($4, minimum_purchase_for_points)
       WHERE loyalty_program_id = $1
       RETURNING loyalty_program_id
+    `,
+  },
+  employee: {
+    getById: `
+      SELECT e.first_name, e.last_name, e.doc_number, e.phone, e.email, e.is_active, c.start_date, c.end_date, c.hours, c.base_salary, c.duties
+      FROM rrhh_module.employee e 
+      INNER JOIN rrhh_module.contract c USING(contract_id)
+      WHERE e.employee_id = $1 LIMIT 1
+    `,
+    getByTenant: `
+      SELECT * FROM rrhh_module.employee WHERE tenant_id = $1
+    `,
+    create: `
+      INSERT INTO rrhh_module.employee (user_id, tenant_id, first_name, last_name, doc_number, phone, email, schedule_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING employee_id
+    `,
+    update: `
+      UPDATE rrhh_module.employee
+      SET
+        first_name = COALESCE($1, first_name),
+        last_name = COALESCE($2, last_name),
+        doc_number = COALESCE($3, doc_number),
+        phone = COALESCE($4, phone),
+        email = COALESCE($5, email),
+        schedule_id = COALESCE($6, schedule_id)
+      WHERE employee_id = $7
+      RETURNING employee_id
+    `,
+    delete: `
+      DELETE FROM rrhh_module.employee WHERE employee_id = $1 RETURNING employee_id
+    `,
+    deactivate: `
+      UPDATE rrhh_module.employee SET is_active = false WHERE employee_id = $1 RETURNING employee_id
+    `,
+  },
+  contract: {
+    byId:`
+      SELECT * FROM rrhh_module.contract WHERE contract_id = $1 LIMIT 1
+    `,
+    update: `
+      UPDATE rrhh_module.contract
+      SET
+        start_date = COALESCE($1, start_date),
+        end_date = COALESCE($2, end_date),
+        hours = COALESCE($3, hours),
+        base_salary = COALESCE($4, base_salary),
+        duties = COALESCE($5, duties)
+      WHERE contract_id = $6
+      RETURNING contract_id
+    `,
+    getSchedule: `
+      SELECT * FROM rrhh_module.payment_schedule 
     `
   },
+  clocking: {
+    clock_in: 
+    `
+      INSERT INTO rrhh_module.clocking (employee_id, branch_id, clock_in, clock_out)
+      VALUES ($1, $2, NOW(), NULL)
+      RETURNING clocking_id
+    `,
+    clock_out:
+    `
+      UPDATE rrhh_module.clocking
+      SET 
+        clock_out = NOW(),
+        turn_hours = GREATEST(0, EXTRACT(EPOCH FROM (NOW() - clock_in)) / 3600)
+      WHERE employee_id = $1 AND clock_in IS NOT NULL
+      RETURNING clocking_id 
+    `,
+  }
 });
 
 export const bulkItems = [
