@@ -21,6 +21,9 @@ import { BranchModule } from '@/modules/branch/branch.module';
 import { CashRegisterModule } from '@/modules/cash_register/cash_register.module';
 import { LoyalProgramModule } from '@/modules/loyal-program/loyal-program.module';
 import { SubscriptionModule } from '@/modules/subscription/subscription.module';
+import { ClockingModule } from '@/modules/clocking/clocking.module';
+import { EmployeeModule } from '@/modules/employee/employee.module';
+import { ContractModule } from '@/modules/contract/contract.module';
 require('dotenv').config();
 
 console.log('Initializing AppModule with Stripe API Key length:', process.env.STRIPE_API_KEY?.length);
@@ -47,6 +50,9 @@ console.log('Initializing AppModule with Stripe API Key length:', process.env.ST
     CashRegisterModule,
     LoyalProgramModule,
     SubscriptionModule,
+    ClockingModule,
+    EmployeeModule,
+    ContractModule
   ],
   controllers: [AppController],
   providers: [AppService],
