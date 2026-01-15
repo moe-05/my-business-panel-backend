@@ -1,4 +1,4 @@
-import Database from '@lodestar-official/database';
+import Database from '@crane-technologies/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { DATABASE } from '@/modules/db/db.provider';
 import { Branch } from '@/modules/branch/interfaces/branch.interface';

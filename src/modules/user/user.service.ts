@@ -1,7 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { CreateUserDto } from './dto/create_user.dto';
 // import { UpdateUserDto } from './dto/update-user.dto';
-import Database from '@lodestar-official/database';
+import Database from '@crane-technologies/database';
 import { DATABASE } from '@/modules/db/db.provider';
 import { IUserResult } from '@/modules/user/interfaces/user_result.interface';
 import { queries } from '@/queries';

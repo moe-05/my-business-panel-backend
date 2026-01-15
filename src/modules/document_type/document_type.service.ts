@@ -1,7 +1,7 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { DocumentType } from './interface/document_type.interface';
 import { DATABASE } from '../db/db.provider';
-import Database from '@lodestar-official/database';
+import Database from '@crane-technologies/database';
 import { queries } from '@/queries';
 
 @Injectable()
@@ -26,6 +26,8 @@ export class DocumentTypeService {
 
   async delete(id: string) {
     const result = await this.db.query(queries.document_type.delete, [id]);
-    return { message: `Document type with ID ${result.rows[0].document_type_id} deleted successfully` };
+    return {
+      message: `Document type with ID ${result.rows[0].document_type_id} deleted successfully`,
+    };
   }
 }

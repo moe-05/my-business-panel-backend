@@ -4,7 +4,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
-import Database from '@lodestar-official/database';
+import Database from '@crane-technologies/database';
 import { FullSaleDto, NewSingleSaleDto } from './dto/sales.dto';
 import { queries } from '@/queries';
 import { randomUUID } from 'crypto';

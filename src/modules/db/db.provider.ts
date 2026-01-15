@@ -1,4 +1,4 @@
-import Database, { DatabaseConfig } from '@lodestar-official/database';
+import Database, { DatabaseConfig } from '@crane-technologies/database';
 import { queries } from '@/queries';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports

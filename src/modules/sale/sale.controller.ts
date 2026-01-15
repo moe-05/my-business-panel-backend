@@ -1,8 +1,16 @@
-import { Body, Controller, Get, Inject, Param, Post, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Post,
+  Res,
+} from '@nestjs/common';
 import { SaleService } from './sale.service';
 import { FullSaleDto, NewSingleSaleDto } from './dto/sales.dto';
 import { DATABASE } from '../db/db.provider';
-import Database from '@lodestar-official/database';
+import Database from '@crane-technologies/database';
 
 @Controller('sale')
 export class SaleController {
@@ -11,7 +19,7 @@ export class SaleController {
     private readonly saleService: SaleService,
   ) {}
 
-  @Get(":branch_id")
+  @Get(':branch_id')
   async getAllSalesByBranch(@Param('branch_id') branch_id: string) {
     return this.saleService.getAllSalesByBranch(branch_id);
   }

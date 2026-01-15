@@ -4,7 +4,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
-import Database from '@lodestar-official/database';
+import Database from '@crane-technologies/database';
 import { Bill, BillDB, FullBill } from './interface/bill.interface';
 import { queries } from '@/queries';
 import { getCustomerBillsDto } from './dto/getBills.dto';

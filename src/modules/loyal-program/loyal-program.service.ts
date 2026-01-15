@@ -1,6 +1,6 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
-import Database from '@lodestar-official/database';
+import Database from '@crane-technologies/database';
 import { queries } from '@/queries';
 import { NewLoyalProgramDto } from './dto/newLoyalProgram.dto';
 import { LoyalProgram } from './interface/loyal-program.interface';

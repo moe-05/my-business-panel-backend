@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
-import Database from '@lodestar-official/database';
+import Database from '@crane-technologies/database';
 import { FullItem, Item, ItemFromDb } from './interface/sale-item.interface';
 import { bulkItems, queries } from '@/queries';
 
