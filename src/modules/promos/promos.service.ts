@@ -5,7 +5,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
-import Database from '@lodestar-official/database';
+import Database from '@crane-technologies/database';
 import { Promo } from './interface/promo.interface';
 import { queries } from '@/queries';
 import { NewPromoDto, PromoRules } from './dto/newPromo.dto';

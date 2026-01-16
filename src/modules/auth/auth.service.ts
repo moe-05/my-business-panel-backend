@@ -5,7 +5,7 @@ import { IUserSession } from '@/common/interfaces/user_session.interface';
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from '@/modules/user/user.service';
 import { DATABASE } from '@/modules/db/db.provider';
-import Database from '@lodestar-official/database';
+import Database from '@crane-technologies/database';
 import { compare } from 'bcrypt';
 
 @Injectable()

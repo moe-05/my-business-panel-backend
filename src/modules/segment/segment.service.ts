@@ -4,7 +4,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
-import Database from '@lodestar-official/database';
+import Database from '@crane-technologies/database';
 import { Segment } from './interface/segment.interface';
 import { queries } from '@/queries';
 import { NewSegmentDto } from './dto/newSegment.dto';

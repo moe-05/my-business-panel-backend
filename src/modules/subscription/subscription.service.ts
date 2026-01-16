@@ -1,6 +1,6 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
-import Database from '@lodestar-official/database';
+import Database from '@crane-technologies/database';
 import Stripe from 'stripe';
 import { NewSubscriptionDto } from './dto/newSubscription.dto';
 import { queries } from '@/queries';

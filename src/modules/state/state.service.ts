@@ -3,7 +3,7 @@ import { IRole } from '@/common/interfaces/role.interface';
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { config as dotenvConfig } from 'dotenv';
 import { DATABASE } from '../db/db.provider';
-import Database from '@lodestar-official/database';
+import Database from '@crane-technologies/database';
 import { queries } from '@/queries';
 import { InvalidRoleError } from '@/common/errors/invalid_role.error';
 import { ITenant } from '@/common/interfaces/tenant.interface';

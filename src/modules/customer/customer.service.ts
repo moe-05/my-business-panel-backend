@@ -10,7 +10,7 @@ import { Customer } from './interface/customer.interface';
 import { NewClientDto } from './dto/newClient.dto';
 import { LevelAuthorizationGuard } from '@/common/guards/level_authorization.guard';
 import { DATABASE } from '../db/db.provider';
-import Database from '@lodestar-official/database/dist/components/Database';
+import Database from '@crane-technologies/database/dist/components/Database';
 import { queries } from '@/queries';
 import { UpdateClientDto } from './dto/updateClient.dto';
 import { ClientCreateError } from '@/common/errors/client_create.error';

@@ -5,9 +5,13 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
-import Database from '@lodestar-official/database';
+import Database from '@crane-technologies/database';
 import { bulkProducts, queries } from '@/queries';
-import { NewProductDto, ProductInsert, ProductInsertDto } from './dto/newProduct.dto';
+import {
+  NewProductDto,
+  ProductInsert,
+  ProductInsertDto,
+} from './dto/newProduct.dto';
 import { UpdateProductDto } from './dto/updateProduct.dto';
 import { Product } from './interface/product.interface';
 
@@ -26,9 +30,7 @@ export class ProductService {
   }
 
   async createProduct(data: ProductInsertDto) {
-    const {
-      products
-    } = data;
+    const { products } = data;
 
     const insertData = this.bulkInsertProducts(products);
 

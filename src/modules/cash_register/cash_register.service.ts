@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { queries } from '@/queries';
-import Database from '@lodestar-official/database';
+import Database from '@crane-technologies/database';
 import { IUserSession } from '@/common/interfaces/user_session.interface';
 import { DATABASE } from '@/modules/db/db.provider';
 import { CreateCashRegisterDto } from '@/modules/cash_register/dto/create_cash_register.dto';

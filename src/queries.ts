@@ -1,4 +1,4 @@
-import { createQueries } from '@lodestar-official/database';
+import { createQueries } from '@crane-technologies/database';
 
 export const queries = createQueries({
   user: {
