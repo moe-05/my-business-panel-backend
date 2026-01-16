@@ -58,7 +58,7 @@ export class SaleService {
       await this.saleItemService.bulkInsert(data.items, sale);
 
       //Se genera la factura y la devolvemos al frontend
-      const bill = await this.billService.createBill({
+      const newBill = await this.billService.createBill({
         tenant_customer_id: data.tenant_customer_id,
         currency_id: data.currency_id,
         subtotal_amount: data.subtotal_amount,
@@ -71,7 +71,7 @@ export class SaleService {
 
       await this.db.query('COMMIT');
 
-      return { message: 'Full sale created successfully' };
+      return { message: 'Full sale created successfully', billId: newBill.bill.bill_id };
     } catch (error) {
       await this.db.query('ROLLBACK');
       throw new InternalServerErrorException('Failed to create full sale');

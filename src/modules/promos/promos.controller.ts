@@ -7,12 +7,12 @@ import { UpdatePromotionDto } from './dto/updatePromo.dto';
 export class PromosController {
   constructor(private readonly promosService: PromosService) {}
 
-  @Get(':id')
-  getPromos(@Param('id') id: string) {
-    return this.promosService.getPromos(id);
+  @Get(':tenantId')
+  getTenantPromos(@Param('tenantId') tenantId: string) {
+    return this.promosService.getPromos(tenantId);
   }
 
-  @Get(':promo')
+  @Get('info/:promo')
   getPromoInfo(@Param('promo') promo: string) {
     return this.promosService.getPromoInfo(promo);
   }

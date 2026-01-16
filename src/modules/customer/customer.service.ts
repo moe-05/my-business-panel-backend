@@ -48,8 +48,8 @@ export class CustomerService {
   /**
    * @returns: Customer[]
    */
-  async getAllCustomers(): Promise<Customer[]> {
-    const customers = await this.db.query(queries.customer.all);
+  async getAllCustomers(tenantId: string): Promise<Customer[]> {
+    const customers = await this.db.query(queries.customer.all, [tenantId]);
     return customers.rows;
   }
 
@@ -79,7 +79,7 @@ export class CustomerService {
       document_number,
       email,
       phone,
-      birthdate,
+      birthdate || null,
       address,
     ]);
 
@@ -148,8 +148,8 @@ export class CustomerService {
     }
 
     try {
-      const res = await this.db.query(queries.customer.delete, [customerId]);
-      return res.rows[0];
+      await this.db.query(queries.customer.delete, [customerId]);
+      return { message: 'Customer deleted' };
     } catch (error) {
       throw new InternalServerErrorException(error);
     }

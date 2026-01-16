@@ -4,6 +4,7 @@ import Database from '@crane-technologies/database';
 import { queries } from '@/queries';
 import { NewLoyalProgramDto } from './dto/newLoyalProgram.dto';
 import { LoyalProgram } from './interface/loyal-program.interface';
+import { UpdateLoyalProgramDto } from './dto/updateLoyalProgram.dto';
 
 @Injectable()
 export class LoyalProgramService {
@@ -58,5 +59,24 @@ export class LoyalProgramService {
       );
 
     return { message: 'Loyal Program deleted successfully' };
+  }
+
+  async updateLoyalProgram(data: UpdateLoyalProgramDto, program_id: string) {
+    const {
+      minimum_purchase_for_points,
+    } = data;
+
+    const programUpdated = await this.db.query(queries.loyal_program.update, [
+      program_id,
+      minimum_purchase_for_points,
+    ]);
+
+    if (programUpdated.rowCount === 0)
+      throw new NotFoundException(
+        `Loyal Program with id ${program_id} not found.`,
+      );
+    return {
+      message: `Loyal Program with id ${programUpdated.rows[0].loyalty_program_id} updated successfully`,
+    };
   }
 }

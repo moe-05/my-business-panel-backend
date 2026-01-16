@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { LoyalProgramService } from './loyal-program.service';
 import { NewLoyalProgramDto } from './dto/newLoyalProgram.dto';
+import { UpdateLoyalProgramDto } from './dto/updateLoyalProgram.dto';
 
 @Controller('loyal-program')
 export class LoyalProgramController {
@@ -19,6 +20,11 @@ export class LoyalProgramController {
   @Post()
   async createLoyalProgram(@Body() req: NewLoyalProgramDto) {
     return this.loyalService.createLoyalProgram(req);
+  }
+
+  @Patch(":id")
+  async updateLoyalProgram(@Param("id") id: string, @Body() req: UpdateLoyalProgramDto) {
+    return this.loyalService.updateLoyalProgram(req, id);
   }
 
   @Delete(':id')

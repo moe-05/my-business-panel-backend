@@ -20,7 +20,7 @@ export class CustomerSegmentMarginService {
       seniority_months,
       frequency_per_month,
     } = marginData;
-    const newMargin = await this.db.query(
+    await this.db.query(
       queries.customer_segment_margin.create,
       [
         tenant_id,
@@ -32,7 +32,7 @@ export class CustomerSegmentMarginService {
       ],
     );
 
-    return { message: 'Margin created.', newMargin };
+    return { message: 'Margin created.' };
   }
 
   async updateMargins(id: string, newMarginData: UpdateMarginDto) {

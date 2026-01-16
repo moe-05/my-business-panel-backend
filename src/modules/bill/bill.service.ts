@@ -52,6 +52,12 @@ export class BillService {
     return result.rows;
   }
 
+  async getBillById(billId: string): Promise<FullBill> {
+    const result = await this.db.query(queries.bill.getBillById, [billId]);
+    if (result.rows.length == 0) throw new InvalidBill();
+    return result.rows[0];
+  }
+
   async deleteBillFromDb(billId: string) {
     const result = await this.db.query(queries.bill.delete, [billId]);
     if (result.rows.length == 0)
