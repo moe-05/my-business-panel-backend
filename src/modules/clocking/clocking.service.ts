@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
-import Database from '@lodestar-official/database';
+import Database from '@crane-technologies/database';
 import { ClockInDto } from './dto/clockIn.dto';
 import { EmployeeService } from '../employee/employee.service';
 import { EmployeeNotFoundError } from '@/common/errors/employee_not_found.error';

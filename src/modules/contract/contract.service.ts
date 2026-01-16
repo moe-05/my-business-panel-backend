@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
-import Database from '@lodestar-official/database';
+import Database from '@crane-technologies/database';
 import { ContractDto } from '../employee/dto/newEmployeeDto.dto';
 import { queries } from '@/queries';
 import { Contract } from '../employee/interface/employee.interface';
