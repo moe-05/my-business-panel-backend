@@ -29,6 +29,7 @@ export class ProductService {
     return product.rows[0];
   }
 
+
   async createProduct(data: ProductInsertDto) {
     const { products } = data;
 

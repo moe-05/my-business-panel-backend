@@ -392,6 +392,13 @@ export const queries = createQueries({
       WHERE employee_id = $1 AND clock_in IS NOT NULL
       RETURNING clocking_id 
     `,
+  },
+  warehouse: {
+    create: `
+    INSERT INTO warehouse_module.warehouse 
+      (tenant_id, warehouse_name, warehouse_address, created_at, updated_at)
+      VALUES ($1, $2, $3, NOW(), NOW()) 
+    RETURNING *`,
   }
 });
 
