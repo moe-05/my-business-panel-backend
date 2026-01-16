@@ -1,4 +1,4 @@
-import { createQueries } from '@crane-technologies/database';
+import { createQueries } from "@crane-technologies/database";
 
 export const queries = createQueries({
   user: {
@@ -333,6 +333,10 @@ export const queries = createQueries({
     getByTenant: `
       SELECT * FROM rrhh_module.employee WHERE tenant_id = $1
     `,
+    getByBranchAndTenant: `
+      SELECT * FROM rrhh_module.employee 
+      WHERE branch_id = $1 AND tenant_id = $2 AND is_active = true
+    `,
     create: `
       INSERT INTO rrhh_module.employee (user_id, tenant_id, first_name, last_name, doc_number, phone, email, schedule_id)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -392,6 +396,72 @@ export const queries = createQueries({
       WHERE employee_id = $1 AND clock_in IS NOT NULL
       RETURNING clocking_id 
     `,
+  },
+  payroll: {
+    createPaysheet: `
+      INSERT INTO rrhh_module.paysheet (
+        tenant_id, 
+        branch_id, 
+        period_start, 
+        period_end, 
+        paysheet_status_id
+      ) VALUES ($1, $2, $3, $4, 1) -- 1 suele ser 'Pendiente' o 'Abierta'
+      RETURNING paysheet_id;
+    `,
+    checkExistingPeriod: `
+      SELECT paysheet_id 
+      FROM rrhh_module.paysheet 
+      WHERE branch_id = $1 
+        AND tenant_id = $2 
+        AND (
+          (period_start <= $4 AND period_end >= $3) 
+        )
+        AND paysheet_status_id != 3; 
+    `,
+    getEmployeeContractForPayroll: `
+      SELECT 
+        e.employee_id,
+        e.tenant_id,
+        c.contract_id,
+        c.base_salary,
+        e.schedule_id
+      FROM rrhh_module.employee e
+      INNER JOIN rrhh_module.contract c USING(contract_id)
+      WHERE e.employee_id = $1 AND e.is_active = true
+    `,
+    getConcepts: `
+      SELECT 
+        concept_id,
+        name,
+        type,
+        calculation_method,
+        is_taxable,
+        base_value
+      FROM rrhh_module.payroll_concept
+      WHERE tenant_id = $1 AND is_active = true;
+    `,
+    insertDetail: `
+      INSERT INTO rrhh_module.paysheet_detail (
+        paysheet_id, employee_id, contract_id, payment_method_id, 
+        gross_salary, total_earnings, total_deduction, net_salary, pay_date
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING detail_id;
+    `,
+    insertMovement: `
+      INSERT INTO rrhh_module.payroll_movement (
+        detail_id, concept_id, base_amount, calculated_amount, description
+      ) VALUES ($1, $2, $3, $4, $5);
+    `,
+    insertPaysheet: `
+      INSERT INTO rrhh_module.paysheet (
+        tenant_id, 
+        branch_id, 
+        period_start, 
+        period_end, 
+        paysheet_status_id
+      ) VALUES ($1, $2, $3, $4, 1)
+      RETURNING paysheet_id;
+    `
   }
 });
 
