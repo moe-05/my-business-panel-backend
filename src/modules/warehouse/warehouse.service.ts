@@ -32,7 +32,7 @@ export class WarehouseService {
         return rows[0] ?? new NotFoundException('Warehouse could not be created');
     }
 
-    async addProductToWarehouse(warehouse_id: string, product_sku: string, tenant_id: string, amount: number): Promise<void> {
+    async addProductToWarehouse(warehouse_id: string, product_id: string, tenant_id: string, amount: number): Promise<void> {
         if (amount <= 0) 
             throw new NotFoundException('Amount must be greater than zero');
         
@@ -40,21 +40,39 @@ export class WarehouseService {
         if (!tenant) 
             throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
 
-        const warehouse = await this.db.query(
-            `SELECT * FROM warehouse_module.warehouse WHERE warehouse_id = $1 AND tenant_id = $2`, 
-            [warehouse_id, tenant_id]
-        );
+        const warehouse = await this.db.query(queries.warehouse.byId, [warehouse_id]);
 
         if (warehouse.rowCount === 0) 
             throw new NotFoundException(`Warehouse with ID ${warehouse_id} not found`);
 
-        const product = await this.products.getProductBySku(product_sku);
-        if (!product) 
-            throw new NotFoundException(`Product with ID ${product_sku} not found`);
-
-        await this.db.query(
-            `INSERT INTO warehouse_module.warehouse_product (warehouse_id, product_id, created_at) VALUES ($1, $2, NOW())`,
-            [warehouse_id, product_sku]
-        );
+        this.db.query(
+            queries.warehouse.insertIntoInventory, 
+            [
+                warehouse_id, 
+                product_id, 
+                amount, 
+                tenant_id
+            ]
+        )
     }   
+
+    async addStockToProduct(warehouse_id: string, product_id: string, tenant_id: string, amount: number): Promise<void> {
+        
+    }
+
+    async removeStockFromProduct(warehouse_id: string, product_id: string, tenant_id: string, amount: number): Promise<void> {
+        
+    }
+
+    async getWarehousesByTenant(tenant_id: string): Promise<Warehouse[]> {
+        const tenant = this.state.getTenant(tenant_id);
+        if (!tenant) 
+            throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
+        
+        const { rows } = await this.db.query(
+            queries.warehouse.byTenant, 
+            [tenant_id]
+        );
+        return rows;
+    }
 }

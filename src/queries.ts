@@ -1,4 +1,5 @@
 import { createQueries } from '@crane-technologies/database';
+import { get } from 'http';
 
 export const queries = createQueries({
   user: {
@@ -96,9 +97,14 @@ export const queries = createQueries({
       WHERE p.tenant_id = $1
     `,
     getBySku: `
-      SELECT p.sku, p.product_name, p.product_description, p.unit_price, pc.category_name FROM core.product p
-      INNER JOIN core.product_category pc USING(product_category_id)
+      SELECT p.product_id, p.sku, p.product_name, p.product_description, p.unit_price, pc.category_name FROM core.product p
+      LEFT JOIN core.product_category pc USING(product_category_id)
       WHERE p.sku = $1
+    `,
+    getById: `
+      SELECT * FROM core.product 
+      WHERE product_id = $1 AND tenant_id = $2 
+      LIMIT 1
     `,
     create: `
       INSERT INTO core.product (tenant_id, sku, product_name, product_description, product_category_id, unit_price)
@@ -395,10 +401,36 @@ export const queries = createQueries({
   },
   warehouse: {
     create: `
-    INSERT INTO warehouse_module.warehouse 
+    INSERT INTO inventory_module.warehouse 
       (tenant_id, warehouse_name, warehouse_address, created_at, updated_at)
       VALUES ($1, $2, $3, NOW(), NOW()) 
     RETURNING *`,
+    byId: `
+      SELECT * FROM inventory_module.warehouse 
+      WHERE warehouse_id = $1 AND tenant_id = $2
+    `,
+    byTenant: `
+      SELECT * FROM inventory_module.warehouse 
+      WHERE tenant_id = $1
+    `,
+    insertIntoInventory: `
+      INSERT INTO inventory_module.inventory
+        (tenant_id, warehouse_id, product_id, stock, expiration_date , created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+      RETURNING *
+    `,
+    addStock: `
+      UPDATE inventory_module.inventory
+      SET stock = stock + $1, updated_at = NOW()
+      WHERE warehouse_id = $2 AND product_id = $3 AND tenant_id = $4
+      RETURNING *
+    `,
+    removeStock: `
+      UPDATE inventory_module.inventory
+      SET stock = GREATEST(0, stock - $1), updated_at = NOW()
+      WHERE warehouse_id = $2 AND product_id = $3 AND tenant_id = $4
+      RETURNING *
+    `,
   }
 });
 

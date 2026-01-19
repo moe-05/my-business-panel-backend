@@ -15,6 +15,7 @@ import {
 import { ProductService } from './product.service';
 import { ProductInsertDto } from './dto/newProduct.dto';
 import { UpdateProductDto } from './dto/updateProduct.dto';
+import { isUUID } from 'class-validator';
 
 // ? @UseGuards(AuthorizationGuard)
 @Controller('product')
@@ -24,12 +25,15 @@ export class ProductController {
   // ? Apply pagination
   @Get(':tenantId')
   async getAllProductsByTenant(@Param('tenantId') tenantId: string) {
+    if (!tenantId || !isUUID(tenantId) ) {
+      throw new InternalServerErrorException('Tenant ID is required');
+    }
     return this.productService.getAllProducts(tenantId);
   }
 
   @Get('sku/:sku')
   async getProductBySku(@Param('sku') sku: string) {
-    return this.productService.getProductBySku(sku);
+    return this.productService.getProductBySku(sku)
   }
 
   @Post()
