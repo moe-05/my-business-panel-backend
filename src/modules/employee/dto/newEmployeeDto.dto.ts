@@ -8,6 +8,9 @@ export class NewEmployeeDto {
   @IsUUID()
   tenant_id!: string;
 
+  @IsUUID()
+  branch_id!: string;
+
   @IsString()
   first_name!: string;
 

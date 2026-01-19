@@ -333,6 +333,10 @@ export const queries = createQueries({
     getByTenant: `
       SELECT * FROM rrhh_module.employee WHERE tenant_id = $1
     `,
+    getByBranchAndTenant: `
+      SELECT * FROM rrhh_module.employee 
+      WHERE branch_id = $1 AND tenant_id = $2 AND is_active = true
+    `,
     create: `
       INSERT INTO rrhh_module.employee (user_id, tenant_id, first_name, last_name, doc_number, phone, email, schedule_id)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -358,7 +362,7 @@ export const queries = createQueries({
     `,
   },
   contract: {
-    byId:`
+    byId: `
       SELECT * FROM rrhh_module.contract WHERE contract_id = $1 LIMIT 1
     `,
     update: `
@@ -374,17 +378,15 @@ export const queries = createQueries({
     `,
     getSchedule: `
       SELECT * FROM rrhh_module.payment_schedule 
-    `
+    `,
   },
   clocking: {
-    clock_in: 
-    `
+    clock_in: `
       INSERT INTO rrhh_module.clocking (employee_id, branch_id, clock_in, clock_out)
       VALUES ($1, $2, NOW(), NULL)
       RETURNING clocking_id
     `,
-    clock_out:
-    `
+    clock_out: `
       UPDATE rrhh_module.clocking
       SET 
         clock_out = NOW(),
@@ -392,7 +394,132 @@ export const queries = createQueries({
       WHERE employee_id = $1 AND clock_in IS NOT NULL
       RETURNING clocking_id 
     `,
-  }
+  },
+  payroll: {
+    createPaysheet: `
+      INSERT INTO rrhh_module.paysheet (
+        tenant_id, 
+        branch_id, 
+        period_start, 
+        period_end, 
+        paysheet_status_id
+      ) VALUES ($1, $2, $3, $4, 1) -- 1 suele ser 'Pendiente' o 'Abierta'
+      RETURNING paysheet_id;
+    `,
+    checkExistingPeriod: `
+      SELECT paysheet_id 
+      FROM rrhh_module.paysheet 
+      WHERE branch_id = $1 
+        AND tenant_id = $2 
+        AND (
+          (period_start <= $4 AND period_end >= $3) 
+        )
+        AND paysheet_status_id != 3; 
+    `,
+    getEmployeeContractForPayroll: `
+      SELECT 
+        e.employee_id,
+        e.tenant_id,
+        e.branch_id,
+        c.contract_id,
+        c.base_salary,
+        e.schedule_id
+      FROM rrhh_module.employee e
+      INNER JOIN rrhh_module.contract c USING(contract_id)
+      WHERE e.tenant_id = $1 AND e.branch_id = $2 AND e.is_active = true
+    `,
+    getConcepts: `
+      SELECT 
+        concept_id,
+        name,
+        type,
+        calculation_method,
+        is_taxable,
+        base_value
+      FROM rrhh_module.payroll_concept
+      WHERE tenant_id = $1 AND is_active = true;
+    `,
+    insertDetail: `
+      INSERT INTO rrhh_module.paysheet_detail (
+        paysheet_id, employee_id, contract_id, payment_method_id, 
+        gross_salary, total_earnings, total_deduction, net_salary, pay_date
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING detail_id;
+    `,
+    insertMovement: `
+      INSERT INTO rrhh_module.payroll_movement (
+        detail_id, concept_id, base_amount, calculated_amount, description
+      ) VALUES ($1, $2, $3, $4, $5);
+    `,
+    insertPaysheet: `
+      INSERT INTO rrhh_module.paysheet (
+        tenant_id, 
+        branch_id, 
+        period_start, 
+        period_end, 
+        paysheet_status_id
+      ) VALUES ($1, $2, $3, $4, 1)
+      RETURNING paysheet_id;
+    `,
+    closePaysheet: `
+      UPDATE rrhh_module.paysheet p
+      SET
+        payment_date = NOW(),
+        total_earnings = sub.earnings,
+        total_deductions = sub.deductions,
+        net_total = sub.net,
+        paysheet_status_id = 2 -- Cerrada
+      FROM (
+        SELECT
+          paysheet_id,
+          SUM(gross_salary) AS gross,
+          SUM(total_earnings) AS earnings,
+          SUM(total_deduction) AS deductions,
+          SUM(net_salary) AS net
+        FROM rrhh_module.paysheet_detail
+        WHERE paysheet_id = $1
+        GROUP BY paysheet_id  
+      ) AS sub
+      WHERE p.paysheet_id = sub.paysheet_id
+      RETURNING p.paysheet_id, p.net_total;
+    `,
+  },
+  concept: {
+    getConceptById: `
+      SELECT * FROM rrhh_module.payroll_concept WHERE concept_id = $1 LIMIT 1
+    `,
+    createConcept: `
+      INSERT INTO rrhh_module.payroll_concept (
+        tenant_id, 
+        name, 
+        type,
+        calculation_method,
+        is_taxable,
+        base_value
+      ) VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING concept_id;
+    `,
+    updateConcept: `
+      UPDATE rrhh_module.payroll_concept
+      SET
+        name = COALESCE($1, name),
+        type = COALESCE($2, type),
+        calculation_method = COALESCE($3, calculation_method),
+        is_taxable = COALESCE($4, is_taxable),
+        base_value = COALESCE($5, base_value),
+      WHERE concept_id = $6
+      RETURNING concept_id;
+    `,
+    softDelete: `
+      UPDATE rrhh_module.payroll_concept
+      SET is_active = false
+      WHERE concept_id = $1
+      RETURNING concept_id;
+    `,
+    deleteConcept: `
+      DELETE FROM rrhh_module.payroll_concept WHERE concept_id = $1 RETURNING concept_id;
+    `,
+  },
 });
 
 export const bulkItems = [

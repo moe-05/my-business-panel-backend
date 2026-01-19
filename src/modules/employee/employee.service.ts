@@ -30,10 +30,25 @@ export class EmployeeService {
     return employee.rows[0];
   }
 
+  async getEmployeesByBranchAndTenant(
+    branchId: string,
+    tenantId: string,
+  ): Promise<Employee[]> {
+    const branchEmployees = await this.db.query(
+      queries.employee.getByBranchAndTenant,
+      [branchId, tenantId],
+    );
+
+    if (branchEmployees.rows.length === 0) return [];
+
+    return branchEmployees.rows;
+  }
+
   async createEmployeeWithContract(data: NewEmployeeDto) {
     const {
       user_id,
       tenant_id,
+      branch_id,
       first_name,
       last_name,
       doc_number,
@@ -44,7 +59,7 @@ export class EmployeeService {
     } = data;
 
     const newEmp = await this.db.query(
-      'SELECT rrhh_module.create_new_employee($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)',
+      'SELECT rrhh_module.create_new_employee($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)',
       [
         contractData.start_date,
         contractData.end_date,
@@ -53,6 +68,7 @@ export class EmployeeService {
         contractData.duties,
         user_id,
         tenant_id,
+        branch_id,
         first_name,
         last_name,
         doc_number,
