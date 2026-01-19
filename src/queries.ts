@@ -1,4 +1,4 @@
-import { createQueries } from "@crane-technologies/database";
+import { createQueries } from '@crane-technologies/database';
 
 export const queries = createQueries({
   user: {
@@ -362,7 +362,7 @@ export const queries = createQueries({
     `,
   },
   contract: {
-    byId:`
+    byId: `
       SELECT * FROM rrhh_module.contract WHERE contract_id = $1 LIMIT 1
     `,
     update: `
@@ -378,17 +378,15 @@ export const queries = createQueries({
     `,
     getSchedule: `
       SELECT * FROM rrhh_module.payment_schedule 
-    `
+    `,
   },
   clocking: {
-    clock_in: 
-    `
+    clock_in: `
       INSERT INTO rrhh_module.clocking (employee_id, branch_id, clock_in, clock_out)
       VALUES ($1, $2, NOW(), NULL)
       RETURNING clocking_id
     `,
-    clock_out:
-    `
+    clock_out: `
       UPDATE rrhh_module.clocking
       SET 
         clock_out = NOW(),
@@ -422,12 +420,13 @@ export const queries = createQueries({
       SELECT 
         e.employee_id,
         e.tenant_id,
+        e.branch_id,
         c.contract_id,
         c.base_salary,
         e.schedule_id
       FROM rrhh_module.employee e
       INNER JOIN rrhh_module.contract c USING(contract_id)
-      WHERE e.employee_id = $1 AND e.is_active = true
+      WHERE e.tenant_id = $1 AND e.branch_id = $2 AND e.is_active = true
     `,
     getConcepts: `
       SELECT 
@@ -461,8 +460,66 @@ export const queries = createQueries({
         paysheet_status_id
       ) VALUES ($1, $2, $3, $4, 1)
       RETURNING paysheet_id;
-    `
-  }
+    `,
+    closePaysheet: `
+      UPDATE rrhh_module.paysheet p
+      SET
+        payment_date = NOW(),
+        total_earnings = sub.earnings,
+        total_deductions = sub.deductions,
+        net_total = sub.net,
+        paysheet_status_id = 2 -- Cerrada
+      FROM (
+        SELECT
+          paysheet_id,
+          SUM(gross_salary) AS gross,
+          SUM(total_earnings) AS earnings,
+          SUM(total_deduction) AS deductions,
+          SUM(net_salary) AS net
+        FROM rrhh_module.paysheet_detail
+        WHERE paysheet_id = $1
+        GROUP BY paysheet_id  
+      ) AS sub
+      WHERE p.paysheet_id = sub.paysheet_id
+      RETURNING p.paysheet_id, p.net_total;
+    `,
+  },
+  concept: {
+    getConceptById: `
+      SELECT * FROM rrhh_module.payroll_concept WHERE concept_id = $1 LIMIT 1
+    `,
+    createConcept: `
+      INSERT INTO rrhh_module.payroll_concept (
+        tenant_id, 
+        name, 
+        type,
+        calculation_method,
+        is_taxable,
+        base_value
+      ) VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING concept_id;
+    `,
+    updateConcept: `
+      UPDATE rrhh_module.payroll_concept
+      SET
+        name = COALESCE($1, name),
+        type = COALESCE($2, type),
+        calculation_method = COALESCE($3, calculation_method),
+        is_taxable = COALESCE($4, is_taxable),
+        base_value = COALESCE($5, base_value),
+      WHERE concept_id = $6
+      RETURNING concept_id;
+    `,
+    softDelete: `
+      UPDATE rrhh_module.payroll_concept
+      SET is_active = false
+      WHERE concept_id = $1
+      RETURNING concept_id;
+    `,
+    deleteConcept: `
+      DELETE FROM rrhh_module.payroll_concept WHERE concept_id = $1 RETURNING concept_id;
+    `,
+  },
 });
 
 export const bulkItems = [

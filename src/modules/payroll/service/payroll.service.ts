@@ -6,6 +6,10 @@ import { CalculationEngine } from './calc-engine.service';
 import { queries } from '@/queries';
 import { EmployeeService } from '@/modules/employee/employee.service';
 import { CreatePaysheetDto } from '../dto/create-paysheet.dto';
+import {
+  EmployeePayrollData,
+  PayrollConceptRow,
+} from '../interface/payroll-db.interface';
 
 @Injectable()
 export class PayrollService {
@@ -21,34 +25,40 @@ export class PayrollService {
     branchId: string,
     tenantId: string,
   ) {
-    const employees = await this.empServ.getEmployeesByBranchAndTenant(
-      branchId,
-      tenantId,
-    );
 
+    console.log('Starting payroll processing for paysheet:', paysheetId);
+    const concepts = await this.repo.getConceptsPerTenant(tenantId);
+
+    const employees = await this.repo.getEmployeeContractForPayroll(
+      tenantId,
+      branchId,
+    );
     for (const emp of employees) {
-      await this.calculateAndSavePayroll(emp.employee_id, paysheetId);
+      await this.calculateAndSavePayroll(emp, concepts, paysheetId);
     }
+
+    console.log('All employee payrolls processed for paysheet:', paysheetId);
+    return this.closePayroll(paysheetId);
   }
 
   private async calculateAndSavePayroll(
-    employeeId: string,
+    emp: EmployeePayrollData,
+    concepts: PayrollConceptRow[],
     paysheetId: string,
   ) {
-    const contract = await this.repo.getEmployeeContractForPayroll(employeeId);
-    const concepts = await this.repo.getConceptsPerTenant(contract!.tenant_id);
+    console.log('Calculating payroll for employee:', emp.employee_id);
+    const result = this.engine.execute(emp.base_salary, concepts);
 
-    const result = this.engine.execute(contract!.base_salary, concepts);
-
+    console.log('Payroll calculation result for employee:', emp.employee_id, result.totals);
     const { movements, totals } = result;
 
     const sqlQueries = [queries.payroll.insertDetail];
 
-    const params: any[][] = [
+    const params: (string | number | Date | null)[][] = [
       [
         paysheetId,
-        employeeId,
-        contract!.contract_id,
+        emp.employee_id,
+        emp.contract_id,
         1, // payment_method_id hardcoded for now
         totals.grossSalary,
         totals.earnings,
@@ -79,6 +89,7 @@ export class PayrollService {
     });
 
     try {
+      console.log('Executing payroll transaction for employee:', emp.employee_id);
       const transactionResult = await this.db.transaction(
         sqlQueries,
         params,
@@ -86,14 +97,15 @@ export class PayrollService {
       );
       console.log(
         'Payroll transaction result for employee',
-        employeeId,
+        emp.employee_id,
         ':',
         transactionResult,
       );
-      return transactionResult;
     } catch (error) {
       console.error('Error processing payroll transaction:', error);
-      throw new Error('Failed to process payroll for employee ' + employeeId);
+      throw new Error(
+        'Failed to process payroll for employee ' + emp.employee_id,
+      );
     }
   }
 
@@ -119,5 +131,26 @@ export class PayrollService {
     ]);
 
     return newPaysheet.rows[0];
+  }
+
+  async closePayroll(paysheetId: string) {
+    const result = await this.db.query(queries.payroll.closePaysheet, [
+      paysheetId,
+    ]);
+
+    if (result.rows.length === 0) {
+      throw Error(
+        'Paysheey not found or cant be closed. (Maybe theres no details generated)',
+      );
+    }
+
+    const totals = result.rows[0];
+
+    console.log(
+      `Payroll closed for paysheet ${paysheetId} with totals:`,
+      totals,
+    );
+
+    return totals;
   }
 }

@@ -12,14 +12,15 @@ export class PayrollRepository {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
   async getEmployeeContractForPayroll(
-    employeeId: string,
-  ): Promise<EmployeePayrollData | null> {
+    tenantId: string,
+    branchId: string,
+  ): Promise<EmployeePayrollData[]> {
     const employee = await this.db.query(
       queries.payroll.getEmployeeContractForPayroll,
-      [employeeId],
+      [tenantId, branchId],
     );
 
-    return employee.rows.length ? employee.rows[0] : null;
+    return employee.rows.length ? employee.rows : [];
   }
 
   async getConceptsPerTenant(tenantId: string): Promise<PayrollConceptRow[]> {

@@ -1,6 +1,7 @@
 export interface EmployeePayrollData {
   employee_id: string;
   tenant_id: string;
+  branch_id: string;
   contract_id: string;
   base_salary: string;
   schedule_id: number;
