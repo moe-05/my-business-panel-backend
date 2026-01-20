@@ -1,4 +1,5 @@
 import { createQueries } from '@crane-technologies/database';
+import { count } from 'console';
 import { get } from 'http';
 
 export const queries = createQueries({
@@ -405,6 +406,10 @@ export const queries = createQueries({
       (tenant_id, warehouse_name, warehouse_address, created_at, updated_at)
       VALUES ($1, $2, $3, NOW(), NOW()) 
     RETURNING *`,
+    delete: `
+      DELETE FROM inventory_module.warehouse 
+      WHERE warehouse_id = $1 AND tenant_id = $2
+    `,
     byId: `
       SELECT * FROM inventory_module.warehouse 
       WHERE warehouse_id = $1 AND tenant_id = $2
@@ -430,6 +435,35 @@ export const queries = createQueries({
       SET stock = GREATEST(0, stock - $1), updated_at = NOW()
       WHERE warehouse_id = $2 AND product_id = $3 AND tenant_id = $4
       RETURNING *
+    `,
+    countAllInWarehouse: `
+      SELECT 
+        p.product_id,
+        p.product_name,
+        SUM(i.stock) AS total_amount
+      FROM 
+        inventory_module.inventory i
+      INNER JOIN 
+        core.product p ON i.product_id = p.product_id
+      WHERE 
+        i.warehouse_id = $1 AND i.tenant_id = $2
+      GROUP BY 
+        p.product_id, p.product_name
+    `,
+    createDiscrepancyReport: `
+      INSERT INTO inventory_module.discrepancy_count
+        (tenant_id, product_id, warehouse_id, stored_quantity, physical_cuantity, discrepancy_reason, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+      RETURNING *
+    `,
+    getAllDiscrepancyReports: `
+      SELECT * FROM inventory_module.discrepancy_count
+      WHERE warehouse_id = $1 AND tenant_id = $2
+      ORDER BY created_at DESC
+    `,
+    getDiscrepancyReportById: `
+      SELECT * FROM inventory_module.discrepancy_count
+      WHERE report_id = $1 AND tenant_id = $2
     `,
   }
 });

@@ -6,6 +6,7 @@ import { CreateWarehouseDto } from './dto/create_warehouse.dto';
 import { StateService } from '../state/state.service';
 import { queries } from '@/queries';
 import { ProductService } from '../product/product.service';
+import { ProductCount } from './interfaces/product_count.interface';
 
 @Injectable()
 export class WarehouseService {
@@ -22,14 +23,21 @@ export class WarehouseService {
         
         const { rows } = await this.db.query(
             queries.warehouse.create, 
-            [
-                tenant_id, 
-                createWarehouseDto.warehouse_name, 
-                createWarehouseDto.warehouse_address
-            ]
+            [ tenant_id, createWarehouseDto.warehouse_name, createWarehouseDto.warehouse_address ]
         );
 
         return rows[0] ?? new NotFoundException('Warehouse could not be created');
+    }
+
+    async deleteWarehouse(warehouse_id: string, tenant_id: string): Promise<void> {
+        const tenant = this.state.getTenant(tenant_id);
+        if (!tenant) 
+            throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
+
+        await this.db.query(
+            queries.warehouse.delete,
+            [ warehouse_id, tenant_id ]
+        );
     }
 
     async addProductToWarehouse(warehouse_id: string, product_id: string, tenant_id: string, amount: number): Promise<void> {
@@ -45,23 +53,64 @@ export class WarehouseService {
         if (warehouse.rowCount === 0) 
             throw new NotFoundException(`Warehouse with ID ${warehouse_id} not found`);
 
+        const product = await this.products.getProductById(product_id, tenant_id);
+        if (!product) 
+            throw new NotFoundException(`Product with ID ${product_id} not found`);
+
         this.db.query(
             queries.warehouse.insertIntoInventory, 
-            [
-                warehouse_id, 
-                product_id, 
-                amount, 
-                tenant_id
-            ]
+            [ warehouse_id, product_id, amount, tenant_id ]
         )
     }   
 
     async addStockToProduct(warehouse_id: string, product_id: string, tenant_id: string, amount: number): Promise<void> {
+        if (amount <= 0) {
+            throw new NotFoundException('Amount must be greater than zero');
+        }
+        const tenant = this.state.getTenant(tenant_id);
+        if (!tenant) {
+            throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
+        }
         
+        const warehouse = await this.db.query(queries.warehouse.byId, [warehouse_id]);
+        if (warehouse.rowCount === 0) {
+            throw new NotFoundException(`Warehouse with ID ${warehouse_id} not found`);
+        }
+
+        const product = await this.products.getProductById(product_id, tenant_id);  
+        if (!product) {
+            throw new NotFoundException(`Product with ID ${product_id} not found`);
+        }
+        
+        await this.db.query(
+            queries.warehouse.addStock, 
+            [ amount, warehouse_id, product_id, tenant_id ]
+        );
     }
 
     async removeStockFromProduct(warehouse_id: string, product_id: string, tenant_id: string, amount: number): Promise<void> {
+        if (amount <= 0) {
+            throw new NotFoundException('Amount must be greater than zero');
+        }
+        const tenant = this.state.getTenant(tenant_id);
+        if (!tenant) {
+            throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
+        }
         
+        const warehouse = await this.db.query(queries.warehouse.byId, [warehouse_id]);
+        if (warehouse.rowCount === 0) {
+            throw new NotFoundException(`Warehouse with ID ${warehouse_id} not found`);
+        }
+        
+        await this.db.query(
+            queries.warehouse.removeStock, 
+            [
+                amount, 
+                warehouse_id, 
+                product_id, 
+                tenant_id
+            ]
+        );        
     }
 
     async getWarehousesByTenant(tenant_id: string): Promise<Warehouse[]> {
@@ -74,5 +123,85 @@ export class WarehouseService {
             [tenant_id]
         );
         return rows;
+    }
+
+    async countAllInWarehouse(warehouse_id: string, tenant_id: string): Promise<ProductCount[]> {
+        const tenant = this.state.getTenant(tenant_id);
+        if (!tenant)
+            throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
+        
+        const warehouse = await this.db.query(queries.warehouse.byId, [warehouse_id]);
+        if (warehouse.rowCount === 0)
+            throw new NotFoundException(`Warehouse with ID ${warehouse_id} not found`);
+        
+        const { rows } = await this.db.query(
+            queries.warehouse.countAllInWarehouse,
+            [warehouse_id, tenant_id]
+        );
+        return rows;
+    }
+
+    async createDiscrepancyReport(
+        tenant_id: string, 
+        product_id: string, 
+        warehouse_id: string, 
+        stored_quantity: number, 
+        physical_cuantity: number, 
+        discrepancy_reason: string
+    ): Promise<void> {
+        const tenant = this.state.getTenant(tenant_id);
+        if (!tenant)
+            throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
+        
+        const warehouse = await this.db.query(queries.warehouse.byId, [warehouse_id]);
+        if (warehouse.rowCount === 0)
+            throw new NotFoundException(`Warehouse with ID ${warehouse_id} not found`);
+        
+        const product = await this.products.getProductById(product_id, tenant_id);
+        if (!product)
+            throw new NotFoundException(`Product with ID ${product_id} not found`);
+        
+        await this.db.query(
+            queries.warehouse.createDiscrepancyReport,
+            [
+                tenant_id,
+                product_id,
+                warehouse_id,
+                stored_quantity,
+                physical_cuantity,
+                discrepancy_reason
+            ]
+        );
+    }
+
+    async getDiscrepancyReports(tenant_id: string, warehouse_id: string): Promise<any[]> {
+        const tenant = this.state.getTenant(tenant_id);
+        if (!tenant)
+            throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
+        
+        const warehouse = await this.db.query(queries.warehouse.byId, [warehouse_id]);
+        if (warehouse.rowCount === 0)
+            throw new NotFoundException(`Warehouse with ID ${warehouse_id} not found`);
+        
+        const { rows } = await this.db.query(
+            queries.warehouse.getAllDiscrepancyReports,
+            [tenant_id, warehouse_id]
+        );
+        return rows;
+    }
+
+    async getDiscrepancyReportById(tenant_id: string, discrepancy_count_id: string): Promise<any> {
+        const tenant = this.state.getTenant(tenant_id);
+        if (!tenant)
+            throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
+        
+        const { rows } = await this.db.query(
+            queries.warehouse.getDiscrepancyReportById,
+            [tenant_id, discrepancy_count_id]
+        );
+        if (rows.length === 0)
+            throw new NotFoundException(`Discrepancy Report with ID ${discrepancy_count_id} not found`);
+        
+        return rows[0];
     }
 }
