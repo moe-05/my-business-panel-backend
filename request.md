@@ -518,3 +518,114 @@ Registra la hora de salida de un empleado
   "employeeId": "c8caabb1-19ee-4427-8a4e-7927e48363e5" //Cambiar el id a uno que sea valido
 }
 ```
+
+## Payroll (Corrida de nomina) (/payroll)
+
+### Creacion de la nomina (POST /create)
+
+```json
+{
+  "tenantId": "af00e3e6-43d0-4ff5-91a7-0da1b84621a5",
+  "branchId": "845699c4-b3aa-4e21-8993-e0934df045e7",
+  "periodStart": "2026-01-01",
+  "periodEnd": "2026-02-01"
+}
+
+//Retorna:
+
+{
+  "paysheet_id": "<uuid>"
+}
+```
+
+### Calculo de la nomina (POST /process)
+
+Ejecuta la calculadora de la nomina y se encarga de cerrar la nomina una vez finalizado el proceso
+
+```json
+{
+  "paysheetId": "<uuid>",
+  "branchId": "<uuid>",
+  "tenantId": "<uuid>"
+}
+
+//Retorna las deducciones totales, el neto total pagado y las ganancias totales de la nomina
+{
+  "totals": {}
+}
+```
+
+## Conceptos (/concept)
+
+Los conceptos son los valores de deduccion o ganancia aplicados a cada empleado, estos son creados por el Tenant. El backend unicamente toma los valores guardados en base de datos para realizar los calculos apropiados.
+
+### Obtener conceptos por Tenant (GET /:tenantId)
+
+```json
+// Retorna los conceptos generados por el tenant.
+
+//Url ==> http://localhost:3000/concept/<tenantId>
+```
+
+### Crear un concepto (POST /)
+
+```json
+{
+  "tenantId": "<uuid>",
+  "name": "Concepto de Prueba",
+  "type": "earning", // "earning" | "deduction"
+  "calcMethod": "fixed", // "fixed" | "deduction" | "formula" | "manual"
+  "isTaxable": false,
+  "baseValue": 0.00 //Siempre que un calculo sea de tipo Fixed, este campo sera 0 dado que es un ingreso fijo.
+}
+```
+
+### Actualizacion de un concepto (PATCH /:conceptId)
+
+```json
+{
+  "name": "Prueba",
+  "type": "earning", // "earning" | "deduction"
+  "calcMethod": "percentage", // "fixed" | "deduction" | "formula" | "manual"
+  "isTaxable": false,
+  "baseValue": 0.10 //Siempre que un calculo sea de tipo Fixed, este campo sera 0 dado que es un ingreso fijo.
+}
+```
+
+### Desactivar un concepto (PATCH /:conceptId/soft-delete)
+
+Cambia el campo del concepto is_active a false
+
+### Eliminar un concepto (DELETE /:conceptId)
+
+Borra de la base de datos un concepto
+
+## Paysheet / Nomina (/paysheet)
+
+### Filtracion de nomina por Periodo (GET /find)
+Encuentra todas las nominas de una sucursal especifica dentro de un intervalo de tiempo determinado
+
+Url: http://localhost:3000/paysheet/find?branchId=:branchId&start=2026-01-01&end=2026-03-01
+
+### Obtener nominas de un tenant (GET /tenant/:tenantId)
+Retorna todas las nominas pertenecientes a un tenant especifico
+
+### Obtener nominas de una sucursal (GET /branch/:branchId)
+Retorna todas las nominas pertenecientes a una sucursal especifica
+
+### Obtener nomina especifica (GET /:paysheetId)
+Retorna una nomina
+
+### Obtener los detalles de una nomina (GET /:paysheetId/details)
+Retorna los detalles de la nomina especifica
+
+## Movimientos de nomina (/movements)
+Entiendase por movimientos, la cantidad que se le dedujo o agrego al pago de cada empleado
+
+### Obtener todos los movimientos de una nomina (GET /paysheet/:paysheetId)
+
+Retorna todos los movimientos de una nomina en especifico
+
+### Obtener los movimientos de nomina para un empleado (GET /detail/:detailId)
+
+Retorna todos los movimientos de un empleado en especifico
