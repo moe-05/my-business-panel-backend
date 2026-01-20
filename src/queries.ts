@@ -457,7 +457,7 @@ export const queries = createQueries({
         branch_id, 
         period_start, 
         period_end, 
-        paysheet_status_id
+        status_id
       ) VALUES ($1, $2, $3, $4, 1)
       RETURNING paysheet_id;
     `,
@@ -468,7 +468,7 @@ export const queries = createQueries({
         total_earnings = sub.earnings,
         total_deductions = sub.deductions,
         net_total = sub.net,
-        paysheet_status_id = 2 -- Cerrada
+        status_id = 2 -- Cerrada
       FROM (
         SELECT
           paysheet_id,
@@ -483,6 +483,11 @@ export const queries = createQueries({
       WHERE p.paysheet_id = sub.paysheet_id
       RETURNING p.paysheet_id, p.net_total;
     `,
+    verifyPaysheet: `
+      SELECT COUNT(*) AS total
+      FROM rrhh_module.paysheet_detail
+      WHERE paysheet_id = $1;
+    `
   },
   concept: {
     getConceptById: `
@@ -520,6 +525,50 @@ export const queries = createQueries({
       DELETE FROM rrhh_module.payroll_concept WHERE concept_id = $1 RETURNING concept_id;
     `,
   },
+  paysheet: {
+    getTenantPaysheets: `
+      SELECT * FROM rrhh_module.paysheet WHERE tenant_id = $1
+      ORDER BY created_at DESC
+    `,
+    getPaysheetById: `
+      SELECT * FROM rrhh_module.paysheet WHERE paysheet_id = $1 LIMIT 1
+    `,
+    getBranchPaysheets: `
+      SELECT * FROM rrhh_module.paysheet 
+      WHERE  branch_id = $1
+      ORDER BY created_at DESC
+    `,
+    getDetails: `
+      SELECT * FROM rrhh_module.paysheet_detail WHERE paysheet_id = $1
+    `,
+    filtrateByDate:`
+      SELECT 
+        p.paysheet_id,
+        p.tenant_id,
+        p.branch_id,
+        p.period_start,
+        p.period_end,
+        p.payment_date,
+        p.net_total,
+        ps.status_description as paysheet_status
+      FROM rrhh_module.paysheet p
+      INNER JOIN rrhh_module.paysheet_status ps USING(status_id)
+      WHERE p.branch_id = $1
+        AND p.period_start >= $2
+        AND p.period_end <= $3
+      ORDER BY p.created_at DESC
+    `
+  },
+  payrollMovement: {
+    getMovementsByPaysheet: `
+      SELECT * FROM rrhh_module.payroll_movement pm
+      INNER JOIN rrhh_module.paysheet_detail pd USING(detail_id)
+      WHERE pd.paysheet_id = $1
+    `,
+    getMovementsByDetail: `
+      SELECT * FROM rrhh_module.payroll_movement WHERE detail_id = $1
+    `
+  }
 });
 
 export const bulkItems = [

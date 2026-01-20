@@ -25,7 +25,6 @@ export class PayrollService {
     branchId: string,
     tenantId: string,
   ) {
-
     console.log('Starting payroll processing for paysheet:', paysheetId);
     const concepts = await this.repo.getConceptsPerTenant(tenantId);
 
@@ -38,7 +37,7 @@ export class PayrollService {
     }
 
     console.log('All employee payrolls processed for paysheet:', paysheetId);
-    return this.closePayroll(paysheetId);
+    return this.closePayroll(paysheetId, employees.length);
   }
 
   private async calculateAndSavePayroll(
@@ -49,7 +48,11 @@ export class PayrollService {
     console.log('Calculating payroll for employee:', emp.employee_id);
     const result = this.engine.execute(emp.base_salary, concepts);
 
-    console.log('Payroll calculation result for employee:', emp.employee_id, result.totals);
+    console.log(
+      'Payroll calculation result for employee:',
+      emp.employee_id,
+      result.totals,
+    );
     const { movements, totals } = result;
 
     const sqlQueries = [queries.payroll.insertDetail];
@@ -89,7 +92,10 @@ export class PayrollService {
     });
 
     try {
-      console.log('Executing payroll transaction for employee:', emp.employee_id);
+      console.log(
+        'Executing payroll transaction for employee:',
+        emp.employee_id,
+      );
       const transactionResult = await this.db.transaction(
         sqlQueries,
         params,
@@ -133,7 +139,18 @@ export class PayrollService {
     return newPaysheet.rows[0];
   }
 
-  async closePayroll(paysheetId: string) {
+  async closePayroll(paysheetId: string, expectedEmployeeCount: number) {
+    const verify = await this.db.query(queries.payroll.verifyPaysheet, [
+      paysheetId,
+    ]);
+    const actualCount = parseInt(verify.rows[0].total);
+
+    if (actualCount !== expectedEmployeeCount) {
+      throw new Error(
+        `Paysheet cannot be closed. Expected ${expectedEmployeeCount} employees, but found ${actualCount} processed.`,
+      );
+    }
+
     const result = await this.db.query(queries.payroll.closePaysheet, [
       paysheetId,
     ]);
