@@ -1,4 +1,4 @@
-import { IsBoolean, IsString } from 'class-validator';
+import { IsBoolean, IsNumber, IsString } from 'class-validator';
 
 export class NewTenantDto {
   @IsString()
@@ -9,4 +9,7 @@ export class NewTenantDto {
 
   @IsBoolean()
   is_subscribed!: boolean;
+
+  @IsNumber()
+  region_id!: number;
 }

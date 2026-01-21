@@ -1,4 +1,4 @@
-import { IsDate, IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsBoolean, IsDate, IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class NewClientDto {
@@ -30,4 +30,8 @@ export class NewClientDto {
 
   @IsString()
   address!: string;
+
+  @IsBoolean()
+  @IsOptional()
+  is_tenant?: boolean;
 }

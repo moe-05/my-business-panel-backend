@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsNumber, IsString, IsUUID } from 'class-validator';
+import { IsDateString, IsNotEmpty, IsNumber, IsString, IsUUID } from 'class-validator';
 
 export class NewSubscriptionDto {
   @IsUUID()
@@ -19,4 +19,13 @@ export class NewSubscriptionDto {
 
   @IsString()
   plan!: string
+
+  @IsNumber()
+  subscription_type_id!: number;
+
+  @IsDateString()
+  start_date!: string;
+
+  @IsDateString()
+  end_date!: string;
 }
