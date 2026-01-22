@@ -1,10 +1,91 @@
 # Request de Prueba para endpoints
 
+## Tenant
+
+### Create single tenant (POST - /tenant)
+
+```json
+{
+  "tenant_name": "AMH Solutions 2",
+  "contact_email": "mybp2026@amh.com"
+}
+```
+
+### Get all tenants (GET - /tenant)
+
+```bash
+http://localhost:3000/tenant
+```
+
+### Get single tenant (GET - /tenant/:id)
+
+```bash
+http://localhost:3000/tenant/a685d8c2-acba-469f-bd16-3200ab7e8b6d
+```
+
+### Get users by tenant (GET - /tenant/:id/users)
+
+```bash
+http://localhost:3000/tenant/a685d8c2-acba-469f-bd16-3200ab7e8b6d/users
+```
+
+## User
+
+### Create single user (POST - /user)
+
+```json
+{
+  "tenant_id": "a685d8c2-acba-469f-bd16-3200ab7e8b6d",
+  "email": "gerente_34@amh.com",
+  "password": "hola1234",
+  "role_id": 3
+}
+```
+
+### Create users by bulk insertion (POST - /user/bulk)
+
+```json
+{
+  "users": [
+    {
+      "tenant_id": "a685d8c2-acba-469f-bd16-3200ab7e8b6d",
+      "email": "alicia@amh.com",
+      "password": "SecurePass123!",
+      "role_id": 2
+    },
+    {
+      "tenant_id": "a685d8c2-acba-469f-bd16-3200ab7e8b6d",
+      "email": "bobo@amh.com",
+      "password": "OtherPass456!",
+      "role_id": 3
+    },
+    {
+      "tenant_id": "a685d8c2-acba-469f-bd16-3200ab7e8b6d",
+      "email": "carlo@amh.com",
+      "password": "ThirdPass789!",
+      "role_id": 2
+    }
+  ]
+}
+```
+
+### Get self (GET - /user)
+
+```bash
+http://localhost:3000/user/
+```
+
+### Get user by email (GET - /user/:email)
+
+```bash
+http://localhost:3000/user/superuser@amh.com
+```
+
 ## Customers
 
 ### Creacion de un cliente (POST /)
 
-Parametro opcional birthday
+Parámetro opcional birthday
 
 ```json
 {
@@ -362,7 +443,7 @@ LLama a una transaccion que se encarga de crear al empleado y al contrato.
     "start_date": "2026-02-01",
     "end_date": "2028-02-01",
     "hours": 8,
-    "base_salary": 3700.00,
+    "base_salary": 3700.0,
     "duties": "Manejo de la sucursal principal, supervision de los empleados y gestionamiento de productos de la misma sucursal."
   }
 }
@@ -459,6 +540,7 @@ Marca como inactivo a un empleado de la empresa
   "message": "Employee with id: a402167d-bd42-475a-ae37-653770355eca deleted successfully."
 }
 ```
+
 ## Contrato
 
 ### Obtener la informacion de un contrato (GET /contract/:contract_id)
@@ -499,9 +581,11 @@ Obtiene la informacion de solo el contrato
   }
 }
 ```
+
 ## Clocking
 
 ### Clock In
+
 Registro de la hora de entrada de un empleado
 
 ```json
@@ -510,7 +594,9 @@ Registro de la hora de entrada de un empleado
   "branchId": "2f0b1b55-5d97-48b0-b6c5-f41290c45cdc"
 }
 ```
+
 ### Clock Out
+
 Registra la hora de salida de un empleado
 
 ```json
@@ -576,7 +662,7 @@ Los conceptos son los valores de deduccion o ganancia aplicados a cada empleado,
   "type": "earning", // "earning" | "deduction"
   "calcMethod": "fixed", // "fixed" | "deduction" | "formula" | "manual"
   "isTaxable": false,
-  "baseValue": 0.00 //Siempre que un calculo sea de tipo Fixed, este campo sera 0 dado que es un ingreso fijo.
+  "baseValue": 0.0 //Siempre que un calculo sea de tipo Fixed, este campo sera 0 dado que es un ingreso fijo.
 }
 ```
 
@@ -588,7 +674,7 @@ Los conceptos son los valores de deduccion o ganancia aplicados a cada empleado,
   "type": "earning", // "earning" | "deduction"
   "calcMethod": "percentage", // "fixed" | "deduction" | "formula" | "manual"
   "isTaxable": false,
-  "baseValue": 0.10 //Siempre que un calculo sea de tipo Fixed, este campo sera 0 dado que es un ingreso fijo.
+  "baseValue": 0.1 //Siempre que un calculo sea de tipo Fixed, este campo sera 0 dado que es un ingreso fijo.
 }
 ```
 
@@ -603,23 +689,29 @@ Borra de la base de datos un concepto
 ## Paysheet / Nomina (/paysheet)
 
 ### Filtracion de nomina por Periodo (GET /find)
+
 Encuentra todas las nominas de una sucursal especifica dentro de un intervalo de tiempo determinado
 
 Url: http://localhost:3000/paysheet/find?branchId=:branchId&start=2026-01-01&end=2026-03-01
 
 ### Obtener nominas de un tenant (GET /tenant/:tenantId)
+
 Retorna todas las nominas pertenecientes a un tenant especifico
 
 ### Obtener nominas de una sucursal (GET /branch/:branchId)
+
 Retorna todas las nominas pertenecientes a una sucursal especifica
 
 ### Obtener nomina especifica (GET /:paysheetId)
+
 Retorna una nomina
 
 ### Obtener los detalles de una nomina (GET /:paysheetId/details)
+
 Retorna los detalles de la nomina especifica
 
 ## Movimientos de nomina (/movements)
+
 Entiendase por movimientos, la cantidad que se le dedujo o agrego al pago de cada empleado
 
 ### Obtener todos los movimientos de una nomina (GET /paysheet/:paysheetId)

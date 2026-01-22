@@ -68,22 +68,29 @@ export class UserService {
   }
 
   async createUsersBulk(createUserDtos: CreateUserDto[]) {
-    const saltRounts = this.state.getConstant<number>('PASSWORD_SALT_ROUNDS');
-    const values = createUserDtos
-      .map((dto) => {
-        const password_hash = hashSync(dto.password, saltRounts);
-        const validTenant =
-          isUUID(dto.tenant_id) && this.state.getTenant(dto.tenant_id);
-        if (!validTenant) throw new InvalidTenantError(dto.tenant_id);
+    const saltRounds = this.state.getConstant<number>('PASSWORD_SALT_ROUNDS');
 
-        return `('${dto.tenant_id}', '${dto.email}', '${password_hash}', ${dto.role_id})`;
-      })
-      .join(', ');
+    const rows = createUserDtos.map((dto) => {
+      const validTenant =
+        isUUID(dto.tenant_id) && this.state.getTenant(dto.tenant_id);
+      if (!validTenant) throw new InvalidTenantError(dto.tenant_id);
 
-    const finalQuery = `INSERT INTO core.users (tenant_id, email, password_hash, role_id) VALUES ${values};`;
+      const password_hash = hashSync(dto.password, saltRounds);
 
-    await this.db.query(finalQuery);
-    return { message: 'users created successfully!', users: finalQuery };
+      return [dto.tenant_id, dto.email, password_hash, dto.role_id];
+    });
+
+    await this.db.bulkInsert(
+      'core.users',
+      ['tenant_id', 'email', 'password_hash', 'role_id'],
+      rows,
+      { header: false },
+    );
+
+    return {
+      message: 'users created successfully!',
+      count: rows.length,
+    };
   }
 
   async assignRole(assignRoleDto: AssignRoleDto) {
