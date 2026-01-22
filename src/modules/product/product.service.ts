@@ -81,7 +81,13 @@ export class ProductService {
       bulkProducts.forEach((k) => {
         const valInsert = p[k as keyof ProductInsert];
 
-        values.push(valInsert === undefined ? null : valInsert);
+        if (k === 'product_description') {
+          values.push(
+            valInsert === undefined ? 'No existe descripcion' : valInsert,
+          );
+        } else {
+          values.push(valInsert === undefined ? null : valInsert);
+        }
       });
     });
 
@@ -91,7 +97,6 @@ export class ProductService {
         RETURNING product_id
       `;
 
-    console.log('Bulk insert', query, values);
     return { query, values };
   }
 
