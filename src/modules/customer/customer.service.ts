@@ -69,6 +69,7 @@ export class CustomerService {
       phone,
       birthdate,
       address,
+      is_tenant
     } = customerData;
 
     const newCustomer = await this.db.query(queries.customer.create, [
@@ -81,6 +82,7 @@ export class CustomerService {
       phone,
       birthdate || null,
       address,
+      is_tenant || false
     ]);
 
     if (newCustomer.rows.length == 0) throw new ClientCreateError(email);
