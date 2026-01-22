@@ -41,8 +41,8 @@ export class TenantService {
       throw new Error('No valid fields to update');
     }
 
-    let setClause: string[] = [];
-    let paramsArray: any[] = [];
+    const setClause: string[] = [];
+    const paramsArray: any[] = [];
     let index = 1;
 
     for (const key of updateKeys) {
