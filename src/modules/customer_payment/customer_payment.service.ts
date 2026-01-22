@@ -63,6 +63,7 @@ export class CustomerPaymentService {
   async createCustomerPayment(paymentData: NewCustomerPaymentDto) {
     const {
       tenant_customer_id,
+      sale_id,
       payment_method_id,
       payment_amount,
       payment_date,
@@ -74,6 +75,7 @@ export class CustomerPaymentService {
       queries.customer_payment.createNewPayment,
       [
         tenant_customer_id,
+        sale_id,
         payment_method_id,
         payment_amount,
         payment_date,

@@ -1,4 +1,4 @@
-import { IsBoolean, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsOptional, IsNumber, IsString } from 'class-validator';
 
 export class NewTenantDto {
   @IsString()
@@ -10,4 +10,7 @@ export class NewTenantDto {
   @IsOptional()
   @IsBoolean()
   is_subscribed?: boolean;
+
+  @IsNumber()
+  region_id!: number;
 }

@@ -25,8 +25,16 @@ export class SubscriptionService {
   } as const;
 
   async createSubscription(data: NewSubscriptionDto) {
-    const { tenant_id, payment_method_id, payment_amount, details, plan } =
-      data;
+    const {
+      tenant_id,
+      payment_method_id,
+      payment_amount,
+      details,
+      plan,
+      start_date,
+      end_date,
+      subscription_type_id,
+    } = data;
 
     const priceId =
       this.tiers[`${plan.toLowerCase()}` as keyof typeof this.tiers];
@@ -83,7 +91,12 @@ export class SubscriptionService {
     };
     // const paymentIntent = invoice.payment_intent as Stripe.PaymentIntent;
 
+    const newSub = await this.db.query(
+      queries.subscription.createSubscription,
+      [tenant_id, subscription_type_id, tenantPaymentId, start_date, end_date],
+    );
     return {
+      idOnDb: newSub.rows[0].subscription_id,
       subscriptionId: subscription.id,
       invoice: invoice.id,
       status: subscription.status,

@@ -20,12 +20,13 @@ export class TenantService {
   }
 
   async createTenant(tenantInfo: NewTenantDto) {
-    const { tenant_name, contact_email, is_subscribed } = tenantInfo;
+    const { tenant_name, contact_email, is_subscribed, region_id } = tenantInfo;
 
     const newTenant = await this.db.query(queries.tenant.create, [
       tenant_name,
       contact_email,
       is_subscribed,
+      region_id,
     ]);
     return newTenant.rows[0];
   }

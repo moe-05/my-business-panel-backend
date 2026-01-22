@@ -36,8 +36,8 @@ export const queries = createQueries({
       WHERE tc.document_number = $1
     `,
     create: `
-      INSERT INTO core.tenant_customer (tenant_id, first_name, last_name, document_type_id, document_number, email, phone, birthdate, address, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+      INSERT INTO core.tenant_customer (tenant_id, first_name, last_name, document_type_id, document_number, email, phone, birthdate, address, created_at, updated_at, is_tenant)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW(), $10)
       RETURNING *
     `,
     byEmail: 'SELECT * FROM core.tenant_customer WHERE email = $1',
@@ -47,8 +47,8 @@ export const queries = createQueries({
     all: 'SELECT * FROM core.tenant',
     byId: 'SELECT * FROM core.tenant WHERE tenant_id = $1',
     create: `
-      INSERT INTO core.tenant (tenant_name, contact_email, is_subscribed, created_at, updated_at)
-      VALUES ($1, $2, $3, NOW(), NOW())
+      INSERT INTO core.tenant (tenant_name, contact_email, is_subscribed, created_at, updated_at, region_id)
+      VALUES ($1, $2, $3, NOW(), NOW(), $4)
       RETURNING *
     `,
     delete: 'DELETE FROM core.tenant WHERE tenant_id = $1',
@@ -121,8 +121,8 @@ export const queries = createQueries({
       WHERE cp.tenant_customer_id = $1
     `,
     createNewPayment: `
-      INSERT INTO pos_module.customer_payment (tenant_customer_id, payment_method_id, payment_amount, payment_date, currency_id, verified)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO pos_module.customer_payment (tenant_customer_id, sale_id, payment_method_id, payment_amount, payment_date, currency_id, verified)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
     `,
     deletePayment:
       'DELETE FROM pos_module.customer_payment WHERE customer_payment_id = $1',
@@ -284,6 +284,14 @@ export const queries = createQueries({
   subscription: {
     cancelSubscription:
       'UPDATE core.tenant SET is_subscribed = false WHERE tenant_id = $1',
+    
+    createSubscription: `
+      INSERT INTO core.subscription (
+        tenant_id, subscription_type_id, tenant_payment_id,
+        start_date, end_date
+      ) VALUES ($1, $2, $3, $4, $5)
+      RETURNING subscription_id
+    `
   },
   customer_segment: {
     getSegments: `
@@ -487,7 +495,7 @@ export const queries = createQueries({
       SELECT COUNT(*) AS total
       FROM rrhh_module.paysheet_detail
       WHERE paysheet_id = $1;
-    `
+    `,
   },
   concept: {
     getConceptById: `
@@ -541,7 +549,7 @@ export const queries = createQueries({
     getDetails: `
       SELECT * FROM rrhh_module.paysheet_detail WHERE paysheet_id = $1
     `,
-    filtrateByDate:`
+    filtrateByDate: `
       SELECT 
         p.paysheet_id,
         p.tenant_id,
@@ -557,7 +565,7 @@ export const queries = createQueries({
         AND p.period_start >= $2
         AND p.period_end <= $3
       ORDER BY p.created_at DESC
-    `
+    `,
   },
   payrollMovement: {
     getMovementsByPaysheet: `
@@ -567,8 +575,8 @@ export const queries = createQueries({
     `,
     getMovementsByDetail: `
       SELECT * FROM rrhh_module.payroll_movement WHERE detail_id = $1
-    `
-  }
+    `,
+  },
 });
 
 export const bulkItems = [

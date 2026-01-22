@@ -28,21 +28,23 @@ export class CustomerSegmentMarginController {
     return this.csegmentService.getMarginInfo();
   }
 
+  @Get(':tenantId')
+  async getMarginsByTenant(@Param('tenantId') tenantId: string) {
+    return this.csegmentService.getTenantMarginsInfo(tenantId);
+  }
+
   @Post()
-  async createNewMargin(@Body() req: NewMarginDto, ) {
+  async createNewMargin(@Body() req: NewMarginDto) {
     return this.csegmentService.createMargins(req);
   }
 
   @Patch(':id')
-  async updateMargin(
-    @Param('id') id: string,
-    @Body() req: UpdateMarginDto,
-  ) {
+  async updateMargin(@Param('id') id: string, @Body() req: UpdateMarginDto) {
     return this.csegmentService.updateMargins(id, req);
   }
 
   @Delete(':id')
-  async deleteMargin(@Param('id') id: string, ) {
+  async deleteMargin(@Param('id') id: string) {
     return this.csegmentService.deleteMargin(id);
   }
 }
