@@ -101,12 +101,6 @@ export class PayrollService {
         params,
         dependencies,
       );
-      console.log(
-        'Payroll transaction result for employee',
-        emp.employee_id,
-        ':',
-        transactionResult,
-      );
     } catch (error) {
       console.error('Error processing payroll transaction:', error);
       throw new Error(
