@@ -10,6 +10,7 @@ import { Session } from "@/common/decorators/session.decorator";
 import { IUserSession } from "@/common/interfaces/user_session.interface";
 import { AddProductToWarehouseDto } from "./dto/add_product_to_warehouse.dto";
 import { CreateDiscrepancyReport } from "./dto/create_discrepancy_report.dto";
+import { CountAllInWarehouseDto } from "./dto/count_all_in_warehouse.dto";
 
 @UseGuards(AuthenticationGuard)
 @Controller('warehouse')
@@ -51,6 +52,16 @@ export class WarehouseController {
         @Session() userSession: IUserSession
     ) {
         return this.warehouseService.getWarehousesByTenant(userSession.tenant_id);
+    }
+
+    @Post('count')
+    countAllProductsInWarehouse(
+        @Body() countAllInWarehouseDto: CountAllInWarehouseDto,
+        @Session() userSession: IUserSession
+    ) {
+        return this.warehouseService.countAllInWarehouse(
+            countAllInWarehouseDto.warehouse_id, userSession.tenant_id
+        );
     }
 
     @Post('discrepancy-report')

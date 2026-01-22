@@ -461,7 +461,7 @@ export const queries = createQueries({
       FROM 
         inventory_module.inventory i
       INNER JOIN 
-        core.product p ON i.product_id = p.product_id
+        core.product p USING(product_id)
       WHERE 
         i.warehouse_id = $1 AND i.tenant_id = $2
       GROUP BY 
