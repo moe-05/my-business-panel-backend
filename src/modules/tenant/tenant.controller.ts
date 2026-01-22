@@ -16,7 +16,7 @@ import { RoleAuthorizationGuard } from '@/common/guards/role_authorization.guard
 import { UserService } from '../user/user.service';
 import { InvalidTenantError } from '@/common/errors/invalid_tenant.error';
 
-// ? UseGuards(AuthorizationGuard)
+// ? @UseGuards(RoleAuthorizationGuard, LevelAuthorizationGuard)
 @Controller('tenant')
 export class TenantController {
   constructor(
