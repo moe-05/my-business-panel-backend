@@ -7,6 +7,7 @@ import { StateService } from '../state/state.service';
 import { queries } from '@/queries';
 import { ProductService } from '../product/product.service';
 import { ProductCount } from './interfaces/product_count.interface';
+import { InvalidTenantError } from '@/common/errors/invalid_tenant.error';
 
 @Injectable()
 export class WarehouseService {
@@ -20,27 +21,37 @@ export class WarehouseService {
         const tenant = this.state.getTenant(tenant_id);
         if (!tenant) 
             throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
+
+        const branch = await this.db.query(queries.branch.byIdAndTenant, [createWarehouseDto.branch_id, tenant_id]);
+        if (branch.rowCount === 0) 
+            throw new NotFoundException(`Branch with ID ${createWarehouseDto.branch_id} not found for Tenant with ID ${tenant_id}`);
         
         const { rows } = await this.db.query(
             queries.warehouse.create, 
-            [ tenant_id, createWarehouseDto.warehouse_name, createWarehouseDto.warehouse_address ]
+            [ createWarehouseDto.branch_id, createWarehouseDto.warehouse_name, createWarehouseDto.warehouse_address ]
         );
 
         return rows[0] ?? new NotFoundException('Warehouse could not be created');
     }
 
-    async deleteWarehouse(warehouse_id: string, tenant_id: string): Promise<void> {
+    async deleteWarehouse(warehouse_id: string, tenant_id: string): Promise<{ message: string }> {
         const tenant = this.state.getTenant(tenant_id);
         if (!tenant) 
             throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
 
+        const warehouse = await this.db.query(queries.warehouse.byTenantAndId, [warehouse_id, tenant_id]);
+        // console.log(warehouse.rows);
+        if (warehouse.rowCount === 0)
+            throw new NotFoundException(`Warehouse with ID ${warehouse_id} not found for Tenant with ID ${tenant_id}`);
+
         await this.db.query(
             queries.warehouse.delete,
-            [ warehouse_id, tenant_id ]
+            [ warehouse_id ]
         );
+        return { message: 'Warehouse deleted successfully' };
     }
 
-    async addProductToWarehouse(warehouse_id: string, product_id: string, tenant_id: string, amount: number): Promise<void> {
+    async addProductToWarehouse(warehouse_id: string, product_id: string, tenant_id: string, amount: number, expiration_date?: string) {
         if (amount <= 0) 
             throw new NotFoundException('Amount must be greater than zero');
         
@@ -57,10 +68,11 @@ export class WarehouseService {
         if (!product) 
             throw new NotFoundException(`Product with ID ${product_id} not found`);
 
-        this.db.query(
+        await this.db.query(
             queries.warehouse.insertIntoInventory, 
-            [ warehouse_id, product_id, amount, tenant_id ]
+            [ tenant_id, warehouse_id, product_id, amount, expiration_date ]
         )
+        return { message: "Product added to warehouse successfully" };
     }   
 
     async addStockToProduct(warehouse_id: string, product_id: string, tenant_id: string, amount: number): Promise<void> {

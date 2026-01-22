@@ -109,7 +109,13 @@ export const queries = createQueries({
     `,
     create: `
       INSERT INTO core.product (tenant_id, sku, product_name, product_description, product_category_id, unit_price)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      SELECT $1, $2, $3, $4, $5, $6
+      WHERE NOT EXISTS (
+        SELECT 1 FROM core.product p
+        WHERE p.tenant_id = $1
+          AND (p.sku = $2 OR LOWER(p.product_name) = LOWER($3))
+      )
+      RETURNING *
     `,
     delete: 'DELETE FROM core.product WHERE product_id = $1',
   },
@@ -218,6 +224,7 @@ export const queries = createQueries({
     byId: `SELECT * FROM core.branch WHERE branch_id = $1 LIMIT 1`,
     byTenant: `SELECT * FROM core.branch WHERE tenant_id = $1`,
     byName: `SELECT * FROM core.branch WHERE branch_name = $1 LIMIT 1`,
+    byIdAndTenant: `SELECT * FROM core.branch WHERE branch_id = $1 AND tenant_id = $2 LIMIT 1`,
     update: `
       UPDATE core.branch SET 
         branch_name = COALESCE($2, branch_name),
@@ -403,20 +410,30 @@ export const queries = createQueries({
   warehouse: {
     create: `
     INSERT INTO inventory_module.warehouse 
-      (tenant_id, warehouse_name, warehouse_address, created_at, updated_at)
+      (branch_id, warehouse_name, warehouse_address, created_at, updated_at)
       VALUES ($1, $2, $3, NOW(), NOW()) 
     RETURNING *`,
     delete: `
       DELETE FROM inventory_module.warehouse 
-      WHERE warehouse_id = $1 AND tenant_id = $2
+      WHERE warehouse_id = $1
     `,
     byId: `
       SELECT * FROM inventory_module.warehouse 
-      WHERE warehouse_id = $1 AND tenant_id = $2
+      WHERE warehouse_id = $1
     `,
     byTenant: `
-      SELECT * FROM inventory_module.warehouse 
+      SELECT 
+        wh.warehouse_id, wh.branch_id, wh.warehouse_name, wh.warehouse_address, br.branch_name, br.tenant_id 
+      FROM inventory_module.warehouse wh 
+        INNER JOIN core.branch br USING(branch_id)
       WHERE tenant_id = $1
+    `,
+    byTenantAndId: `
+      SELECT 
+        wh.warehouse_id, wh.branch_id, wh.warehouse_name, wh.warehouse_address, br.branch_name, br.tenant_id
+      FROM inventory_module.warehouse wh 
+        INNER JOIN core.branch br USING(branch_id)
+      WHERE wh.warehouse_id = $1 AND br.tenant_id = $2
     `,
     insertIntoInventory: `
       INSERT INTO inventory_module.inventory

@@ -20,7 +20,7 @@ export class WarehouseController {
     createWarehouse(
         @Body() createWarehouseDto: CreateWarehouseDto, 
         @Session() userSession: IUserSession
-    ): Promise<Warehouse> {
+    ) {
         return this.warehouseService.createWarehouse(createWarehouseDto, userSession.tenant_id);
     }
 
@@ -28,27 +28,28 @@ export class WarehouseController {
     deleteWarehouse(
         @Param('warehouse_id') warehouse_id: string, 
         @Session() userSession: IUserSession
-    ): Promise<void> {
+    ) {
         return this.warehouseService.deleteWarehouse(warehouse_id, userSession.tenant_id);
     }
 
-    @Post('/add-product')
+    @Post('/product')
     addProductToWarehouse(
         @Body() addProductToWarehouseDto: AddProductToWarehouseDto,
         @Session() userSession: IUserSession
-    ): Promise<void> {
+    ) {
         return this.warehouseService.addProductToWarehouse(
             addProductToWarehouseDto.warehouse_id,
             addProductToWarehouseDto.product_id,
             userSession.tenant_id,
-            addProductToWarehouseDto.amount
+            addProductToWarehouseDto.amount,
+            addProductToWarehouseDto.expiration_date
         );
     }
 
-    @Get('by-tenant/')
+    @Get('tenant/')
     getAllWarehouses(
         @Session() userSession: IUserSession
-    ): Promise<Warehouse[]> {
+    ) {
         return this.warehouseService.getWarehousesByTenant(userSession.tenant_id);
     }
 
@@ -56,7 +57,7 @@ export class WarehouseController {
     generateDiscrepancyReport(
         @Session() userSession: IUserSession,
         @Body() createDiscrepancyReport: CreateDiscrepancyReport  
-    ): Promise<void> {
+    ){
         return this.warehouseService.createDiscrepancyReport(
             userSession.tenant_id,
             createDiscrepancyReport.product_id,
@@ -71,7 +72,7 @@ export class WarehouseController {
     getAllDiscrepancyReports(
         @Param('warehouse_id') warehouse_id: string,
         @Session() userSession: IUserSession
-    ): Promise<any[]> {
+    ) {
         return this.warehouseService.getDiscrepancyReports(userSession.tenant_id, warehouse_id);
     }
 
@@ -79,7 +80,7 @@ export class WarehouseController {
     getDiscrepancyReportById(
         @Param('report_id') report_id: string,
         @Session() userSession: IUserSession
-    ): Promise<any> {
+    ) {
         return this.warehouseService.getDiscrepancyReportById(userSession.tenant_id, report_id);
     }
 }

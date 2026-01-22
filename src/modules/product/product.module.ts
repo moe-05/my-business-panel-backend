@@ -6,6 +6,7 @@ import { LevelAuthorizationGuard } from '@/common/guards/level_authorization.gua
 
 @Module({
   providers: [ProductService, RoleAuthorizationGuard, LevelAuthorizationGuard],
-  controllers: [ProductController]
+  controllers: [ProductController],
+  exports: [ProductService],
 })
 export class ProductModule {}
