@@ -284,7 +284,6 @@ export const queries = createQueries({
   subscription: {
     cancelSubscription:
       'UPDATE core.tenant SET is_subscribed = false WHERE tenant_id = $1',
-    
     createSubscription: `
       INSERT INTO core.subscription (
         tenant_id, subscription_type_id, tenant_payment_id,
@@ -410,7 +409,7 @@ export const queries = createQueries({
         branch_id, 
         period_start, 
         period_end, 
-        paysheet_status_id
+        status_id
       ) VALUES ($1, $2, $3, $4, 1) -- 1 suele ser 'Pendiente' o 'Abierta'
       RETURNING paysheet_id;
     `,
@@ -422,7 +421,7 @@ export const queries = createQueries({
         AND (
           (period_start <= $4 AND period_end >= $3) 
         )
-        AND paysheet_status_id != 3; 
+        AND status_id != 3; 
     `,
     getEmployeeContractForPayroll: `
       SELECT 
@@ -519,7 +518,7 @@ export const queries = createQueries({
         type = COALESCE($2, type),
         calculation_method = COALESCE($3, calculation_method),
         is_taxable = COALESCE($4, is_taxable),
-        base_value = COALESCE($5, base_value),
+        base_value = COALESCE($5, base_value)
       WHERE concept_id = $6
       RETURNING concept_id;
     `,
