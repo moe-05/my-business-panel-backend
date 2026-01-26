@@ -367,6 +367,9 @@ export const queries = createQueries({
     deactivate: `
       UPDATE rrhh_module.employee SET is_active = false WHERE employee_id = $1 RETURNING employee_id
     `,
+    full: `
+      SELECT rrhh_module.create_new_employee($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+    `
   },
   contract: {
     byId: `

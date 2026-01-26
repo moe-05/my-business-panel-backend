@@ -12,12 +12,15 @@ import { AssignRoleDto } from '@/modules/user/dto/assign_role.dto';
 import { IUserSession } from '@/common/interfaces/user_session.interface';
 import { isUUID } from 'class-validator';
 import { InvalidTenantError } from '@/common/errors/invalid_tenant.error';
+import { EmployeeService } from '../employee/employee.service';
+import { CreateFullEmployeeError } from '@/common/errors/create_full_employee.error';
 
 @Injectable()
 export class UserService {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     private readonly state: StateService,
+    private readonly employeeService: EmployeeService,
   ) {}
 
   async getUserByEmail(email: string): Promise<IUserResult | null> {
@@ -50,7 +53,7 @@ export class UserService {
       createUserDto.password,
       this.state.getConstant<number>('PASSWORD_SALT_ROUNDS'),
     );
-    const { tenant_id, email, role_id } = createUserDto;
+    const { tenant_id, email, role_id, employeeInfo } = createUserDto;
 
     const validTenant = isUUID(tenant_id) && this.state.getTenant(tenant_id);
     if (!validTenant) throw new InvalidTenantError(tenant_id);
@@ -64,6 +67,33 @@ export class UserService {
     if (newUser.rows.length === 0) {
       throw new UserCreationError(email);
     }
+
+    const userId = newUser.rows[0].user_id;
+
+    const { base_salary, hours, start_date, end_date, duties } =
+      employeeInfo.contractData;
+
+    const newEmployee = await this.db.query(queries.employee.full, [
+      start_date,
+      end_date,
+      hours,
+      base_salary,
+      duties,
+      userId,
+      employeeInfo.tenant_id,
+      employeeInfo.branch_id,
+      employeeInfo.first_name,
+      employeeInfo.last_name,
+      employeeInfo.doc_number,
+      employeeInfo.phone,
+      employeeInfo.email,
+      employeeInfo.schedule_id,
+    ]);
+
+    if( newEmployee.rows.length === 0) {
+      throw new CreateFullEmployeeError();
+    }
+    
     return { message: 'user created successfully!' };
   }
 
