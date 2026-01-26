@@ -438,6 +438,13 @@ export const queries = createQueries({
         INNER JOIN core.branch br USING(branch_id)
       WHERE tenant_id = $1
     `,
+    byBranch: `
+      SELECT 
+        wh.warehouse_id, wh.branch_id, wh.warehouse_name, wh.warehouse_address, br.branch_name, br.tenant_id
+      FROM inventory_module.warehouse wh
+        INNER JOIN core.branch br USING(branch_id)
+      WHERE wh.branch_id = $1
+    `,
     byTenantAndId: `
       SELECT 
         wh.warehouse_id, wh.branch_id, wh.warehouse_name, wh.warehouse_address, br.branch_name, br.tenant_id
@@ -492,6 +499,33 @@ export const queries = createQueries({
       SELECT * FROM inventory_module.discrepancy_count
       WHERE report_id = $1 AND tenant_id = $2
     `,
+    createInventoryTransfer: `
+      INSERT INTO inventory_module.inventory_transfer
+        (tenant_id, from_warehouse_id, to_warehouse_id, transfer_date, created_at, updated_at)
+      VALUES ($1, $2, $3, NOW(), NOW(), NOW())
+      RETURNING *
+    `,
+    addProductToInventoryTransfer: `
+      INSERT INTO inventory_module.inventory_transfer_item
+        (inventory_transfer_id, tenant_id, product_id, quantity, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, NOW(), NOW())
+      RETURNING *
+    `,
+    getInventoryTransfers: `
+      SELECT * FROM inventory_module.inventory_transfer
+      WHERE warehouse_id = $1 AND tenant_id = $2
+      ORDER BY transfer_date DESC
+    `,
+    getInventoryTransferById: `
+      SELECT * FROM inventory_module.inventory_transfer
+      WHERE transfer_id = $1 AND tenant_id = $2
+    `,
+    logInventoryMovement: `
+      INSERT INTO inventory_module.inventory_movement
+        (tenant_id, warehouse_id, product_id, quantity_change, movement_type, movement_date, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), NOW())
+      RETURNING *
+    `
   }
 });
 

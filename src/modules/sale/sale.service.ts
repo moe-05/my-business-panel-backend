@@ -12,6 +12,7 @@ import { BillService } from '../bill/bill.service';
 import { CustomerPaymentService } from '../customer_payment/customer_payment.service';
 import { SaleItemService } from '../sale-item/sale-item.service';
 import { SaleFromDb } from './interface/sale.interface';
+import { WarehouseService } from '../warehouse/warehouse.service';
 
 @Injectable()
 export class SaleService {
@@ -20,6 +21,7 @@ export class SaleService {
     private readonly saleItemService: SaleItemService,
     private readonly customerPaymentService: CustomerPaymentService,
     private readonly billService: BillService,
+    private readonly warehouseService: WarehouseService,
   ) {}
 
   async createSingleSale(data: NewSingleSaleDto) {
@@ -56,6 +58,18 @@ export class SaleService {
 
       //Se guardan los productos de la venta en bd
       await this.saleItemService.bulkInsert(data.items, sale);
+
+      // TODO: Se reduce el stock de los productos en los almacenes correspondientes
+      // const warehouse = await this.warehouseService.getWarehousesByTenant(data.tenant_id);
+
+      // for (const item of data.items) {
+      //   await this.warehouseService.removeStockFromProduct(
+      //     item.warehouse_id,
+      //     item.product_id,
+      //     data.tenant_id,
+      //     item.quantity,
+      //   );
+      // }
 
       //Se genera la factura y la devolvemos al frontend
       const newBill = await this.billService.createBill({

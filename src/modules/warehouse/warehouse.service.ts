@@ -8,6 +8,8 @@ import { queries } from '@/queries';
 import { ProductService } from '../product/product.service';
 import { ProductCount } from './interfaces/product_count.interface';
 import { InvalidTenantError } from '@/common/errors/invalid_tenant.error';
+import { InventoryTransferProduct } from './interfaces/inventory_transfer_product.interface';
+import { InventoryTransfer } from './interfaces/inventory_transfer.interface';
 
 @Injectable()
 export class WarehouseService {
@@ -109,11 +111,6 @@ export class WarehouseService {
             throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
         }
         
-        const warehouse = await this.db.query(queries.warehouse.byId, [warehouse_id]);
-        if (warehouse.rowCount === 0) {
-            throw new NotFoundException(`Warehouse with ID ${warehouse_id} not found`);
-        }
-        
         await this.db.query(
             queries.warehouse.removeStock, 
             [
@@ -133,6 +130,22 @@ export class WarehouseService {
         const { rows } = await this.db.query(
             queries.warehouse.byTenant, 
             [tenant_id]
+        );
+        return rows;
+    }
+
+    async getWarehousesByBranch(branch_id: string, tenant_id: string): Promise<Warehouse[]> {
+        const tenant = this.state.getTenant(tenant_id);
+        if (!tenant) 
+            throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
+        
+        const branch = await this.db.query(queries.branch.byIdAndTenant, [branch_id, tenant_id]);
+        if (branch.rowCount === 0) 
+            throw new NotFoundException(`Branch with ID ${branch_id} not found for Tenant with ID ${tenant_id}`);
+        
+        const { rows } = await this.db.query(
+            queries.warehouse.byBranch, 
+            [branch_id, tenant_id]
         );
         return rows;
     }
@@ -202,7 +215,7 @@ export class WarehouseService {
         return rows;
     }
 
-    async getDiscrepancyReportById(tenant_id: string, discrepancy_count_id: string): Promise<any> {
+    async getDiscrepancyReportById(tenant_id: string, discrepancy_count_id: string) {
         const tenant = this.state.getTenant(tenant_id);
         if (!tenant)
             throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
@@ -215,5 +228,37 @@ export class WarehouseService {
             throw new NotFoundException(`Discrepancy Report with ID ${discrepancy_count_id} not found`);
         
         return rows[0];
+    }
+
+    async moveProductToWarehouse(
+        origin_warehouse_id: string,
+        destination_warehouse_id: string,
+        tenant_id: string,
+        products: InventoryTransferProduct[]
+    ) {        
+        const tenant = this.state.getTenant(tenant_id);
+        if (!tenant) 
+            throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
+
+        const transfer_creator = await this.db.query(
+            queries.warehouse.createInventoryTransfer,
+            [ origin_warehouse_id, destination_warehouse_id, tenant_id, JSON.stringify(products) ]
+        );        
+
+        const transfer = transfer_creator.rows[0] as InventoryTransfer;
+
+        for (const product of products) {
+            await this.db.query(
+                queries.warehouse.addProductToInventoryTransfer,
+                [
+                    transfer.inventory_transfer_id,
+                    tenant_id,
+                    product.product_id,
+                    product.amount,
+                ]
+            );
+        }
+
+        return { message: 'Products moved successfully between warehouses' };
     }
 }

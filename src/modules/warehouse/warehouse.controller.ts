@@ -11,6 +11,8 @@ import { IUserSession } from "@/common/interfaces/user_session.interface";
 import { AddProductToWarehouseDto } from "./dto/add_product_to_warehouse.dto";
 import { CreateDiscrepancyReport } from "./dto/create_discrepancy_report.dto";
 import { CountAllInWarehouseDto } from "./dto/count_all_in_warehouse.dto";
+import { InventoryTransferProduct } from "./interfaces/inventory_transfer_product.interface";
+import { InventoryTransferDto, InventoryTransferProductDto } from "./dto/inventory_transfer.dto";
 
 @UseGuards(AuthenticationGuard)
 @Controller('warehouse')
@@ -93,5 +95,18 @@ export class WarehouseController {
         @Session() userSession: IUserSession
     ) {
         return this.warehouseService.getDiscrepancyReportById(userSession.tenant_id, report_id);
+    }
+
+    @Post('transfer')
+    transferInventoryBetweenWarehouses(
+        @Session() userSession: IUserSession,
+        @Body() body: InventoryTransferDto
+    ) {
+        return this.warehouseService.moveProductToWarehouse(
+            body.origin_warehouse_id,
+            body.destination_warehouse_id,
+            userSession.tenant_id,
+            body.products
+        );
     }
 }
