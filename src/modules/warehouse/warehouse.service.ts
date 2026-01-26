@@ -10,6 +10,7 @@ import { ProductCount } from './interfaces/product_count.interface';
 import { InvalidTenantError } from '@/common/errors/invalid_tenant.error';
 import { InventoryTransferProduct } from './interfaces/inventory_transfer_product.interface';
 import { InventoryTransfer } from './interfaces/inventory_transfer.interface';
+import { warehouseQueries } from './warehouse.queries';
 
 @Injectable()
 export class WarehouseService {
@@ -29,7 +30,7 @@ export class WarehouseService {
             throw new NotFoundException(`Branch with ID ${createWarehouseDto.branch_id} not found for Tenant with ID ${tenant_id}`);
         
         const { rows } = await this.db.query(
-            queries.warehouse.create, 
+            warehouseQueries.create, 
             [ createWarehouseDto.branch_id, createWarehouseDto.warehouse_name, createWarehouseDto.warehouse_address ]
         );
 
@@ -41,13 +42,13 @@ export class WarehouseService {
         if (!tenant) 
             throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
 
-        const warehouse = await this.db.query(queries.warehouse.byTenantAndId, [warehouse_id, tenant_id]);
+        const warehouse = await this.db.query(warehouseQueries.byTenantAndId, [warehouse_id, tenant_id]);
         // console.log(warehouse.rows);
         if (warehouse.rowCount === 0)
             throw new NotFoundException(`Warehouse with ID ${warehouse_id} not found for Tenant with ID ${tenant_id}`);
 
         await this.db.query(
-            queries.warehouse.delete,
+            warehouseQueries.delete,
             [ warehouse_id ]
         );
         return { message: 'Warehouse deleted successfully' };
@@ -61,7 +62,7 @@ export class WarehouseService {
         if (!tenant) 
             throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
 
-        const warehouse = await this.db.query(queries.warehouse.byId, [warehouse_id]);
+        const warehouse = await this.db.query(warehouseQueries.byId, [warehouse_id]);
 
         if (warehouse.rowCount === 0) 
             throw new NotFoundException(`Warehouse with ID ${warehouse_id} not found`);
@@ -71,7 +72,7 @@ export class WarehouseService {
             throw new NotFoundException(`Product with ID ${product_id} not found`);
 
         await this.db.query(
-            queries.warehouse.insertIntoInventory, 
+            warehouseQueries.insertIntoInventory, 
             [ tenant_id, warehouse_id, product_id, amount, expiration_date ]
         )
         return { message: "Product added to warehouse successfully" };
@@ -86,7 +87,7 @@ export class WarehouseService {
             throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
         }
         
-        const warehouse = await this.db.query(queries.warehouse.byId, [warehouse_id]);
+        const warehouse = await this.db.query(warehouseQueries.byId, [warehouse_id]);
         if (warehouse.rowCount === 0) {
             throw new NotFoundException(`Warehouse with ID ${warehouse_id} not found`);
         }
@@ -97,7 +98,7 @@ export class WarehouseService {
         }
         
         await this.db.query(
-            queries.warehouse.addStock, 
+            warehouseQueries.addStock, 
             [ amount, warehouse_id, product_id, tenant_id ]
         );
     }
@@ -112,7 +113,7 @@ export class WarehouseService {
         }
         
         await this.db.query(
-            queries.warehouse.removeStock, 
+            warehouseQueries.removeStock, 
             [
                 amount, 
                 warehouse_id, 
@@ -128,7 +129,7 @@ export class WarehouseService {
             throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
         
         const { rows } = await this.db.query(
-            queries.warehouse.byTenant, 
+            warehouseQueries.byTenant, 
             [tenant_id]
         );
         return rows;
@@ -144,7 +145,7 @@ export class WarehouseService {
             throw new NotFoundException(`Branch with ID ${branch_id} not found for Tenant with ID ${tenant_id}`);
         
         const { rows } = await this.db.query(
-            queries.warehouse.byBranch, 
+            warehouseQueries.byBranch, 
             [branch_id, tenant_id]
         );
         return rows;
@@ -155,12 +156,12 @@ export class WarehouseService {
         if (!tenant)
             throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
         
-        const warehouse = await this.db.query(queries.warehouse.byId, [warehouse_id]);
+        const warehouse = await this.db.query(warehouseQueries.byId, [warehouse_id]);
         if (warehouse.rowCount === 0)
             throw new NotFoundException(`Warehouse with ID ${warehouse_id} not found`);
         
         const { rows } = await this.db.query(
-            queries.warehouse.countAllInWarehouse,
+            warehouseQueries.countAllInWarehouse,
             [warehouse_id, tenant_id]
         );
         return rows;
@@ -178,7 +179,7 @@ export class WarehouseService {
         if (!tenant)
             throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
         
-        const warehouse = await this.db.query(queries.warehouse.byId, [warehouse_id]);
+        const warehouse = await this.db.query(warehouseQueries.byId, [warehouse_id]);
         if (warehouse.rowCount === 0)
             throw new NotFoundException(`Warehouse with ID ${warehouse_id} not found`);
         
@@ -187,7 +188,7 @@ export class WarehouseService {
             throw new NotFoundException(`Product with ID ${product_id} not found`);
         
         await this.db.query(
-            queries.warehouse.createDiscrepancyReport,
+            warehouseQueries.createDiscrepancyReport,
             [
                 tenant_id,
                 product_id,
@@ -204,12 +205,12 @@ export class WarehouseService {
         if (!tenant)
             throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
         
-        const warehouse = await this.db.query(queries.warehouse.byId, [warehouse_id]);
+        const warehouse = await this.db.query(warehouseQueries.byId, [warehouse_id]);
         if (warehouse.rowCount === 0)
             throw new NotFoundException(`Warehouse with ID ${warehouse_id} not found`);
         
         const { rows } = await this.db.query(
-            queries.warehouse.getAllDiscrepancyReports,
+            warehouseQueries.getAllDiscrepancyReports,
             [tenant_id, warehouse_id]
         );
         return rows;
@@ -221,7 +222,7 @@ export class WarehouseService {
             throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
         
         const { rows } = await this.db.query(
-            queries.warehouse.getDiscrepancyReportById,
+            warehouseQueries.getDiscrepancyReportById,
             [tenant_id, discrepancy_count_id]
         );
         if (rows.length === 0)
@@ -241,7 +242,7 @@ export class WarehouseService {
             throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
 
         const transfer_creator = await this.db.query(
-            queries.warehouse.createInventoryTransfer,
+            warehouseQueries.createInventoryTransfer,
             [ origin_warehouse_id, destination_warehouse_id, tenant_id, JSON.stringify(products) ]
         );        
 
@@ -249,7 +250,7 @@ export class WarehouseService {
 
         for (const product of products) {
             await this.db.query(
-                queries.warehouse.addProductToInventoryTransfer,
+                warehouseQueries.addProductToInventoryTransfer,
                 [
                     transfer.inventory_transfer_id,
                     tenant_id,
