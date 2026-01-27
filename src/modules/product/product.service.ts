@@ -14,6 +14,7 @@ import {
 } from './dto/newProduct.dto';
 import { UpdateProductDto } from './dto/updateProduct.dto';
 import { Product } from './interface/product.interface';
+import { isUUID } from 'class-validator';
 
 @Injectable()
 export class ProductService {
@@ -26,6 +27,17 @@ export class ProductService {
 
   async getProductBySku(sku: string): Promise<Product> {
     const product = await this.db.query(queries.products.getBySku, [sku]);
+    return product.rows[0];
+  }
+
+  async getProductById(productId: string, tenantId: string): Promise<Product> {
+    if (!isUUID(productId)) {
+      throw new BadRequestException('Invalid product ID format');
+    }
+    if (!isUUID(tenantId)) {
+      throw new BadRequestException('Invalid tenant ID format');
+    }
+    const product = await this.db.query(queries.products.getById, [productId, tenantId]);
     return product.rows[0];
   }
 
