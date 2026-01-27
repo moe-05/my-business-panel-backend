@@ -1,6 +1,10 @@
+import { NewEmployeeDto } from '@/modules/employee/dto/newEmployeeDto.dto';
+import { Type } from 'class-transformer';
 import {
   IsNotEmpty,
   IsNumber,
+  IsObject,
+  IsOptional,
   IsString,
   Length,
   Matches,
@@ -29,4 +33,8 @@ export class CreateUserDto {
     message: 'password is too weak, it must contain a number',
   })
   password!: string;
+
+  @IsObject()
+  @Type(() => NewEmployeeDto)
+  employeeInfo!: NewEmployeeDto;
 }
