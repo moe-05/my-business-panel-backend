@@ -1,4 +1,6 @@
 import { createQueries } from '@crane-technologies/database';
+import { count } from 'console';
+import { get } from 'http';
 
 export const queries = createQueries({
   user: {
@@ -96,13 +98,24 @@ export const queries = createQueries({
       WHERE p.tenant_id = $1
     `,
     getBySku: `
-      SELECT p.sku, p.product_name, p.product_description, p.unit_price, pc.category_name FROM core.product p
-      INNER JOIN core.product_category pc USING(product_category_id)
+      SELECT p.product_id, p.sku, p.product_name, p.product_description, p.unit_price, pc.category_name FROM core.product p
+      LEFT JOIN core.product_category pc USING(product_category_id)
       WHERE p.sku = $1
+    `,
+    getById: `
+      SELECT * FROM core.product 
+      WHERE product_id = $1 AND tenant_id = $2 
+      LIMIT 1
     `,
     create: `
       INSERT INTO core.product (tenant_id, sku, product_name, product_description, product_category_id, unit_price)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      SELECT $1, $2, $3, $4, $5, $6
+      WHERE NOT EXISTS (
+        SELECT 1 FROM core.product p
+        WHERE p.tenant_id = $1
+          AND (p.sku = $2 OR LOWER(p.product_name) = LOWER($3))
+      )
+      RETURNING *
     `,
     delete: 'DELETE FROM core.product WHERE product_id = $1',
   },
@@ -211,6 +224,7 @@ export const queries = createQueries({
     byId: `SELECT * FROM core.branch WHERE branch_id = $1 LIMIT 1`,
     byTenant: `SELECT * FROM core.branch WHERE tenant_id = $1`,
     byName: `SELECT * FROM core.branch WHERE branch_name = $1 LIMIT 1`,
+    byIdAndTenant: `SELECT * FROM core.branch WHERE branch_id = $1 AND tenant_id = $2 LIMIT 1`,
     update: `
       UPDATE core.branch SET 
         branch_name = COALESCE($2, branch_name),
