@@ -58,7 +58,7 @@ export class TenantService {
     const setString = setClause.join(', ');
 
     const queryString = `
-      UPDATE core.tenant
+      UPDATE general_schema.tenant
       SET ${setString}
       WHERE tenant_id = $${index}
       RETURNING *

@@ -1,9 +1,9 @@
-import { createQueries } from "@crane-technologies/database";
+import { createQueries } from '@crane-technologies/database';
 
 export const payrollQueries = createQueries({
   payroll: {
     createPaysheet: `
-      INSERT INTO rrhh_module.paysheet (
+      INSERT INTO hr_schema.paysheet (
         tenant_id, 
         branch_id, 
         period_start, 
@@ -14,7 +14,7 @@ export const payrollQueries = createQueries({
     `,
     checkExistingPeriod: `
       SELECT paysheet_id 
-      FROM rrhh_module.paysheet 
+      FROM hr_schema.paysheet 
       WHERE branch_id = $1 
         AND tenant_id = $2 
         AND (
@@ -30,8 +30,8 @@ export const payrollQueries = createQueries({
         c.contract_id,
         c.base_salary,
         e.schedule_id
-      FROM rrhh_module.employee e
-      INNER JOIN rrhh_module.contract c USING(contract_id)
+      FROM hr_schema.employee e
+      INNER JOIN hr_schema.contract c USING(contract_id)
       WHERE e.tenant_id = $1 AND e.branch_id = $2 AND e.is_active = true
     `,
     getConcepts: `
@@ -42,23 +42,23 @@ export const payrollQueries = createQueries({
         calculation_method,
         is_taxable,
         base_value
-      FROM rrhh_module.payroll_concept
+      FROM hr_schema.payroll_concept
       WHERE tenant_id = $1 AND is_active = true;
     `,
     insertDetail: `
-      INSERT INTO rrhh_module.paysheet_detail (
+      INSERT INTO hr_schema.paysheet_detail (
         paysheet_id, employee_id, contract_id, payment_method_id, 
         gross_salary, total_earnings, total_deduction, net_salary, pay_date
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING detail_id;
     `,
     insertMovement: `
-      INSERT INTO rrhh_module.payroll_movement (
+      INSERT INTO hr_schema.payroll_movement (
         detail_id, concept_id, base_amount, calculated_amount, description
       ) VALUES ($1, $2, $3, $4, $5);
     `,
     insertPaysheet: `
-      INSERT INTO rrhh_module.paysheet (
+      INSERT INTO hr_schema.paysheet (
         tenant_id, 
         branch_id, 
         period_start, 
@@ -68,7 +68,7 @@ export const payrollQueries = createQueries({
       RETURNING paysheet_id;
     `,
     closePaysheet: `
-      UPDATE rrhh_module.paysheet p
+      UPDATE hr_schema.paysheet p
       SET
         payment_date = NOW(),
         total_earnings = sub.earnings,
@@ -82,7 +82,7 @@ export const payrollQueries = createQueries({
           SUM(total_earnings) AS earnings,
           SUM(total_deduction) AS deductions,
           SUM(net_salary) AS net
-        FROM rrhh_module.paysheet_detail
+        FROM hr_schema.paysheet_detail
         WHERE paysheet_id = $1
         GROUP BY paysheet_id  
       ) AS sub
@@ -91,8 +91,8 @@ export const payrollQueries = createQueries({
     `,
     verifyPaysheet: `
       SELECT COUNT(*) AS total
-      FROM rrhh_module.paysheet_detail
+      FROM hr_schema.paysheet_detail
       WHERE paysheet_id = $1;
     `,
-  },  
-}) 
+  },
+});

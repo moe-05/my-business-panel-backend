@@ -53,7 +53,7 @@ export class SaleItemService {
 
     console.log(placeholders, val);
     const q = `
-      INSERT INTO pos_module.sale_item (sale_id, tenant_id, product_id, quantity, unit_price, total_price)
+      INSERT INTO pos_schema.sale_item (sale_id, tenant_id, product_id, quantity, unit_price, total_price)
       VALUES ${placeholders.join(',')}
     `;
 

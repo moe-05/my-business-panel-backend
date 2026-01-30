@@ -37,7 +37,10 @@ export class ProductService {
     if (!isUUID(tenantId)) {
       throw new BadRequestException('Invalid tenant ID format');
     }
-    const product = await this.db.query(queries.products.getById, [productId, tenantId]);
+    const product = await this.db.query(queries.products.getById, [
+      productId,
+      tenantId,
+    ]);
     return product.rows[0];
   }
 
@@ -92,7 +95,7 @@ export class ProductService {
     });
 
     const query = `
-        INSERT INTO core.product (${bulkProducts.join(', ')})
+        INSERT INTO general_schema.product (${bulkProducts.join(', ')})
         VALUES ${placeholders.join(', ')}
         RETURNING product_id
       `;
@@ -127,7 +130,7 @@ export class ProductService {
     const setString = setClause.join(', ');
 
     const queryString = `
-          UPDATE core.product
+          UPDATE general_schema.product
           SET ${setString}
           WHERE product_id = $${index}
           RETURNING *

@@ -4,198 +4,203 @@ import { get } from 'http';
 
 export const queries = createQueries({
   user: {
-    all: 'SELECT user_id, email, role_id, tenant_id FROM core.users',
-    byId: 'SELECT user_id, email, role_id FROM core.users WHERE users_id = $1 LIMIT 1',
+    all: 'SELECT user_id, email, role_id, tenant_id FROM general_schema.users',
+    byId: 'SELECT user_id, email, role_id FROM general_schema.users WHERE users_id = $1 LIMIT 1',
     byEmail:
-      'SELECT user_id, email, role_id FROM core.users WHERE email = $1 LIMIT 1',
+      'SELECT user_id, email, role_id FROM general_schema.users WHERE email = $1 LIMIT 1',
     byTenant:
-      'SELECT user_id, email, role_id FROM core.users WHERE tenant_id = $1',
-    byEmailWithPassword: 'SELECT * FROM core.users WHERE email = $1 LIMIT 1',
+      'SELECT user_id, email, role_id FROM general_schema.users WHERE tenant_id = $1',
+    byEmailWithPassword:
+      'SELECT * FROM general_schema.users WHERE email = $1 LIMIT 1',
     create: `
-      INSERT INTO core.users 
+      INSERT INTO general_schema.users 
       (tenant_id, email, password_hash, role_id, created_at, updated_at) 
       VALUES ($1, $2, $3, $4, NOW(), NOW()) 
       RETURNING *
     `,
-    assignRole: 'UPDATE core.users SET role_id = $1 WHERE users_id = $2',
+    assignRole:
+      'UPDATE general_schema.users SET role_id = $1 WHERE users_id = $2',
   },
   role: {
-    all: 'SELECT * FROM core.role',
+    all: 'SELECT * FROM general_schema.role',
   },
   document_type: {
-    all: 'SELECT * FROM core.document_type',
-    byId: 'SELECT * FROM core.document_type WHERE document_type_id = $1',
-    delete: 'DELETE FROM core.document_type WHERE document_type_id = $1',
+    all: 'SELECT * FROM general_schema.document_type',
+    byId: 'SELECT * FROM general_schema.document_type WHERE document_type_id = $1',
+    delete:
+      'DELETE FROM general_schema.document_type WHERE document_type_id = $1',
   },
   customer: {
-    all: 'SELECT * FROM core.tenant_customer WHERE tenant_id = $1',
-    byId: 'SELECT * FROM core.tenant_customer WHERE tenant_customer_id = $1',
+    all: 'SELECT * FROM general_schema.tenant_customer WHERE tenant_id = $1',
+    byId: 'SELECT * FROM general_schema.tenant_customer WHERE tenant_customer_id = $1',
     getInfo: `
-      SELECT tc.first_name, tc.last_name, d.type_name, tc.document_number, t.tenant_name, c.segment_name FROM core.tenant_customer tc
-      INNER JOIN core.tenant t USING(tenant_id)
-      INNER JOIN core.customer_segment c USING(customer_segment_id)
-      INNER JOIN core.document_type d USING(document_type_id)
+      SELECT tc.first_name, tc.last_name, d.type_name, tc.document_number, t.tenant_name, c.segment_name FROM general_schema.tenant_customer tc
+      INNER JOIN general_schema.tenant t USING(tenant_id)
+      INNER JOIN general_schema.customer_segment c USING(customer_segment_id)
+      INNER JOIN general_schema.document_type d USING(document_type_id)
       WHERE tc.document_number = $1
     `,
     create: `
-      INSERT INTO core.tenant_customer (tenant_id, first_name, last_name, document_type_id, document_number, email, phone, birthdate, address, created_at, updated_at, is_tenant)
+      INSERT INTO general_schema.tenant_customer (tenant_id, first_name, last_name, document_type_id, document_number, email, phone, birthdate, address, created_at, updated_at, is_tenant)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW(), $10)
       RETURNING *
     `,
-    byEmail: 'SELECT * FROM core.tenant_customer WHERE email = $1',
-    delete: 'DELETE FROM core.tenant_customer WHERE tenant_customer_id = $1',
+    byEmail: 'SELECT * FROM general_schema.tenant_customer WHERE email = $1',
+    delete:
+      'DELETE FROM general_schema.tenant_customer WHERE tenant_customer_id = $1',
   },
   tenant: {
-    all: 'SELECT * FROM core.tenant',
-    byId: 'SELECT * FROM core.tenant WHERE tenant_id = $1',
+    all: 'SELECT * FROM general_schema.tenant',
+    byId: 'SELECT * FROM general_schema.tenant WHERE tenant_id = $1',
     create: `
-      INSERT INTO core.tenant (tenant_name, contact_email, is_subscribed, created_at, updated_at, region_id)
+      INSERT INTO general_schema.tenant (tenant_name, contact_email, is_subscribed, created_at, updated_at, region_id)
       VALUES ($1, $2, $3, NOW(), NOW(), $4)
       RETURNING *
     `,
-    delete: 'DELETE FROM core.tenant WHERE tenant_id = $1',
+    delete: 'DELETE FROM general_schema.tenant WHERE tenant_id = $1',
     updateStripeId:
-      'UPDATE core.tenant SET stripe_id = $1 WHERE tenant_id = $2',
+      'UPDATE general_schema.tenant SET stripe_id = $1 WHERE tenant_id = $2',
   },
   tenant_payment: {
-    all: 'SELECT * FROM core.tenant_payment WHERE tenant_id = $1',
+    all: 'SELECT * FROM general_schema.tenant_payment WHERE tenant_id = $1',
     create: `
-      INSERT INTO core.tenant_payment (tenant_id, payment_method_id, payment_amount, details)
+      INSERT INTO general_schema.tenant_payment (tenant_id, payment_method_id, payment_amount, details)
       VALUES ($1, $2, $3, $4)
       RETURNING tenant_payment_id
     `,
   },
   p_category: {
-    all: 'SELECT * FROM core.product_category',
-    byId: 'SELECT * FROM core.product_category WHERE product_category_id = $1',
+    all: 'SELECT * FROM general_schema.product_category',
+    byId: 'SELECT * FROM general_schema.product_category WHERE product_category_id = $1',
     create:
-      'INSERT INTO core.product_category (category_name) VALUES ($1) RETURNING *',
+      'INSERT INTO general_schema.product_category (category_name) VALUES ($1) RETURNING *',
     update:
-      'UPDATE core.product_category SET category_name = $1 WHERE product_category_id = $2',
-    delete: 'DELETE FROM core.product_category WHERE product_category_id = $1',
+      'UPDATE general_schema.product_category SET category_name = $1 WHERE product_category_id = $2',
+    delete:
+      'DELETE FROM general_schema.product_category WHERE product_category_id = $1',
   },
   customer_segment_margin: {
-    all: 'SELECT * FROM core.customer_segment_margin',
+    all: 'SELECT * FROM general_schema.customer_segment_margin',
     create: `
-      INSERT INTO core.customer_segment_margin (tenant_id, customer_segment_id, customer_segment_margin_type_id, spending_threshold, seniority_months, frequency_per_month)
+      INSERT INTO general_schema.customer_segment_margin (tenant_id, customer_segment_id, customer_segment_margin_type_id, spending_threshold, seniority_months, frequency_per_month)
       VALUES ($1, $2, $3, $4, $5, $6)
     `,
     delete:
-      'DELETE FROM core.customer_segment_margin WHERE customer_segment_margin_id = $1',
+      'DELETE FROM general_schema.customer_segment_margin WHERE customer_segment_margin_id = $1',
     getInfo: `
-      SELECT cm.customer_segment_margin_id, t.tenant_name, cs.segment_name, cmt.type_name, cm.spending_threshold, cm.seniority_months, cm.frequency_per_month FROM core.customer_segment_margin cm
-      INNER JOIN core.tenant t USING(tenant_id)
-      INNER JOIN core.customer_segment cs USING(customer_segment_id)
-      LEFT JOIN core.customer_segment_margin_type cmt USING(customer_segment_margin_type_id)
+      SELECT cm.customer_segment_margin_id, t.tenant_name, cs.segment_name, cmt.type_name, cm.spending_threshold, cm.seniority_months, cm.frequency_per_month FROM general_schema.customer_segment_margin cm
+      INNER JOIN general_schema.tenant t USING(tenant_id)
+      INNER JOIN general_schema.customer_segment cs USING(customer_segment_id)
+      LEFT JOIN general_schema.customer_segment_margin_type cmt USING(customer_segment_margin_type_id)
       WHERE cm.tenant_id = $1 
       ORDER BY cm.customer_segment_margin_id
     `,
   },
   products: {
     getAll: `
-      SELECT p.sku, p.product_name, p.product_description, p.unit_price, pc.category_name FROM core.product p
-      INNER JOIN core.product_category pc USING(product_category_id)
+      SELECT p.sku, p.product_name, p.product_description, p.unit_price, pc.category_name FROM general_schema.product p
+      INNER JOIN general_schema.product_category pc USING(product_category_id)
       WHERE p.tenant_id = $1
     `,
     getBySku: `
-      SELECT p.product_id, p.sku, p.product_name, p.product_description, p.unit_price, pc.category_name FROM core.product p
-      LEFT JOIN core.product_category pc USING(product_category_id)
+      SELECT p.product_id, p.sku, p.product_name, p.product_description, p.unit_price, pc.category_name FROM general_schema.product p
+      LEFT JOIN general_schema.product_category pc USING(product_category_id)
       WHERE p.sku = $1
     `,
     getById: `
-      SELECT * FROM core.product 
+      SELECT * FROM general_schema.product 
       WHERE product_id = $1 AND tenant_id = $2 
       LIMIT 1
     `,
     create: `
-      INSERT INTO core.product (tenant_id, sku, product_name, product_description, product_category_id, unit_price)
+      INSERT INTO general_schema.product (tenant_id, sku, product_name, product_description, product_category_id, unit_price)
       SELECT $1, $2, $3, $4, $5, $6
       WHERE NOT EXISTS (
-        SELECT 1 FROM core.product p
+        SELECT 1 FROM general_schema.product p
         WHERE p.tenant_id = $1
           AND (p.sku = $2 OR LOWER(p.product_name) = LOWER($3))
       )
       RETURNING *
     `,
-    delete: 'DELETE FROM core.product WHERE product_id = $1',
+    delete: 'DELETE FROM general_schema.product WHERE product_id = $1',
   },
   customer_payment: {
     getPayments: `
-      SELECT cp.payment_amount, pm.name, cp.payment_date, cp.verified, tc.first_name, tc.last_name, c.symbol FROM pos_module.customer_payment cp
-      INNER JOIN core.tenant_customer tc USING(tenant_customer_id)
-      INNER JOIN core.payment_method pm USING(payment_method_id)
-      INNER JOIN core.currency c USING(currency_id)
+      SELECT cp.payment_amount, pm.name, cp.payment_date, cp.verified, tc.first_name, tc.last_name, c.symbol FROM pos_schema.customer_payment cp
+      INNER JOIN general_schema.tenant_customer tc USING(tenant_customer_id)
+      INNER JOIN general_schema.payment_method pm USING(payment_method_id)
+      INNER JOIN general_schema.currency c USING(currency_id)
     `,
     getCustomerPayments: `
-      SELECT cp.payment_amount, pm.name, cp.payment_date, cp.verified, tc.first_name, tc.last_name, c.currency_code FROM pos_module.customer_payment cp
-      INNER JOIN core.tenant_customer tc USING(tenant_customer_id)
-      INNER JOIN core.payment_method pm USING(payment_method_id)
-      INNER JOIN core.currency c USING(currency_id)
+      SELECT cp.payment_amount, pm.name, cp.payment_date, cp.verified, tc.first_name, tc.last_name, c.currency_code FROM pos_schema.customer_payment cp
+      INNER JOIN general_schema.tenant_customer tc USING(tenant_customer_id)
+      INNER JOIN general_schema.payment_method pm USING(payment_method_id)
+      INNER JOIN general_schema.currency c USING(currency_id)
       WHERE cp.tenant_customer_id = $1
     `,
     createNewPayment: `
-      INSERT INTO pos_module.customer_payment (tenant_customer_id, sale_id, payment_method_id, payment_amount, payment_date, currency_id, verified)
+      INSERT INTO pos_schema.customer_payment (tenant_customer_id, sale_id, payment_method_id, payment_amount, payment_date, currency_id, verified)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
     `,
     deletePayment:
-      'DELETE FROM pos_module.customer_payment WHERE customer_payment_id = $1',
+      'DELETE FROM pos_schema.customer_payment WHERE customer_payment_id = $1',
   },
   sales: {
     singleSale: `
-      INSERT INTO pos_module.sale (sale_id, branch_id, sale_date, currency_id, total_amount, is_completed)
+      INSERT INTO pos_schema.sale (sale_id, branch_id, sale_date, currency_id, total_amount, is_completed)
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING sale_id
     `,
     getSalesByBranch: `
-      SELECT s.sale_id, s.sale_date, s.total_amount, s.subtotal_amount, s.tax_amount, s.is_completed, b.branch_id, b.branch_name, c.currency_code, c.symbol FROM pos_module.sale s
-      INNER JOIN core.branch b USING(branch_id)
-      INNER JOIN core.currency c USING(currency_id)
+      SELECT s.sale_id, s.sale_date, s.total_amount, s.subtotal_amount, s.tax_amount, s.is_completed, b.branch_id, b.branch_name, c.currency_code, c.symbol FROM pos_schema.sale s
+      INNER JOIN general_schema.branch b USING(branch_id)
+      INNER JOIN general_schema.currency c USING(currency_id)
       WHERE s.branch_id = $1
     `,
   },
   items: {
     getItems: `
-      SELECT p.product_name, p.sku, si.quantity, si.unit_price, si.total_price FROM pos_module.sale_item si
-      INNER JOIN core.product p USING(product_id)
+      SELECT p.product_name, p.sku, si.quantity, si.unit_price, si.total_price FROM pos_schema.sale_item si
+      INNER JOIN general_schema.product p USING(product_id)
       WHERE si.sale_id = $1
     `, // ? add pagination
-    getItemById: 'SELECT * FROM pos_module.sale_item WHERE sale_item_id = $1',
+    getItemById: 'SELECT * FROM pos_schema.sale_item WHERE sale_item_id = $1',
     delete:
-      'DELETE FROM pos_module.sale_item WHERE sale_item_id = $1 RETURNING sale_item_id',
+      'DELETE FROM pos_schema.sale_item WHERE sale_item_id = $1 RETURNING sale_item_id',
   },
   bill: {
     create: `
-      INSERT INTO pos_module.bill (tenant_customer_id, currency_id, subtotal_amount, tax_amount, total_amount, billed_at, updated_at, sale_id)
+      INSERT INTO pos_schema.bill (tenant_customer_id, currency_id, subtotal_amount, tax_amount, total_amount, billed_at, updated_at, sale_id)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
     `,
     getBills: `
-      SELECT t.tenant_name, tc.first_name, tc.last_name, tc.document_number, tc.email, b.subtotal_amount, b.total_amount, b.billed_at FROM pos_module.bill b
-      INNER JOIN core.tenant_customer tc USING(tenant_customer_id)
-      INNER JOIN core.currency c USING(currency_id)
-      INNER JOIN core.tenant t USING(tenant_id)
+      SELECT t.tenant_name, tc.first_name, tc.last_name, tc.document_number, tc.email, b.subtotal_amount, b.total_amount, b.billed_at FROM pos_schema.bill b
+      INNER JOIN general_schema.tenant_customer tc USING(tenant_customer_id)
+      INNER JOIN general_schema.currency c USING(currency_id)
+      INNER JOIN general_schema.tenant t USING(tenant_id)
       WHERE t.tenant_id = $1
     `,
     getCustomerBills: `
-      SELECT t.tenant_name, tc.first_name, tc.last_name, tc.document_number, tc.email, b.subtotal_amount, b.total_amount, b.billed_at FROM pos_module.bill b
-      INNER JOIN core.tenant_customer tc USING(tenant_customer_id)
-      INNER JOIN core.currency c USING(currency_id)
-      INNER JOIN core.tenant t USING(tenant_id)
+      SELECT t.tenant_name, tc.first_name, tc.last_name, tc.document_number, tc.email, b.subtotal_amount, b.total_amount, b.billed_at FROM pos_schema.bill b
+      INNER JOIN general_schema.tenant_customer tc USING(tenant_customer_id)
+      INNER JOIN general_schema.currency c USING(currency_id)
+      INNER JOIN general_schema.tenant t USING(tenant_id)
       WHERE t.tenant_id = $1 AND tc.document_number = $2
     `,
     getBillById: `
-      SELECT t.tenant_name, tc.first_name, tc.last_name, tc.document_number, tc.email, b.subtotal_amount, b.total_amount, b.billed_at FROM pos_module.bill b
-      INNER JOIN core.tenant_customer tc USING(tenant_customer_id)
-      INNER JOIN core.currency c USING(currency_id)
-      INNER JOIN core.tenant t USING(tenant_id)
+      SELECT t.tenant_name, tc.first_name, tc.last_name, tc.document_number, tc.email, b.subtotal_amount, b.total_amount, b.billed_at FROM pos_schema.bill b
+      INNER JOIN general_schema.tenant_customer tc USING(tenant_customer_id)
+      INNER JOIN general_schema.currency c USING(currency_id)
+      INNER JOIN general_schema.tenant t USING(tenant_id)
       WHERE b.bill_id = $1 
     `,
-    delete: 'DELETE FROM pos_module.bill WHERE bill_id = $1 RETURNING bill_id',
-    updateAmount: `UPDATE pos_module.bill SET total_amount = total_amount - $1 WHERE bill_id = $2`,
+    delete: 'DELETE FROM pos_schema.bill WHERE bill_id = $1 RETURNING bill_id',
+    updateAmount: `UPDATE pos_schema.bill SET total_amount = total_amount - $1 WHERE bill_id = $2`,
   },
   returns: {
     newTransaction: `
-      INSERT INTO pos_module.return_transaction (bill_id, tenant_customer_id, total_refund_amount, refund_method, return_status_id, return_date)
+      INSERT INTO pos_schema.return_transaction (bill_id, tenant_customer_id, total_refund_amount, refund_method, return_status_id, return_date)
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING return_transaction_id
     `,
@@ -209,7 +214,7 @@ export const queries = createQueries({
           return_status_id, 
           return_date
       FROM 
-          pos_module.return_transaction
+          pos_schema.return_transaction
       WHERE 
           ($1::uuid IS NULL OR bill_id = $1)
           AND ($2::uuid IS NULL OR tenant_customer_id = $2)
@@ -220,13 +225,13 @@ export const queries = createQueries({
       ORDER BY return_date DESC`,
   },
   branch: {
-    all: `SELECT * FROM core.branch`,
-    byId: `SELECT * FROM core.branch WHERE branch_id = $1 LIMIT 1`,
-    byTenant: `SELECT * FROM core.branch WHERE tenant_id = $1`,
-    byName: `SELECT * FROM core.branch WHERE branch_name = $1 LIMIT 1`,
-    byIdAndTenant: `SELECT * FROM core.branch WHERE branch_id = $1 AND tenant_id = $2 LIMIT 1`,
+    all: `SELECT * FROM general_schema.branch`,
+    byId: `SELECT * FROM general_schema.branch WHERE branch_id = $1 LIMIT 1`,
+    byTenant: `SELECT * FROM general_schema.branch WHERE tenant_id = $1`,
+    byName: `SELECT * FROM general_schema.branch WHERE branch_name = $1 LIMIT 1`,
+    byIdAndTenant: `SELECT * FROM general_schema.branch WHERE branch_id = $1 AND tenant_id = $2 LIMIT 1`,
     update: `
-      UPDATE core.branch SET 
+      UPDATE general_schema.branch SET 
         branch_name = COALESCE($2, branch_name),
         address = COALESCE($3, address),
         contact_email = COALESCE($4, contact_email),
@@ -236,47 +241,47 @@ export const queries = createQueries({
       RETURNING *
     `,
     create: `
-      INSERT INTO core.branch (tenant_id, branch_name, address, contact_email, is_main_branch, created_at, updated_at)
+      INSERT INTO general_schema.branch (tenant_id, branch_name, address, contact_email, is_main_branch, created_at, updated_at)
       VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
       RETURNING *
     `,
-    delete: `DELETE FROM core.branch WHERE branch_id = $1 RETURNING *`,
+    delete: `DELETE FROM general_schema.branch WHERE branch_id = $1 RETURNING *`,
   },
   cash_register: {
-    all: `SELECT * FROM pos_module.cash_register`,
-    byId: `SELECT * FROM pos_module.cash_register WHERE cash_register_id = $1 LIMIT 1`,
-    byBranch: `SELECT * FROM pos_module.cash_register WHERE branch_id = $1`,
-    create: `INSERT INTO pos_module.cash_register (branch_id, is_active, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) RETURNING *`,
-    delete: `DELETE FROM pos_module.cash_register WHERE cash_register_id = $1 RETURNING *`,
-    update: `UPDATE pos_module.cash_register SET branch_id = COALESCE($2, branch_id), is_active = COALESCE($3, is_active), updated_at = NOW() WHERE cash_register_id = $1 RETURNING *`,
-    startSession: `INSERT INTO pos_module.cash_register_session (cash_register_id, opened_at, opening_amount, user_id, is_active) VALUES ($1, $2, $3, $4, true) RETURNING *`,
-    getSessionById: `SELECT * FROM pos_module.cash_register_session WHERE cash_register_session_id = $1 LIMIT 1`,
-    getSessionsByCashRegister: `SELECT * FROM pos_module.cash_register_session WHERE cash_register_id = $1 ORDER BY opened_at DESC`,
-    closeSession: `UPDATE pos_module.cash_register_session SET closed_at = $1, closing_amount = $2, is_active = false WHERE cash_register_session_id = $3 RETURNING *`,
+    all: `SELECT * FROM pos_schema.cash_register`,
+    byId: `SELECT * FROM pos_schema.cash_register WHERE cash_register_id = $1 LIMIT 1`,
+    byBranch: `SELECT * FROM pos_schema.cash_register WHERE branch_id = $1`,
+    create: `INSERT INTO pos_schema.cash_register (branch_id, is_active, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) RETURNING *`,
+    delete: `DELETE FROM pos_schema.cash_register WHERE cash_register_id = $1 RETURNING *`,
+    update: `UPDATE pos_schema.cash_register SET branch_id = COALESCE($2, branch_id), is_active = COALESCE($3, is_active), updated_at = NOW() WHERE cash_register_id = $1 RETURNING *`,
+    startSession: `INSERT INTO pos_schema.cash_register_session (cash_register_id, opened_at, opening_amount, user_id, is_active) VALUES ($1, $2, $3, $4, true) RETURNING *`,
+    getSessionById: `SELECT * FROM pos_schema.cash_register_session WHERE cash_register_session_id = $1 LIMIT 1`,
+    getSessionsByCashRegister: `SELECT * FROM pos_schema.cash_register_session WHERE cash_register_id = $1 ORDER BY opened_at DESC`,
+    closeSession: `UPDATE pos_schema.cash_register_session SET closed_at = $1, closing_amount = $2, is_active = false WHERE cash_register_session_id = $3 RETURNING *`,
     registerTransaction: `INSERT INTO cash_register_sale_transaction (cash_register_session_id, amount, transaction_time, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW()) RETURNING *`,
   },
   promotions: {
     getPromos: `
-      SELECT p.promotion_name, p.promotion_code, c.segment_name, p.promotion_start_date, p.promotion_end_date, pt.type_name, p.is_active FROM pos_module.promotion p
-      INNER JOIN core.customer_segment c USING(customer_segment_id)
-      INNER JOIN pos_module.promotion_type pt USING(promotion_type_id)
+      SELECT p.promotion_name, p.promotion_code, c.segment_name, p.promotion_start_date, p.promotion_end_date, pt.type_name, p.is_active FROM pos_schema.promotion p
+      INNER JOIN general_schema.customer_segment c USING(customer_segment_id)
+      INNER JOIN pos_schema.promotion_type pt USING(promotion_type_id)
       WHERE p.tenant_id = $1
     `,
     getPromoInfo: `
-      SELECT p.promotion_name, p.promotion_code, c.segment_name, p.promotion_start_date, p.promotion_end_date, p.is_active FROM pos_module.promotion p
-      INNER JOIN core.customer_segment c USING(customer_segment_id)
-      INNER JOIN pos_module.promotion_type pt USING(promotion_type_id)
+      SELECT p.promotion_name, p.promotion_code, c.segment_name, p.promotion_start_date, p.promotion_end_date, p.is_active FROM pos_schema.promotion p
+      INNER JOIN general_schema.customer_segment c USING(customer_segment_id)
+      INNER JOIN pos_schema.promotion_type pt USING(promotion_type_id)
       WHERE p.promotion_id = $1 LIMIT 1
     `,
     insertPromo: `
-      INSERT INTO pos_module.promotion (tenant_id, promotion_name, promotion_code, promotion_description, promotion_type_id, customer_segment_id, promotion_start_date, promotion_end_date, is_active)
+      INSERT INTO pos_schema.promotion (tenant_id, promotion_name, promotion_code, promotion_description, promotion_type_id, customer_segment_id, promotion_start_date, promotion_end_date, is_active)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING promotion_id
     `,
     deletePromo:
-      'DELETE FROM pos_module.promotion WHERE promotion_id = $1 RETURNING promotion_id',
+      'DELETE FROM pos_schema.promotion WHERE promotion_id = $1 RETURNING promotion_id',
     updatePromo: `
-      UPDATE pos_module.promotion
+      UPDATE pos_schema.promotion
       SET tenant_id = COALESCE($2, tenant_id),
           promotion_name = COALESCE($3, promotion_name),
           promotion_code = COALESCE($4, promotion_code),
@@ -292,50 +297,50 @@ export const queries = createQueries({
   },
   promo_types: {
     getPromoTypes: `
-      SELECT * FROM pos_module.promotion_type
+      SELECT * FROM pos_schema.promotion_type
     `,
   },
   subscription: {
     cancelSubscription:
-      'UPDATE core.tenant SET is_subscribed = false WHERE tenant_id = $1',
+      'UPDATE general_schema.tenant SET is_subscribed = false WHERE tenant_id = $1',
     createSubscription: `
-      INSERT INTO core.subscription (
+      INSERT INTO general_schema.subscription (
         tenant_id, subscription_type_id, tenant_payment_id,
         start_date, end_date
       ) VALUES ($1, $2, $3, $4, $5)
       RETURNING subscription_id
-    `
+    `,
   },
   customer_segment: {
     getSegments: `
-      SELECT customer_segment_id, segment_name, segment_hierarchy FROM core.customer_segment
+      SELECT customer_segment_id, segment_name, segment_hierarchy FROM general_schema.customer_segment
     `,
     newSegments: `
-      INSERT INTO core.customer_segment (segment_name, segment_hierarchy)
+      INSERT INTO general_schema.customer_segment (segment_name, segment_hierarchy)
       VALUES ($1, $2)
       RETURNING customer_segment_id
     `,
     deleteSegment: `
-      DELETE FROM core.customer_segment WHERE customer_segment_id = $1
+      DELETE FROM general_schema.customer_segment WHERE customer_segment_id = $1
       RETURNING customer_segment_id
     `,
   },
   loyal_program: {
     create: `
-      INSERT INTO pos_module.loyalty_program (tenant_id, points_earned_per_currency_unit, points_redeemed_per_currency_unit, minimum_purchase_for_points, created_at, updated_at)
+      INSERT INTO pos_schema.loyalty_program (tenant_id, points_earned_per_currency_unit, points_redeemed_per_currency_unit, minimum_purchase_for_points, created_at, updated_at)
       VALUES ($1, $2, $3, $4, NOW(), NOW())
     `,
     all: `
-      SELECT * FROM pos_module.loyalty_program WHERE tenant_id = $1
+      SELECT * FROM pos_schema.loyalty_program WHERE tenant_id = $1
     `,
     delete: `
-      DELETE FROM pos_module.loyalty_program WHERE loyalty_program_id = $1 RETURNING loyalty_program_id
+      DELETE FROM pos_schema.loyalty_program WHERE loyalty_program_id = $1 RETURNING loyalty_program_id
     `,
     byId: `
-      SELECT * FROM pos_module.loyalty_program WHERE loyalty_program_id = $1 LIMIT 1
+      SELECT * FROM pos_schema.loyalty_program WHERE loyalty_program_id = $1 LIMIT 1
     `,
     update: `
-      UPDATE pos_module.loyalty_program
+      UPDATE pos_schema.loyalty_program
       SET
         points_per_dollar = COALESCE($2, points_per_dollar),
         points_per_currency_unit = COALESCE($3, points_per_currency_unit),
@@ -347,24 +352,24 @@ export const queries = createQueries({
   employee: {
     getById: `
       SELECT e.first_name, e.last_name, e.doc_number, e.phone, e.email, e.is_active, c.start_date, c.end_date, c.hours, c.base_salary, c.duties
-      FROM rrhh_module.employee e 
-      INNER JOIN rrhh_module.contract c USING(contract_id)
+      FROM hr_schema.employee e 
+      INNER JOIN hr_schema.contract c USING(contract_id)
       WHERE e.employee_id = $1 LIMIT 1
     `,
     getByTenant: `
-      SELECT * FROM rrhh_module.employee WHERE tenant_id = $1
+      SELECT * FROM hr_schema.employee WHERE tenant_id = $1
     `,
     getByBranchAndTenant: `
-      SELECT * FROM rrhh_module.employee 
+      SELECT * FROM hr_schema.employee 
       WHERE branch_id = $1 AND tenant_id = $2 AND is_active = true
     `,
     create: `
-      INSERT INTO rrhh_module.employee (user_id, tenant_id, first_name, last_name, doc_number, phone, email, schedule_id)
+      INSERT INTO hr_schema.employee (user_id, tenant_id, first_name, last_name, doc_number, phone, email, schedule_id)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING employee_id
     `,
     update: `
-      UPDATE rrhh_module.employee
+      UPDATE hr_schema.employee
       SET
         first_name = COALESCE($1, first_name),
         last_name = COALESCE($2, last_name),
@@ -376,21 +381,21 @@ export const queries = createQueries({
       RETURNING employee_id
     `,
     delete: `
-      DELETE FROM rrhh_module.employee WHERE employee_id = $1 RETURNING employee_id
+      DELETE FROM hr_schema.employee WHERE employee_id = $1 RETURNING employee_id
     `,
     deactivate: `
-      UPDATE rrhh_module.employee SET is_active = false WHERE employee_id = $1 RETURNING employee_id
+      UPDATE hr_schema.employee SET is_active = false WHERE employee_id = $1 RETURNING employee_id
     `,
     full: `
-      SELECT rrhh_module.create_new_employee($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-    `
+      SELECT hr_schema.create_new_employee($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+    `,
   },
   contract: {
     byId: `
-      SELECT * FROM rrhh_module.contract WHERE contract_id = $1 LIMIT 1
+      SELECT * FROM hr_schema.contract WHERE contract_id = $1 LIMIT 1
     `,
     update: `
-      UPDATE rrhh_module.contract
+      UPDATE hr_schema.contract
       SET
         start_date = COALESCE($1, start_date),
         end_date = COALESCE($2, end_date),
@@ -401,17 +406,17 @@ export const queries = createQueries({
       RETURNING contract_id
     `,
     getSchedule: `
-      SELECT * FROM rrhh_module.payment_schedule 
+      SELECT * FROM hr_schema.payment_schedule 
     `,
   },
   clocking: {
     clock_in: `
-      INSERT INTO rrhh_module.clocking (employee_id, branch_id, clock_in, clock_out)
+      INSERT INTO hr_schema.clocking (employee_id, branch_id, clock_in, clock_out)
       VALUES ($1, $2, NOW(), NULL)
       RETURNING clocking_id
     `,
     clock_out: `
-      UPDATE rrhh_module.clocking
+      UPDATE hr_schema.clocking
       SET 
         clock_out = NOW(),
         turn_hours = GREATEST(0, EXTRACT(EPOCH FROM (NOW() - clock_in)) / 3600)
@@ -421,7 +426,7 @@ export const queries = createQueries({
   },
   payroll: {
     createPaysheet: `
-      INSERT INTO rrhh_module.paysheet (
+      INSERT INTO hr_schema.paysheet (
         tenant_id, 
         branch_id, 
         period_start, 
@@ -432,7 +437,7 @@ export const queries = createQueries({
     `,
     checkExistingPeriod: `
       SELECT paysheet_id 
-      FROM rrhh_module.paysheet 
+      FROM hr_schema.paysheet 
       WHERE branch_id = $1 
         AND tenant_id = $2 
         AND (
@@ -448,8 +453,8 @@ export const queries = createQueries({
         c.contract_id,
         c.base_salary,
         e.schedule_id
-      FROM rrhh_module.employee e
-      INNER JOIN rrhh_module.contract c USING(contract_id)
+      FROM hr_schema.employee e
+      INNER JOIN hr_schema.contract c USING(contract_id)
       WHERE e.tenant_id = $1 AND e.branch_id = $2 AND e.is_active = true
     `,
     getConcepts: `
@@ -460,23 +465,23 @@ export const queries = createQueries({
         calculation_method,
         is_taxable,
         base_value
-      FROM rrhh_module.payroll_concept
+      FROM hr_schema.payroll_concept
       WHERE tenant_id = $1 AND is_active = true;
     `,
     insertDetail: `
-      INSERT INTO rrhh_module.paysheet_detail (
+      INSERT INTO hr_schema.paysheet_detail (
         paysheet_id, employee_id, contract_id, payment_method_id, 
         gross_salary, total_earnings, total_deduction, net_salary, pay_date
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING detail_id;
     `,
     insertMovement: `
-      INSERT INTO rrhh_module.payroll_movement (
+      INSERT INTO hr_schema.payroll_movement (
         detail_id, concept_id, base_amount, calculated_amount, description
       ) VALUES ($1, $2, $3, $4, $5);
     `,
     insertPaysheet: `
-      INSERT INTO rrhh_module.paysheet (
+      INSERT INTO hr_schema.paysheet (
         tenant_id, 
         branch_id, 
         period_start, 
@@ -486,7 +491,7 @@ export const queries = createQueries({
       RETURNING paysheet_id;
     `,
     closePaysheet: `
-      UPDATE rrhh_module.paysheet p
+      UPDATE hr_schema.paysheet p
       SET
         payment_date = NOW(),
         total_earnings = sub.earnings,
@@ -500,7 +505,7 @@ export const queries = createQueries({
           SUM(total_earnings) AS earnings,
           SUM(total_deduction) AS deductions,
           SUM(net_salary) AS net
-        FROM rrhh_module.paysheet_detail
+        FROM hr_schema.paysheet_detail
         WHERE paysheet_id = $1
         GROUP BY paysheet_id  
       ) AS sub
@@ -509,16 +514,16 @@ export const queries = createQueries({
     `,
     verifyPaysheet: `
       SELECT COUNT(*) AS total
-      FROM rrhh_module.paysheet_detail
+      FROM hr_schema.paysheet_detail
       WHERE paysheet_id = $1;
     `,
   },
   concept: {
     getConceptById: `
-      SELECT * FROM rrhh_module.payroll_concept WHERE concept_id = $1 LIMIT 1
+      SELECT * FROM hr_schema.payroll_concept WHERE concept_id = $1 LIMIT 1
     `,
     createConcept: `
-      INSERT INTO rrhh_module.payroll_concept (
+      INSERT INTO hr_schema.payroll_concept (
         tenant_id, 
         name, 
         type,
@@ -529,7 +534,7 @@ export const queries = createQueries({
       RETURNING concept_id;
     `,
     updateConcept: `
-      UPDATE rrhh_module.payroll_concept
+      UPDATE hr_schema.payroll_concept
       SET
         name = COALESCE($1, name),
         type = COALESCE($2, type),
@@ -540,30 +545,30 @@ export const queries = createQueries({
       RETURNING concept_id;
     `,
     softDelete: `
-      UPDATE rrhh_module.payroll_concept
+      UPDATE hr_schema.payroll_concept
       SET is_active = false
       WHERE concept_id = $1
       RETURNING concept_id;
     `,
     deleteConcept: `
-      DELETE FROM rrhh_module.payroll_concept WHERE concept_id = $1 RETURNING concept_id;
+      DELETE FROM hr_schema.payroll_concept WHERE concept_id = $1 RETURNING concept_id;
     `,
   },
   paysheet: {
     getTenantPaysheets: `
-      SELECT * FROM rrhh_module.paysheet WHERE tenant_id = $1
+      SELECT * FROM hr_schema.paysheet WHERE tenant_id = $1
       ORDER BY created_at DESC
     `,
     getPaysheetById: `
-      SELECT * FROM rrhh_module.paysheet WHERE paysheet_id = $1 LIMIT 1
+      SELECT * FROM hr_schema.paysheet WHERE paysheet_id = $1 LIMIT 1
     `,
     getBranchPaysheets: `
-      SELECT * FROM rrhh_module.paysheet 
+      SELECT * FROM hr_schema.paysheet 
       WHERE  branch_id = $1
       ORDER BY created_at DESC
     `,
     getDetails: `
-      SELECT * FROM rrhh_module.paysheet_detail WHERE paysheet_id = $1
+      SELECT * FROM hr_schema.paysheet_detail WHERE paysheet_id = $1
     `,
     filtrateByDate: `
       SELECT 
@@ -575,8 +580,8 @@ export const queries = createQueries({
         p.payment_date,
         p.net_total,
         ps.status_description as paysheet_status
-      FROM rrhh_module.paysheet p
-      INNER JOIN rrhh_module.paysheet_status ps USING(status_id)
+      FROM hr_schema.paysheet p
+      INNER JOIN hr_schema.paysheet_status ps USING(status_id)
       WHERE p.branch_id = $1
         AND p.period_start >= $2
         AND p.period_end <= $3
@@ -585,12 +590,12 @@ export const queries = createQueries({
   },
   payrollMovement: {
     getMovementsByPaysheet: `
-      SELECT * FROM rrhh_module.payroll_movement pm
-      INNER JOIN rrhh_module.paysheet_detail pd USING(detail_id)
+      SELECT * FROM hr_schema.payroll_movement pm
+      INNER JOIN hr_schema.paysheet_detail pd USING(detail_id)
       WHERE pd.paysheet_id = $1
     `,
     getMovementsByDetail: `
-      SELECT * FROM rrhh_module.payroll_movement WHERE detail_id = $1
+      SELECT * FROM hr_schema.payroll_movement WHERE detail_id = $1
     `,
   },
 });

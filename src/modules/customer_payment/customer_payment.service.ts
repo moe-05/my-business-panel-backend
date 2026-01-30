@@ -52,7 +52,7 @@ export class CustomerPaymentService {
 
     console.log(placeholders, val);
     const q = `
-        INSERT INTO pos_module.customer_payment (tenant_customer_id, sale_id, payment_method_id, payment_amount, payment_date, currency_id, verified)
+        INSERT INTO pos_schema.customer_payment (tenant_customer_id, sale_id, payment_method_id, payment_amount, payment_date, currency_id, verified)
         VALUES ${placeholders.join(',')}
       `;
 

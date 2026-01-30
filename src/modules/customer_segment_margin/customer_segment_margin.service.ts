@@ -20,17 +20,14 @@ export class CustomerSegmentMarginService {
       seniority_months,
       frequency_per_month,
     } = marginData;
-    await this.db.query(
-      queries.customer_segment_margin.create,
-      [
-        tenant_id,
-        customer_segment_id,
-        customer_segment_margin_type,
-        spending_threshold,
-        seniority_months,
-        frequency_per_month,
-      ],
-    );
+    await this.db.query(queries.customer_segment_margin.create, [
+      tenant_id,
+      customer_segment_id,
+      customer_segment_margin_type,
+      spending_threshold,
+      seniority_months,
+      frequency_per_month,
+    ]);
 
     return { message: 'Margin created.' };
   }
@@ -61,7 +58,7 @@ export class CustomerSegmentMarginService {
     const setString = setClause.join(', ');
 
     const qString = `
-      UPDATE core.customer_segment_margin
+      UPDATE general_schema.customer_segment_margin
       SET ${setString}
       WHERE customer_segment_margin_id = $${index}
     `;
