@@ -91,7 +91,7 @@ export class PromosService {
     }
 
     const q = `
-      INSERT INTO pos_module.promotion_rule(${insertClause.join(', ')})
+      INSERT INTO pos_schema.promotion_rule(${insertClause.join(', ')})
       VALUES(${placeholders.join(', ')})
       RETURNING *
     `;
@@ -197,7 +197,7 @@ export class PromosService {
     const setString = setClause.join(', ');
 
     const queryString = `
-      UPDATE pos_module.promotion_rule
+      UPDATE pos_schema.promotion_rule
       SET ${setString}
       WHERE promotion_rule_id = $${index}
       RETURNING *

@@ -3,10 +3,10 @@ import { createQueries } from '@crane-technologies/database';
 export const conceptQueries = createQueries({
   concept: {
     getConceptById: `
-      SELECT * FROM rrhh_module.payroll_concept WHERE concept_id = $1 LIMIT 1
+      SELECT * FROM hr_schema.payroll_concept WHERE concept_id = $1 LIMIT 1
     `,
     createConcept: `
-      INSERT INTO rrhh_module.payroll_concept (
+      INSERT INTO hr_schema.payroll_concept (
         tenant_id, 
         name, 
         type,
@@ -17,7 +17,7 @@ export const conceptQueries = createQueries({
       RETURNING concept_id;
     `,
     updateConcept: `
-      UPDATE rrhh_module.payroll_concept
+      UPDATE hr_schema.payroll_concept
       SET
         name = COALESCE($1, name),
         type = COALESCE($2, type),
@@ -28,13 +28,13 @@ export const conceptQueries = createQueries({
       RETURNING concept_id;
     `,
     softDelete: `
-      UPDATE rrhh_module.payroll_concept
+      UPDATE hr_schema.payroll_concept
       SET is_active = false
       WHERE concept_id = $1
       RETURNING concept_id;
     `,
     deleteConcept: `
-      DELETE FROM rrhh_module.payroll_concept WHERE concept_id = $1 RETURNING concept_id;
+      DELETE FROM hr_schema.payroll_concept WHERE concept_id = $1 RETURNING concept_id;
     `,
   },
 });

@@ -69,7 +69,7 @@ export class CustomerService {
       phone,
       birthdate,
       address,
-      is_tenant
+      is_tenant,
     } = customerData;
 
     const newCustomer = await this.db.query(queries.customer.create, [
@@ -82,7 +82,7 @@ export class CustomerService {
       phone,
       birthdate || null,
       address,
-      is_tenant || false
+      is_tenant || false,
     ]);
 
     if (newCustomer.rows.length == 0) throw new ClientCreateError(email);
@@ -122,7 +122,7 @@ export class CustomerService {
     const setString = setClause.join(', ');
 
     const queryString = `
-      UPDATE core.tenant_customer
+      UPDATE general_schema.tenant_customer
       SET ${setString}
       WHERE tenant_customer_id = $${index}
       RETURNING *

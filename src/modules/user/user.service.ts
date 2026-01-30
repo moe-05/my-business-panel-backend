@@ -90,10 +90,10 @@ export class UserService {
       employeeInfo.schedule_id,
     ]);
 
-    if( newEmployee.rows.length === 0) {
+    if (newEmployee.rows.length === 0) {
       throw new CreateFullEmployeeError();
     }
-    
+
     return { message: 'user created successfully!' };
   }
 
@@ -111,7 +111,7 @@ export class UserService {
     });
 
     await this.db.bulkInsert(
-      'core.users',
+      'general_schema.users',
       ['tenant_id', 'email', 'password_hash', 'role_id'],
       rows,
       { header: false },

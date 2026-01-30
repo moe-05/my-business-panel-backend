@@ -110,7 +110,7 @@ export class ReturnsService {
     });
 
     const query = `
-      INSERT INTO pos_module.return_product (${bulkReturns.join(', ')})
+      INSERT INTO pos_schema.return_product (${bulkReturns.join(', ')})
       VALUES ${placeholders.join(', ')}
       RETURNING sale_item_id, quantity, total_price
     `;
@@ -130,7 +130,7 @@ export class ReturnsService {
     });
 
     const q = `
-      UPDATE pos_module.sale_item AS s
+      UPDATE pos_schema.sale_item AS s
       SET
           quantity = COALESCE(s.quantity, 0) - data.quantity::integer,
           total_price = COALESCE(s.total_price, 0) - data.total_price::numeric
