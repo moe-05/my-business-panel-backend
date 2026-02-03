@@ -12,8 +12,9 @@ export const conceptQueries = createQueries({
         type,
         calculation_method,
         is_taxable,
-        base_value
-      ) VALUES ($1, $2, $3, $4, $5, $6)
+        base_value,
+        code
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING concept_id;
     `,
     updateConcept: `

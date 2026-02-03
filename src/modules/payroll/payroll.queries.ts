@@ -29,6 +29,7 @@ export const payrollQueries = createQueries({
         e.branch_id,
         c.contract_id,
         c.base_salary,
+        c.hours,
         e.schedule_id
       FROM hr_schema.employee e
       INNER JOIN hr_schema.contract c USING(contract_id)
@@ -94,5 +95,24 @@ export const payrollQueries = createQueries({
       FROM hr_schema.paysheet_detail
       WHERE paysheet_id = $1;
     `,
+    getHoursWorked: `
+      SELECT employee_id, SUM(turn_hours) AS total_hours
+      FROM hr_schema.clocking
+      WHERE branch_id = $1
+        AND clock_in >= $2
+        AND clock_out <= $3
+      GROUP BY employee_id;
+    `,
+    getHistorycalPayrolls: `
+      SELECT
+        pd.employee_id,
+        SUM(pd.gross_salary) AS gross,
+        COUNT(pd.detail_id) AS periods
+      FROM hr_schema.paysheet_detail pd
+      INNER JOIN hr_schema.paysheet p USING(paysheet_id)
+      WHERE p.branch_id = $1
+        AND p.period_start >= (CURRENT_DATE - INTERVAL '1 year')
+      GROUP BY pd.employee_id;
+    `
   },
 });

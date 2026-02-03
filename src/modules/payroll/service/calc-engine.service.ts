@@ -17,7 +17,7 @@ export class CalculationEngine {
     let totalDeductions = new Decimal(0);
 
     const mov = concepts.map((c) => {
-      const strategy = this.stratctx.getStrategy(c.calculation_method);
+      const strategy = this.stratctx.getStrategy(c.calculation_method, c.code);
 
       const amountToGo =
         extras && extras[c.name] !== undefined
