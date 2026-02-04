@@ -23,6 +23,7 @@ export class StrategyContext {
   }
 
   getStrategy(method: string, code?: string): IPayrollStrategy {
+    
     let strat: IPayrollStrategy | undefined;
 
     if (method === 'formula' && code) {

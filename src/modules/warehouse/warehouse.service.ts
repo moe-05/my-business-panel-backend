@@ -322,7 +322,7 @@ export class WarehouseService {
         transfer.inventory_transfer_id,
         tenant_id,
         product.product_id,
-        product.quantity,
+        // product.quantity,
       ]);
     }
 

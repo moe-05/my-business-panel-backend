@@ -29,7 +29,6 @@ export class PayrollRepository {
     const concepts = await this.db.query(queries.payroll.getConcepts, [
       tenantId,
     ]);
-
     return concepts.rows;
   }
 
@@ -38,7 +37,7 @@ export class PayrollRepository {
     periodStart: string,
     periodEnd: string,
   ): Promise<HoursWorked[]> {
-    const res = await this.db.query(payrollQueries.payroll.getHoursWorked, [
+    const res = await this.db.query(queries.payroll.getHoursWorked, [
       branchId,
       periodStart,
       periodEnd,

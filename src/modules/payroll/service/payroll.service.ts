@@ -47,6 +47,7 @@ export class PayrollService {
     );
 
     for (const emp of employees) {
+      
       const empHours = hoursMap.get(emp.employee_id) || 0;
 
       await this.calculateAndSavePayroll(
@@ -123,7 +124,7 @@ export class PayrollService {
         'Executing payroll transaction for employee:',
         emp.employee_id,
       );
-      const transactionResult = await this.db.transaction(
+      await this.db.transaction(
         sqlQueries,
         params,
         dependencies,

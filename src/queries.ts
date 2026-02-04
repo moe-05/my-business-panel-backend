@@ -387,7 +387,22 @@ export const queries = createQueries({
       UPDATE hr_schema.employee SET is_active = false WHERE employee_id = $1 RETURNING employee_id
     `,
     full: `
-      SELECT hr_schema.create_new_employee($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      SELECT hr_schema.create_new_employee(
+        $1::date,
+        $2::date,
+        $3::int4,
+        $4::numeric,
+        $5::text,
+        $6::uuid,
+        $7::uuid,
+        $8::varchar,
+        $9::varchar,
+        $10::varchar,
+        $11::varchar,
+        $12::varchar,
+        $13::int4,
+        $14::uuid
+      )
     `,
   },
   contract: {
@@ -452,6 +467,7 @@ export const queries = createQueries({
         e.branch_id,
         c.contract_id,
         c.base_salary,
+        c.hours,
         e.schedule_id
       FROM hr_schema.employee e
       INNER JOIN hr_schema.contract c USING(contract_id)
@@ -464,7 +480,8 @@ export const queries = createQueries({
         type,
         calculation_method,
         is_taxable,
-        base_value
+        base_value,
+        code
       FROM hr_schema.payroll_concept
       WHERE tenant_id = $1 AND is_active = true;
     `,
@@ -517,6 +534,25 @@ export const queries = createQueries({
       FROM hr_schema.paysheet_detail
       WHERE paysheet_id = $1;
     `,
+    getHoursWorked: `
+      SELECT employee_id, SUM(turn_hours) AS total_hours
+      FROM hr_schema.clocking
+      WHERE branch_id = $1
+        AND clock_in >= $2
+        AND clock_out <= $3
+      GROUP BY employee_id;
+    `,
+    getHistorycalPayrolls: `
+      SELECT
+        pd.employee_id,
+        SUM(pd.gross_salary) AS gross,
+        COUNT(pd.detail_id) AS periods
+      FROM hr_schema.paysheet_detail pd
+      INNER JOIN hr_schema.paysheet p USING(paysheet_id)
+      WHERE p.branch_id = $1
+        AND p.period_start >= (CURRENT_DATE - INTERVAL '1 year')
+      GROUP BY pd.employee_id;
+    ` 
   },
   concept: {
     getConceptById: `
