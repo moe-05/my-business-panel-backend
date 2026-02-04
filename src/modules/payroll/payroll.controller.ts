@@ -1,6 +1,6 @@
 import { Body, Controller, Param, Post } from '@nestjs/common';
 import { PayrollService } from './service/payroll.service';
-import { CreatePaysheetDto } from './dto/create-paysheet.dto';
+import { CreatePaysheetDto, ProcessPaysheetDto } from './dto/create-paysheet.dto';
 
 @Controller('payroll')
 export class PayrollController {
@@ -14,12 +14,14 @@ export class PayrollController {
   @Post(':id/process')
   async processPayroll(
     @Param('id') id: string,
-    @Body() body: { tenantId: string; branchId: string },
+    @Body() body: ProcessPaysheetDto,
   ) {
     return this.payrollService.processPayrollForEmployee(
       id,
-      body.branchId,
-      body.tenantId,
+      body.branch_id,
+      body.tenant_id,
+      body.period_start,
+      body.period_end,
     );
   }
 }

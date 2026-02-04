@@ -58,25 +58,22 @@ export class EmployeeService {
       contractData,
     } = data;
 
-    const newEmp = await this.db.query(
-      queries.employee.full,
-      [
-        contractData.start_date,
-        contractData.end_date,
-        contractData.hours,
-        contractData.base_salary,
-        contractData.duties,
-        user_id,
-        tenant_id,
-        branch_id,
-        first_name,
-        last_name,
-        doc_number,
-        phone,
-        email,
-        schedule_id,
-      ],
-    );
+    const newEmp = await this.db.query(queries.employee.full, [
+      contractData.start_date,
+      contractData.end_date,
+      contractData.hours,
+      contractData.base_salary,
+      contractData.duties,
+      user_id,
+      tenant_id,
+      first_name,
+      last_name,
+      doc_number,
+      phone,
+      email,
+      schedule_id,
+      branch_id,
+    ]);
 
     if (newEmp.rowCount === 0) return new CreateFullEmployeeError();
 

@@ -17,7 +17,8 @@ export class CalculationEngine {
     let totalDeductions = new Decimal(0);
 
     const mov = concepts.map((c) => {
-      const strategy = this.stratctx.getStrategy(c.calculation_method);
+      
+      const strategy = this.stratctx.getStrategy(c.calculation_method, c.code);
 
       const amountToGo =
         extras && extras[c.name] !== undefined
@@ -67,7 +68,13 @@ export class CalculationEngine {
     }
 
     for (const key in extras) {
-      mapped[key] = new Decimal(extras[key]);
+      const val = extras[key];
+
+      if (val !== undefined && val !== null) {
+        mapped[key] = new Decimal(val);
+      } else {
+        mapped[key] = new Decimal(0);
+      }
     }
 
     return mapped;
