@@ -80,19 +80,15 @@ export const warehouseQueries = {
       SELECT * FROM inventory_schema.discrepancy_count
       WHERE report_id = $1 AND tenant_id = $2
     `,
-  // ! campo transfer date no existe, es:
-  // !    inventory_transfer_departure_date timestamp default current_timestamp,
-  // !    inventory_transfer_arrival_date timestamp,
   createInventoryTransfer: `
       INSERT INTO inventory_schema.inventory_transfer
         (tenant_id, from_warehouse_id, to_warehouse_id, transfer_date, created_at, updated_at)
       VALUES ($1, $2, $3, NOW(), NOW(), NOW())
       RETURNING *
     `,
-  // ! tabla inventory_transfer_item no existe, es inventory_transfer_product
   addProductToInventoryTransfer: `
-      INSERT INTO inventory_schema.inventory_transfer_item
-        (inventory_transfer_id, tenant_id, product_id, quantity, created_at, updated_at)
+      INSERT INTO inventory_schema.inventory_transfer_product
+        (inventory_transfer_id, tenant_id, product_variant_id, quantity, created_at, updated_at)
       VALUES ($1, $2, $3, $4, NOW(), NOW())
       RETURNING *
     `,
