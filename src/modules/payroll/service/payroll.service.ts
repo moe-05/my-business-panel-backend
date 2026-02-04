@@ -24,16 +24,39 @@ export class PayrollService {
     paysheetId: string,
     branchId: string,
     tenantId: string,
+    periodStart: string,
+    periodEnd: string,
   ) {
     console.log('Starting payroll processing for paysheet:', paysheetId);
+
     const concepts = await this.repo.getConceptsPerTenant(tenantId);
 
     const employees = await this.repo.getEmployeeContractForPayroll(
       tenantId,
       branchId,
     );
+
+    const hoursWorked = await this.repo.getHoursWorked(
+      branchId,
+      periodStart,
+      periodEnd,
+    );
+
+    const hoursMap = new Map<string, number>(
+      hoursWorked.map((h) => [h.employee_id, h.total_hours]),
+    );
+
     for (const emp of employees) {
-      await this.calculateAndSavePayroll(emp, concepts, paysheetId);
+      
+      const empHours = hoursMap.get(emp.employee_id) || 0;
+
+      await this.calculateAndSavePayroll(
+        emp,
+        concepts,
+        paysheetId,
+        empHours,
+        emp.hours,
+      );
     }
 
     console.log('All employee payrolls processed for paysheet:', paysheetId);
@@ -44,9 +67,14 @@ export class PayrollService {
     emp: EmployeePayrollData,
     concepts: PayrollConceptRow[],
     paysheetId: string,
+    hoursWorked: number,
+    contractedHours: number,
   ) {
     console.log('Calculating payroll for employee:', emp.employee_id);
-    const result = this.engine.execute(emp.base_salary, concepts);
+    const result = this.engine.execute(emp.base_salary, concepts, {
+      hoursWorked,
+      contractedHours,
+    });
 
     console.log(
       'Payroll calculation result for employee:',
@@ -96,7 +124,7 @@ export class PayrollService {
         'Executing payroll transaction for employee:',
         emp.employee_id,
       );
-      const transactionResult = await this.db.transaction(
+      await this.db.transaction(
         sqlQueries,
         params,
         dependencies,
