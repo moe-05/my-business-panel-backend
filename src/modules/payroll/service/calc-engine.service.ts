@@ -40,14 +40,14 @@ export class CalculationEngine {
         name: c.name,
         type: c.type,
         calculated_amount: calculatedValue.toFixed(4),
-        appliedValue: amountToGo,
+        appliedValue: amountToGo.toFixed(4),
       };
     });
 
     return {
       movements: mov,
       totals: {
-        grossSalary: baseSalary.toFixed(4),
+        grossSalary: baseSalary.add(totalEarnings).toFixed(4),
         earnings: totalEarnings.toFixed(4),
         deductions: totalDeductions.toFixed(4),
         netSalary: baseSalary

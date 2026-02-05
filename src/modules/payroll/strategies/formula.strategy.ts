@@ -20,7 +20,7 @@ export class OvertimeStrategy implements IPayrollStrategy {
     const hourlyRate = dailyRate.dividedBy(new Decimal(8));
     const overtimeHours = hoursWorked.minus(contractedHours);
 
-    console.log("Overtime: ", overtimeHours)
+    console.log('Overtime: ', overtimeHours);
     if (overtimeHours.isNegative() || overtimeHours.isZero()) {
       return new Decimal(0);
     }
@@ -42,12 +42,38 @@ export class OvertimeStrategy implements IPayrollStrategy {
 
 export class VacationsStrategy implements IPayrollStrategy {
   calculate(input: CalculatorInput): Decimal {
-    return input.conceptValue;
+    const earnings50week = new Decimal(input.context?.totalEarnings || 0);
+    const constantDivisive = new Decimal(input.conceptValue);
+
+    if (earnings50week.isZero()) {
+      return new Decimal(0);
+    }
+
+    const vacationsPay = earnings50week.dividedBy(constantDivisive);
+
+    console.log('Vacations calculation details:', {
+      earnings50week: earnings50week.toFixed(2),
+      constantDivisive: constantDivisive.toFixed(2),
+      vacationsPay: vacationsPay.toFixed(2),
+    });
+
+    return vacationsPay;
   }
 }
 
 export class HolidayStrategy implements IPayrollStrategy {
   calculate(input: CalculatorInput): Decimal {
-    return input.conceptValue;
+    const totalYear = new Decimal(input.context?.yearlySalary || 0);
+    const factor = new Decimal(input.conceptValue);
+
+    if (totalYear.isZero()) {
+      return new Decimal(0);
+    }
+
+    const holidayPay = totalYear.dividedBy(factor);
+
+    console.log('Holiday calculation details:', { holidayPay });
+
+    return holidayPay;
   }
 }

@@ -4,7 +4,6 @@ import { Inject, Injectable } from '@nestjs/common';
 import { PayrollRepository } from '../repositories/payroll.repository';
 import { CalculationEngine } from './calc-engine.service';
 import { queries } from '@/queries';
-import { EmployeeService } from '@/modules/employee/employee.service';
 import { CreatePaysheetDto } from '../dto/create-paysheet.dto';
 import {
   EmployeePayrollData,
@@ -17,7 +16,6 @@ export class PayrollService {
     @Inject(DATABASE) private readonly db: Database,
     private readonly repo: PayrollRepository,
     private readonly engine: CalculationEngine,
-    private readonly empServ: EmployeeService,
   ) {}
 
   async processPayrollForEmployee(
@@ -42,13 +40,30 @@ export class PayrollService {
       periodEnd,
     );
 
+    const yearly = await this.repo.getYearlySalary(
+      branchId,
+      periodStart,
+      periodEnd,
+    );
+
+    const historicalEarnings = await this.repo.getHistoricalEarnings(branchId);
+
     const hoursMap = new Map<string, number>(
       hoursWorked.map((h) => [h.employee_id, h.total_hours]),
     );
 
+    const yearlyMap = new Map<string, number>(
+      yearly.map((y) => [y.employee_id, y.total]),
+    );
+
+    const historicalEarningsMap = new Map<string, number>(
+      historicalEarnings.map((h) => [h.employee_id, h.gross]),
+    );
+
     for (const emp of employees) {
-      
       const empHours = hoursMap.get(emp.employee_id) || 0;
+      const empEarn = historicalEarningsMap.get(emp.employee_id) || 0;
+      const empYearly = yearlyMap.get(emp.employee_id) || 0;
 
       await this.calculateAndSavePayroll(
         emp,
@@ -56,6 +71,8 @@ export class PayrollService {
         paysheetId,
         empHours,
         emp.hours,
+        empEarn,
+        empYearly,
       );
     }
 
@@ -69,11 +86,15 @@ export class PayrollService {
     paysheetId: string,
     hoursWorked: number,
     contractedHours: number,
+    earning50week: number,
+    yearlySalary: number,
   ) {
     console.log('Calculating payroll for employee:', emp.employee_id);
     const result = this.engine.execute(emp.base_salary, concepts, {
       hoursWorked,
       contractedHours,
+      totalEarnings: earning50week,
+      yearlySalary,
     });
 
     console.log(
@@ -124,11 +145,7 @@ export class PayrollService {
         'Executing payroll transaction for employee:',
         emp.employee_id,
       );
-      await this.db.transaction(
-        sqlQueries,
-        params,
-        dependencies,
-      );
+      await this.db.transaction(sqlQueries, params, dependencies);
     } catch (error) {
       console.error('Error processing payroll transaction:', error);
       throw new Error(
