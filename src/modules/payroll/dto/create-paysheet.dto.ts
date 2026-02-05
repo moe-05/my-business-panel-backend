@@ -17,3 +17,21 @@ export class CreatePaysheetDto {
   @IsNotEmpty()
   periodEnd!: string;
 }
+
+export class ProcessPaysheetDto {
+  @IsUUID()
+  @IsNotEmpty()
+  branch_id!: string;
+
+  @IsUUID()
+  @IsNotEmpty()
+  tenant_id!: string;
+
+  @IsDateString()
+  @IsNotEmpty()
+  period_start!: string;
+
+  @IsDateString()
+  @IsNotEmpty()
+  period_end!: string;
+}

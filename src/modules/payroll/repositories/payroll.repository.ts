@@ -3,9 +3,11 @@ import Database from '@crane-technologies/database';
 import { Inject, Injectable } from '@nestjs/common';
 import {
   EmployeePayrollData,
+  HoursWorked,
   PayrollConceptRow,
 } from '../interface/payroll-db.interface';
 import { queries } from '@/queries';
+import { payrollQueries } from '../payroll.queries';
 
 @Injectable()
 export class PayrollRepository {
@@ -27,7 +29,19 @@ export class PayrollRepository {
     const concepts = await this.db.query(queries.payroll.getConcepts, [
       tenantId,
     ]);
-
     return concepts.rows;
+  }
+
+  async getHoursWorked(
+    branchId: string,
+    periodStart: string,
+    periodEnd: string,
+  ): Promise<HoursWorked[]> {
+    const res = await this.db.query(queries.payroll.getHoursWorked, [
+      branchId,
+      periodStart,
+      periodEnd,
+    ]);
+    return res.rows;
   }
 }
