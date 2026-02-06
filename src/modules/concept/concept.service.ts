@@ -19,7 +19,7 @@ export class ConceptService {
   }
 
   async createNewConcept(data: NewConceptDto) {
-    const { tenantId, name, type, calcMethod, isTaxable, baseValue } = data;
+    const { tenantId, name, type, calcMethod, isTaxable, baseValue, code } = data;
 
     const newConcept = await this.db.query(queries.concept.createConcept, [
       tenantId,
@@ -28,6 +28,7 @@ export class ConceptService {
       calcMethod,
       isTaxable,
       baseValue,
+      code
     ]);
 
     if (newConcept.rows.length === 0) {

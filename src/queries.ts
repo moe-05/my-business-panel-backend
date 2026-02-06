@@ -545,14 +545,25 @@ export const queries = createQueries({
     getHistorycalPayrolls: `
       SELECT
         pd.employee_id,
-        SUM(pd.gross_salary) AS gross,
-        COUNT(pd.detail_id) AS periods
+        SUM(pd.gross_salary) AS gross
       FROM hr_schema.paysheet_detail pd
       INNER JOIN hr_schema.paysheet p USING(paysheet_id)
       WHERE p.branch_id = $1
-        AND p.period_start >= (CURRENT_DATE - INTERVAL '1 year')
+        AND p.period_start >= (CURRENT_DATE - INTERVAL '50 weeks')
       GROUP BY pd.employee_id;
-    ` 
+    `,
+    getAguinaldos: `
+      SELECT 
+        pd.employee_id,
+        SUM(pd.gross_salary) as total
+      FROM hr_schema.paysheet_detail pd
+      INNER JOIN hr_schema.paysheet p USING(paysheet_id)
+      WHERE p.branch_id = $1
+        AND p.period_start >= $2  -- '2025-12-01' (Diciembre año anterior) Teniendo en cuenta la info compartida por el cliente
+        AND p.period_end <= $3    -- '2026-11-30' (Noviembre año actual)
+        AND p.status_id = 2
+      GROUP BY pd.employee_id;
+    `
   },
   concept: {
     getConceptById: `
@@ -565,8 +576,9 @@ export const queries = createQueries({
         type,
         calculation_method,
         is_taxable,
-        base_value
-      ) VALUES ($1, $2, $3, $4, $5, $6)
+        base_value,
+        code
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING concept_id;
     `,
     updateConcept: `

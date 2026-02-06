@@ -22,3 +22,13 @@ export interface HoursWorked {
   employee_id: string;
   total_hours: number;
 }
+
+export interface HistoricalEarnings {
+  employee_id: string;
+  gross: number;
+}
+
+export interface YearlySalary {
+  employee_id: string;
+  total: number;
+}
