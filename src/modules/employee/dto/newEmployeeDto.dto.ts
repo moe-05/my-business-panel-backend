@@ -1,5 +1,29 @@
-import { Type } from "class-transformer";
-import { IsBoolean, IsDateString, IsEmail, IsNumber, IsString, IsUUID } from "class-validator";
+import { Type } from 'class-transformer';
+import {
+  IsDateString,
+  IsEmail,
+  IsNumber,
+  IsString,
+  IsUUID,
+  ValidateNested,
+} from 'class-validator';
+
+export class ContractDto {
+  @IsDateString()
+  start_date!: string;
+
+  @IsDateString()
+  end_date!: string;
+
+  @IsNumber()
+  hours!: number;
+
+  @IsNumber()
+  base_salary!: number;
+
+  @IsString()
+  duties!: string;
+}
 
 export class NewEmployeeDto {
   @IsUUID()
@@ -29,24 +53,39 @@ export class NewEmployeeDto {
   @IsNumber()
   schedule_id!: number;
 
+  @ValidateNested()
+  @Type(() => ContractDto)
   contractData!: ContractDto;
 }
 
-export class ContractDto {
-  @IsDateString()
-  start_date!: string;
+export class CreateUserEmployeeInfoDto {
+  @IsUUID()
+  tenant_id!: string;
 
-  @IsDateString()
-  end_date!: string;
-
-  @IsNumber()
-  hours!: number;
-
-  @IsNumber()
-  base_salary!: number;
+  @IsUUID()
+  branch_id!: string;
 
   @IsString()
-  duties!: string;
+  first_name!: string;
+
+  @IsString()
+  last_name!: string;
+
+  @IsString()
+  doc_number!: string;
+
+  @IsString()
+  phone!: string;
+
+  @IsEmail()
+  email!: string;
+
+  @IsNumber()
+  schedule_id!: number;
+
+  @ValidateNested()
+  @Type(() => ContractDto)
+  contractData!: ContractDto;
 }
 
 export class NewSingleEmployeeDto {

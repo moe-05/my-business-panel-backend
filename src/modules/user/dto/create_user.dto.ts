@@ -1,40 +1,98 @@
-import { NewEmployeeDto } from '@/modules/employee/dto/newEmployeeDto.dto';
-import { Type } from 'class-transformer';
 import {
-  IsNotEmpty,
+  IsEmail,
   IsNumber,
-  IsObject,
-  IsOptional,
+  IsNotEmpty,
   IsString,
-  Length,
-  Matches,
+  IsUUID,
+  ValidateNested,
+  IsArray,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
-const passwordRegexp =
-  /^(?=.*[a-z])(?=.*[0-9])[A-Za-z0-9!@#$%^&*()_+\-=[\]{};:'"<>,./?\\|]+$/;
-
-export class CreateUserDto {
-  @IsString()
+export class ContractDataDto {
   @IsNotEmpty()
-  tenant_id!: string; // ? Maybe change to fetch from state, and switch to enum
+  @IsString()
+  start_date!: string;
 
+  @IsNotEmpty()
+  @IsString()
+  end_date!: string;
+
+  @IsNotEmpty()
   @IsNumber()
+  hours!: number;
+
   @IsNotEmpty()
-  role_id!: number; // ? Maybe change to fetch from state, and switch to enum
+  base_salary!: number;
 
   @IsNotEmpty()
   @IsString()
+  duties!: string;
+}
+
+export class EmployeeInfoDto {
+  @IsNotEmpty()
+  @IsUUID()
+  tenant_id!: string;
+
+  @IsNotEmpty()
+  @IsUUID()
+  branch_id!: string;
+
+  @IsNotEmpty()
+  @IsString()
+  first_name!: string;
+
+  @IsNotEmpty()
+  @IsString()
+  last_name!: string;
+
+  @IsNotEmpty()
+  @IsString()
+  doc_number!: string;
+
+  @IsNotEmpty()
+  @IsString()
+  phone!: string;
+
+  @IsNotEmpty()
+  @IsEmail()
   email!: string;
 
-  @IsString()
   @IsNotEmpty()
-  @Length(8, 32)
-  @Matches(passwordRegexp, {
-    message: 'password is too weak, it must contain a number',
-  })
+  @IsNumber()
+  schedule_id!: number;
+
+  @ValidateNested()
+  @Type(() => ContractDataDto)
+  contractData!: ContractDataDto;
+}
+
+export class CreateUserDto {
+  @IsNotEmpty()
+  @IsUUID()
+  tenant_id!: string;
+
+  @IsNotEmpty()
+  @IsEmail()
+  email!: string;
+
+  @IsNotEmpty()
+  @IsString()
   password!: string;
 
-  @IsObject()
-  @Type(() => NewEmployeeDto)
-  employeeInfo!: NewEmployeeDto;
+  @IsNotEmpty()
+  @IsNumber()
+  role_id!: number;
+
+  @ValidateNested()
+  @Type(() => EmployeeInfoDto)
+  employeeInfo!: EmployeeInfoDto;
+}
+
+export class CreateUserBulkDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateUserDto)
+  users!: CreateUserDto[];
 }

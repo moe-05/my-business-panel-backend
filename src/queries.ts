@@ -1,6 +1,4 @@
 import { createQueries } from '@crane-technologies/database';
-import { count } from 'console';
-import { get } from 'http';
 
 export const queries = createQueries({
   user: {
@@ -20,6 +18,31 @@ export const queries = createQueries({
     `,
     assignRole:
       'UPDATE general_schema.users SET role_id = $1 WHERE users_id = $2',
+    getByEmails: `
+      SELECT user_id, email FROM general_schema.users 
+      WHERE email = ANY($1) 
+      ORDER BY created_at DESC
+    `,
+  },
+  contract: {
+    byId: `SELECT * FROM general_schema.contract WHERE contract_id = $1 LIMIT 1`,
+    update: `
+      UPDATE general_schema.contract
+      SET
+        start_date = COALESCE($1, start_date),
+        end_date = COALESCE($2, end_date),
+        hours = COALESCE($3, hours),
+        base_salary = COALESCE($4, base_salary),
+        duties = COALESCE($5, duties)
+      WHERE contract_id = $6
+      RETURNING contract_id
+    `,
+    getSchedule: `SELECT * FROM hr_schema.payment_schedule`,
+    getByUserIds: `
+      SELECT contract_id, user_id FROM general_schema.contract 
+      WHERE user_id = ANY($1) 
+      ORDER BY created_at DESC
+    `,
   },
   role: {
     all: 'SELECT * FROM general_schema.role',
@@ -387,42 +410,23 @@ export const queries = createQueries({
       UPDATE hr_schema.employee SET is_active = false WHERE employee_id = $1 RETURNING employee_id
     `,
     full: `
-      SELECT hr_schema.create_new_employee(
-        $1::date,
-        $2::date,
-        $3::int4,
-        $4::numeric,
-        $5::text,
-        $6::uuid,
-        $7::uuid,
-        $8::varchar,
-        $9::varchar,
-        $10::varchar,
-        $11::varchar,
-        $12::varchar,
-        $13::int4,
-        $14::uuid
-      )
-    `,
-  },
-  contract: {
-    byId: `
-      SELECT * FROM hr_schema.contract WHERE contract_id = $1 LIMIT 1
-    `,
-    update: `
-      UPDATE hr_schema.contract
-      SET
-        start_date = COALESCE($1, start_date),
-        end_date = COALESCE($2, end_date),
-        hours = COALESCE($3, hours),
-        base_salary = COALESCE($4, base_salary),
-        duties = COALESCE($5, duties)
-      WHERE contract_id = $6
-      RETURNING contract_id
-    `,
-    getSchedule: `
-      SELECT * FROM hr_schema.payment_schedule 
-    `,
+    SELECT hr_schema.create_new_employee(
+      $1::date,           -- start_date
+      $2::date,           -- end_date
+      $3::integer,        -- hours
+      $4::numeric,        -- base_salary
+      $5::text,           -- duties
+      $6::uuid,           -- user_id
+      $7::uuid,           -- tenant_id
+      $8::uuid,           -- branch_id (nuevo parámetro)
+      $9::varchar,        -- first_name
+      $10::varchar,       -- last_name
+      $11::varchar,       -- doc_number
+      $12::varchar,       -- phone
+      $13::varchar,       -- email
+      $14::integer        -- schedule_id
+    ) AS employee_id
+  `,
   },
   clocking: {
     clock_in: `
@@ -563,7 +567,7 @@ export const queries = createQueries({
         AND p.period_end <= $3    -- '2026-11-30' (Noviembre año actual)
         AND p.status_id = 2
       GROUP BY pd.employee_id;
-    `
+    `,
   },
   concept: {
     getConceptById: `

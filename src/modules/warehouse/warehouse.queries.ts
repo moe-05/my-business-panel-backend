@@ -80,9 +80,6 @@ export const warehouseQueries = {
       SELECT * FROM inventory_schema.discrepancy_count
       WHERE report_id = $1 AND tenant_id = $2
     `,
-  // ! campo transfer date no existe, es:
-  // !    inventory_transfer_departure_date timestamp default current_timestamp,
-  // !    inventory_transfer_arrival_date timestamp,
   createInventoryTransfer: `
       INSERT INTO inventory_schema.inventory_transfer
         (tenant_id, from_warehouse_id, to_warehouse_id, transfer_date, created_at, updated_at)
