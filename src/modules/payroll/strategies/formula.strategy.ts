@@ -3,6 +3,7 @@ import {
   CalculatorInput,
   IPayrollStrategy,
 } from '../interface/payroll-strategy.interface';
+import e from 'express';
 
 export class OvertimeStrategy implements IPayrollStrategy {
   calculate(input: CalculatorInput): Decimal {
@@ -75,5 +76,46 @@ export class HolidayStrategy implements IPayrollStrategy {
     console.log('Holiday calculation details:', { holidayPay });
 
     return holidayPay;
+  }
+}
+
+export class ISRDeduction implements IPayrollStrategy {
+  calculate(input: CalculatorInput): Decimal {
+    console.log(input.context?.gross)
+    const currentGross = new Decimal(input.context?.gross || 0);
+    const gross = currentGross.mul(new Decimal(0.1067));
+    const val = currentGross.minus(gross);
+
+    const brackets = [
+      { upTo: new Decimal(929000), taxApply: new Decimal(0) },
+      { upTo: new Decimal(1363000), taxApply: new Decimal(0.1) },
+      { upTo: new Decimal(2392000), taxApply: new Decimal(0.15) },
+      { upTo: new Decimal(4783000), taxApply: new Decimal(0.2) },
+      { upTo: null, taxApply: new Decimal(0.25) },
+    ];
+
+    let totalTax = new Decimal(0);
+    let previousLimit = new Decimal(0);
+
+    for (const b of brackets) {
+      if (val.gt(previousLimit)) {
+        const upperLimit = b.upTo ? b.upTo : val;
+
+        const bracketTax = Decimal.min(val, upperLimit).minus(
+          previousLimit,
+        );
+
+        if (bracketTax.gt(0)) {
+          totalTax = totalTax.plus(bracketTax.mul(b.taxApply));
+        }
+
+        previousLimit = upperLimit;
+      } else {
+        break;
+      }
+    }
+
+    console.log("Tax total: ", totalTax)
+    return totalTax.toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
   }
 }

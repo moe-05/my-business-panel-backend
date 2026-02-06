@@ -7,7 +7,7 @@ import { EmployeeService } from '../employee/employee.service';
 import { StrategyContext } from './service/strategy.context';
 import { FixedStrategy } from './strategies/fixed.strategy';
 import { PercentageStrategy } from './strategies/percentage.strategy';
-import { HolidayStrategy, OvertimeStrategy, VacationsStrategy } from './strategies/formula.strategy';
+import { HolidayStrategy, ISRDeduction, OvertimeStrategy, VacationsStrategy } from './strategies/formula.strategy';
 
 @Module({
   controllers: [PayrollController],
@@ -21,7 +21,8 @@ import { HolidayStrategy, OvertimeStrategy, VacationsStrategy } from './strategi
     EmployeeService,
     OvertimeStrategy,
     VacationsStrategy,
-    HolidayStrategy
+    HolidayStrategy,
+    ISRDeduction
   ],
   imports: [],
 })

@@ -97,16 +97,16 @@ export class WarehouseController {
         return this.warehouseService.getDiscrepancyReportById(userSession.tenant_id, report_id);
     }
 
-    @Post('transfer')
-    transferInventoryBetweenWarehouses(
-        @Session() userSession: IUserSession,
-        @Body() body: InventoryTransferDto
-    ) {
-        return this.warehouseService.moveProductToWarehouse(
-            body.origin_warehouse_id,
-            body.destination_warehouse_id,
-            userSession.tenant_id,
-            body.products
-        );
-    }
+    // @Post('transfer')
+    // transferInventoryBetweenWarehouses(
+    //     @Session() userSession: IUserSession,
+    //     @Body() body: InventoryTransferDto
+    // ) {
+    //     return this.warehouseService.moveProductToWarehouse(
+    //         body.origin_warehouse_id,
+    //         body.destination_warehouse_id,
+    //         userSession.tenant_id,
+    //         body.products
+    //     );
+    // }
 }
