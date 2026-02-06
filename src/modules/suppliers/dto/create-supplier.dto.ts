@@ -1,6 +1,16 @@
+import { IsOptional, IsString } from 'class-validator';
+
 export class CreateSupplierDto {
+  @IsString()
   supplier_name!: string;
+
+  @IsString()
   supplier_contact_info!: string;
+
+  @IsString()
   supplier_address!: string;
-  supplier_notes!: string;
+
+  @IsOptional()
+  @IsString()
+  supplier_notes?: string;
 }

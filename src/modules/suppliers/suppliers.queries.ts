@@ -1,15 +1,17 @@
-import { createQueries } from '@crane-technologies/database';
-
 export const supplierQueries = {
   create: `
-    INSERT INTO purchase_schema.supplier (supplier_name, supplier_contact_info, supplier_address, supplier_notes)
-    VALUES ($1, $2, $3, $4)
+    INSERT INTO purchase_schema.supplier (supplier_name, supplier_contact_info, supplier_address, supplier_notes, added_by)
+    VALUES ($1, $2, $3, $4, $5)
     RETURNING *
     `,
 
   getAll: `
     SELECT * FROM purchase_schema.supplier
     `,
+
+  getAllByTenant: `
+    SELECT * FROM purchase_schema.supplier WHERE added_by = $1
+  `,
 
   getById: `
     SELECT * FROM purchase_schema.supplier WHERE supplier_id = $1
