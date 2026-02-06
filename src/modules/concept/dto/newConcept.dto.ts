@@ -1,4 +1,4 @@
-import { IsBoolean, IsNumber, IsString, IsUUID } from 'class-validator';
+import { IsBoolean, IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class NewConceptDto {
   @IsUUID()
@@ -18,4 +18,8 @@ export class NewConceptDto {
 
   @IsNumber()
   baseValue!: number;
+
+  @IsString()
+  @IsOptional()
+  code?: string;
 }

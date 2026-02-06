@@ -1,10 +1,11 @@
 import { Body, Controller, Param, Post } from '@nestjs/common';
 import { PayrollService } from './service/payroll.service';
 import { CreatePaysheetDto, ProcessPaysheetDto } from './dto/create-paysheet.dto';
+import { CalculationEngine } from './service/calc-engine.service';
 
 @Controller('payroll')
 export class PayrollController {
-  constructor(private readonly payrollService: PayrollService) {}
+  constructor(private readonly payrollService: PayrollService, private readonly engine: CalculationEngine) {}
 
   @Post('create')
   async createPaysheet(@Body() body: CreatePaysheetDto) {
@@ -24,4 +25,5 @@ export class PayrollController {
       body.period_end,
     );
   }
+
 }

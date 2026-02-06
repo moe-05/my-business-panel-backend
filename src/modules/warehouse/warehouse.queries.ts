@@ -88,9 +88,8 @@ export const warehouseQueries = {
     `,
   addProductToInventoryTransfer: `
       INSERT INTO inventory_schema.inventory_transfer_product
-        (inventory_transfer_id, tenant_id, product_variant_id, quantity, created_at, updated_at)
+        (inventory_transfer_id, tenant_id, product_id, quantity, created_at, updated_at)
       VALUES ($1, $2, $3, $4, NOW(), NOW())
-      RETURNING *
     `,
   getInventoryTransfers: `
       SELECT * FROM inventory_schema.inventory_transfer

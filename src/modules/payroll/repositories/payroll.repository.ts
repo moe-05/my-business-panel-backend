@@ -3,8 +3,10 @@ import Database from '@crane-technologies/database';
 import { Inject, Injectable } from '@nestjs/common';
 import {
   EmployeePayrollData,
+  HistoricalEarnings,
   HoursWorked,
   PayrollConceptRow,
+  YearlySalary,
 } from '../interface/payroll-db.interface';
 import { queries } from '@/queries';
 import { payrollQueries } from '../payroll.queries';
@@ -38,6 +40,28 @@ export class PayrollRepository {
     periodEnd: string,
   ): Promise<HoursWorked[]> {
     const res = await this.db.query(queries.payroll.getHoursWorked, [
+      branchId,
+      periodStart,
+      periodEnd,
+    ]);
+    return res.rows;
+  }
+
+  async getHistoricalEarnings(branchId: string): Promise<HistoricalEarnings[]> {
+    const res = await this.db.query(queries.payroll.getHistorycalPayrolls, [
+      branchId,
+    ]);
+
+    console.log('Historical earnings fetched:', res.rows);
+    return res.rows;
+  }
+
+  async getYearlySalary(
+    branchId: string,
+    periodStart: string,
+    periodEnd: string,
+  ): Promise<YearlySalary[]> {
+    const res = await this.db.query(queries.payroll.getAguinaldos, [
       branchId,
       periodStart,
       periodEnd,
