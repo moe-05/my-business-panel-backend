@@ -29,9 +29,13 @@ import { ConceptModule } from '@/modules/concept/concept.module';
 import { PayrollMovementsModule } from '@/modules/payroll_movements/payroll_movements.module';
 import { PayrollModule } from '@/modules/payroll/payroll.module';
 import { PaysheetModule } from '@/modules/paysheet/paysheet.module';
+import { SuppliersModule } from '@/modules/suppliers/suppliers.module';
 require('dotenv').config();
 
-console.log('Initializing AppModule with Stripe API Key length:', process.env.STRIPE_API_KEY?.length);
+console.log(
+  'Initializing AppModule with Stripe API Key length:',
+  process.env.STRIPE_API_KEY?.length,
+);
 
 @Module({
   imports: [
@@ -62,7 +66,8 @@ console.log('Initializing AppModule with Stripe API Key length:', process.env.ST
     PayrollMovementsModule,
     PayrollModule,
     PaysheetModule,
-    WarehouseModule
+    WarehouseModule,
+    SuppliersModule,
   ],
   controllers: [AppController],
   providers: [AppService],
