@@ -23,11 +23,16 @@ export class ContractDataDto {
   hours!: number;
 
   @IsNotEmpty()
+  @IsNumber()
   base_salary!: number;
 
   @IsNotEmpty()
   @IsString()
   duties!: string;
+
+  @IsNotEmpty()
+  @IsNumber()
+  turn_type!: number;
 }
 
 export class EmployeeInfoDto {

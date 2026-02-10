@@ -7,6 +7,7 @@ import { queries } from '@/queries';
 import { CreatePaysheetDto } from '../dto/create-paysheet.dto';
 import {
   EmployeePayrollData,
+  HoursWorked,
   PayrollConceptRow,
 } from '../interface/payroll-db.interface';
 import Decimal from 'decimal.js';
@@ -27,43 +28,11 @@ export class PayrollService {
     periodEnd: string,
   ) {
     console.log('Starting payroll processing for paysheet:', paysheetId);
-    // const [concepts, employees, hoursWorked, yearly, historical] = await Promise.all([
-    //   this.repo.getConceptsPerTenant(tenantId),
-    //   this.repo.getEmployeeContractForPayroll(tenantId, branchId),
-    //   this.repo.getHoursWorked(branchId, periodStart, periodEnd),
-    //   this.repo.getYearlySalary(branchId, periodStart, periodEnd),
-    //   this.repo.getHistoricalEarnings(branchId)
-    // ])
-
-    // const contextMap = new Map<string, { hours: number, yearly: number, historical: number }>()
-
-    // hoursWorked.forEach(h => contextMap.set(h.employee_id, {...contextMap.get(h.employee_id), hours: h.total_hours, yearly: 0, historical: 0}))
-    // yearly.forEach(y => {
-    //   const entry = contextMap.get(y.employee_id) || { hours: 0, yearly: 0, historical: 0}
-    //   contextMap.set(y.employee_id, {...entry, yearly: y.total})
-    // })
-    // historical.forEach(hist => {
-    //   const entry = contextMap.get(hist.employee_id) || { hours: 0, yearly: 0, historical: 0}
-    //   contextMap.set(hist.employee_id, {...entry, historical: hist.gross})
-    // })
-
-    // const payrollPromises = employees.map(emp => {
-    //   const ctx = contextMap.get(emp.employee_id) || { hours: 0, yearly: 0, historical: 0 }
-
-    //   return this.calculateAndSavePayroll(
-    //     emp,
-    //     concepts,
-    //     paysheetId,
-    //     ctx.hours,
-    //     emp.hours,
-    //     ctx.yearly,
-    //     ctx.historical,
-    //   )
-    // })
-
-    // await Promise.all(payrollPromises)
 
     const concepts = await this.repo.getConceptsPerTenant(tenantId);
+
+    const holidays = await this.repo.getHolidays();
+    console.log('Holidays: ', holidays);
 
     const employees = await this.repo.getEmployeeContractForPayroll(
       tenantId,
@@ -84,9 +53,13 @@ export class PayrollService {
 
     const historicalEarnings = await this.repo.getHistoricalEarnings(branchId);
 
-    const hoursMap = new Map<string, number>(
-      hoursWorked.map((h) => [h.employee_id, h.total_hours]),
-    );
+    const hoursMap = new Map<string, { total: number; work_date: string }[]>();
+
+    hoursWorked.forEach((hw) => {
+      const current = hoursMap.get(hw.employee_id) || [];
+      current.push({ total: hw.total_hours, work_date: hw.work_date });
+      hoursMap.set(hw.employee_id, current);
+    });
 
     const yearlyMap = new Map<string, number>(
       yearly.map((y) => [y.employee_id, y.total]),
@@ -97,7 +70,7 @@ export class PayrollService {
     );
 
     for (const emp of employees) {
-      const empHours = hoursMap.get(emp.employee_id) || 0;
+      const empHours = hoursMap.get(emp.employee_id) || [];
       const empEarn = historicalEarningsMap.get(emp.employee_id) || 0;
       const empYearly = yearlyMap.get(emp.employee_id) || 0;
 
@@ -106,9 +79,9 @@ export class PayrollService {
         concepts,
         paysheetId,
         empHours,
-        emp.hours,
         empEarn,
         empYearly,
+        holidays,
       );
     }
 
@@ -120,40 +93,50 @@ export class PayrollService {
     emp: EmployeePayrollData,
     concepts: PayrollConceptRow[],
     paysheetId: string,
-    hoursWorked: number,
-    contractedHours: number,
+    hours: { total: number; work_date: string }[],
     earning50week: number,
     yearlySalary: number,
+    dates: string[],
   ) {
-
-    const incomeConcepts = concepts.filter(c => c.type == "earning")
-    const deductionConcepts = concepts.filter(c => c.type == "deduction")
+    const time = this.getOvertimeHolidays(hours, dates, emp.turn_type);
+    const incomeConcepts = concepts.filter((c) => c.type == 'earning');
+    const deductionConcepts = concepts.filter((c) => c.type == 'deduction');
 
     console.log('Calculating payroll for employee:', emp.employee_id);
-    console.log("calculating income for base salary: ", emp.base_salary)
+    console.log('calculating income for base salary: ', emp.base_salary);
     const incomeResult = this.engine.execute(emp.base_salary, incomeConcepts, {
-      hoursWorked,
-      contractedHours,
+      standardHours: time.ordinaryHours,
+      holidaysHours: time.holidaysHours,
       totalEarnings: earning50week,
       yearlySalary,
+      turnType: emp.turn_type,
     });
 
-    const currentGrossSalary = incomeResult.totals.grossSalary
-    console.log("calculating deduction")
+    const currentGrossSalary = incomeResult.totals.grossSalary;
+    console.log('calculating deduction');
 
-    const deductionResult = this.engine.execute(emp.base_salary, deductionConcepts, {
-      gross: Number(currentGrossSalary)
-    })
+    const deductionResult = this.engine.execute(
+      emp.base_salary,
+      deductionConcepts,
+      {
+        gross: Number(currentGrossSalary),
+      },
+    );
 
-    const allMovements = [...incomeResult.movements, ...deductionResult.movements]
-    const netSalary = new Decimal(incomeResult.totals.earnings).minus(new Decimal(deductionResult.totals.deductions))
+    const allMovements = [
+      ...incomeResult.movements,
+      ...deductionResult.movements,
+    ];
+    const netSalary = new Decimal(incomeResult.totals.earnings).minus(
+      new Decimal(deductionResult.totals.deductions),
+    );
 
     const allTotals = {
       grossSalary: incomeResult.totals.grossSalary,
       earnings: incomeResult.totals.earnings,
       deductions: deductionResult.totals.deductions,
-      netSalary: netSalary.plus(emp.base_salary)
-    }
+      netSalary: netSalary.plus(emp.base_salary),
+    };
     console.log(
       'Payroll calculation result for employee:',
       emp.employee_id,
@@ -264,5 +247,51 @@ export class PayrollService {
     );
 
     return totals;
+  }
+
+  getOvertimeHolidays(
+    clockingDates: { total: number; work_date: string }[],
+    holidays: string[],
+    turn: number,
+  ) {
+    let holidaysHours = new Decimal(0);
+    let ordinaryHours = new Decimal(0);
+
+    if (holidays.length === 0) {
+      return {
+        holidaysHours,
+        ordinaryHours: new Decimal(
+          clockingDates.reduce((acc, d) => acc + d.total, 0),
+        ),
+      };
+    }
+
+    clockingDates.forEach((date) => {
+      const formattedDate = new Date(date.work_date)
+        .toISOString()
+        .split('T')[0];
+      const isHoliday = holidays.some((h) => h === formattedDate);
+
+      const extraHours = Decimal.max(
+        0,
+        new Decimal(date.total).minus(new Decimal(turn)),
+      );
+
+      console.log(extraHours);
+      if (isHoliday) {
+        holidaysHours = holidaysHours.plus(extraHours);
+      } else {
+        ordinaryHours = ordinaryHours.plus(extraHours);
+      }
+    });
+
+    console.log('Overtime and holiday hours calculated:', {
+      holidaysHours: holidaysHours.toFixed(2),
+      ordinaryHours: ordinaryHours.toFixed(2),
+    });
+    return {
+      holidaysHours,
+      ordinaryHours,
+    };
   }
 }

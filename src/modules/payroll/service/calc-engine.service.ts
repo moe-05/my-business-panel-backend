@@ -10,7 +10,7 @@ export class CalculationEngine {
   execute(
     baseSalaryStr: string,
     concepts: PayrollConceptRow[],
-    extras?: Record<string, number>, // Bonus, extra hours, vacations, etc.
+    extras?: Record<string, number | Decimal>, // Bonus, extra hours, vacations, etc.
   ) {
     const baseSalary = new Decimal(baseSalaryStr);
     let totalEarnings = new Decimal(0);
@@ -59,7 +59,7 @@ export class CalculationEngine {
   }
 
   private mappedToDecimal(
-    extras: Record<string, number> | undefined,
+    extras: Record<string, number | Decimal> | undefined,
   ): Record<string, Decimal> {
     const mapped: Record<string, Decimal> = {};
 
@@ -71,7 +71,7 @@ export class CalculationEngine {
       const val = extras[key];
 
       if (val !== undefined && val !== null) {
-        mapped[key] = new Decimal(val);
+        mapped[key] = val instanceof Decimal ? val : new Decimal(val);
       } else {
         mapped[key] = new Decimal(0);
       }

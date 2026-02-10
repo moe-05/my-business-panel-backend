@@ -25,9 +25,9 @@ export const queries = createQueries({
     `,
   },
   contract: {
-    byId: `SELECT * FROM general_schema.contract WHERE contract_id = $1 LIMIT 1`,
+    byId: `SELECT * FROM hr_schema.contract WHERE contract_id = $1 LIMIT 1`,
     update: `
-      UPDATE general_schema.contract
+      UPDATE hr_schema.contract
       SET
         start_date = COALESCE($1, start_date),
         end_date = COALESCE($2, end_date),
@@ -38,11 +38,6 @@ export const queries = createQueries({
       RETURNING contract_id
     `,
     getSchedule: `SELECT * FROM hr_schema.payment_schedule`,
-    getByUserIds: `
-      SELECT contract_id, user_id FROM general_schema.contract 
-      WHERE user_id = ANY($1) 
-      ORDER BY created_at DESC
-    `,
   },
   role: {
     all: 'SELECT * FROM general_schema.role',
@@ -411,20 +406,21 @@ export const queries = createQueries({
     `,
     full: `
     SELECT hr_schema.create_new_employee(
-      $1::date,           -- start_date
-      $2::date,           -- end_date
-      $3::integer,        -- hours
-      $4::numeric,        -- base_salary
-      $5::text,           -- duties
-      $6::uuid,           -- user_id
-      $7::uuid,           -- tenant_id
-      $8::uuid,           -- branch_id (nuevo parámetro)
-      $9::varchar,        -- first_name
-      $10::varchar,       -- last_name
-      $11::varchar,       -- doc_number
-      $12::varchar,       -- phone
-      $13::varchar,       -- email
-      $14::integer        -- schedule_id
+      $1::date,           
+      $2::date,           
+      $3::integer,        
+      $4::numeric,        
+      $5::text,           
+      $6::integer
+      $7::uuid,           
+      $8::uuid,           
+      $9::uuid,           
+      $10::varchar,        
+      $11::varchar,       
+      $12::varchar,       
+      $13::varchar,       
+      $14::varchar,       
+      $15::integer        
     ) AS employee_id
   `,
   },
@@ -472,6 +468,7 @@ export const queries = createQueries({
         c.contract_id,
         c.base_salary,
         c.hours,
+        c.turn_type,
         e.schedule_id
       FROM hr_schema.employee e
       INNER JOIN hr_schema.contract c USING(contract_id)
@@ -539,12 +536,12 @@ export const queries = createQueries({
       WHERE paysheet_id = $1;
     `,
     getHoursWorked: `
-      SELECT employee_id, SUM(turn_hours) AS total_hours
+      SELECT employee_id, clock_in::date AS work_date, SUM(turn_hours) AS total_hours
       FROM hr_schema.clocking
       WHERE branch_id = $1
         AND clock_in >= $2
         AND clock_out <= $3
-      GROUP BY employee_id;
+      GROUP BY employee_id, work_date;
     `,
     getHistorycalPayrolls: `
       SELECT
@@ -567,6 +564,9 @@ export const queries = createQueries({
         AND p.period_end <= $3    -- '2026-11-30' (Noviembre año actual)
         AND p.status_id = 2
       GROUP BY pd.employee_id;
+    `,
+    getHolidays: `
+      SELECT date::date AS holiday_date, holiday_name, is_freeday, is_payable FROM hr_schema.holiday WHERE is_payable = true
     `,
   },
   concept: {

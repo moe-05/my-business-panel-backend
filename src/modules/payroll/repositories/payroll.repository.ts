@@ -4,6 +4,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   EmployeePayrollData,
   HistoricalEarnings,
+  Holidays,
   HoursWorked,
   PayrollConceptRow,
   YearlySalary,
@@ -67,5 +68,19 @@ export class PayrollRepository {
       periodEnd,
     ]);
     return res.rows;
+  }
+
+  async getHolidays() {
+    const res = await this.db.query(queries.payroll.getHolidays);
+
+    if (res.rows.length === 0) return [];
+
+    return res.rows.map((h) => {
+      const dateObj =
+        h.holiday_date instanceof Date
+          ? h.holiday_date
+          : new Date(h.holiday_date);
+      return dateObj.toISOString().split('T')[0];
+    });
   }
 }

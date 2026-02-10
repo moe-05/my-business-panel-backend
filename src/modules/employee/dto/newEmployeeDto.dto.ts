@@ -23,6 +23,9 @@ export class ContractDto {
 
   @IsString()
   duties!: string;
+
+  @IsNumber()
+  turn_type!: number;
 }
 
 export class NewEmployeeDto {
