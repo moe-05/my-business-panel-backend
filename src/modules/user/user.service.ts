@@ -100,6 +100,7 @@ export class UserService {
     try {
       const saltRounds = this.state.getConstant<number>('PASSWORD_SALT_ROUNDS');
 
+      console.log('Entre al primer mapa');
       const rows = createUserDtos.map((dto) => {
         const validTenant =
           isUUID(dto.tenant_id) && this.state.getTenant(dto.tenant_id);
@@ -110,6 +111,7 @@ export class UserService {
         return [dto.tenant_id, dto.email, password_hash, dto.role_id];
       });
 
+      console.log('Bulk Insert para Users: ', rows);
       await this.db.bulkInsert(
         'general_schema.users',
         ['tenant_id', 'email', 'password_hash', 'role_id'],
@@ -138,13 +140,12 @@ export class UserService {
           hours,
           base_salary,
           duties,
-          userId,
         ];
       });
 
       console.log('Contract rows for bulk insert:', contractRows);
 
-      await this.db.bulkInsert(
+      const contractIds = await this.db.bulkInsert(
         'hr_schema.contract',
         [
           'tenant_id',
@@ -153,18 +154,15 @@ export class UserService {
           'hours',
           'base_salary',
           'duties',
-          'user_id',
         ],
         contractRows,
-        { header: false },
+        // { header: false, returningFields: ['contract_id'] }
       );
 
-      const contractIds = await this.db.query(queries.contract.getByUserIds, [
-        Array.from(userIdMap.values()),
-      ]);
+    
 
       const contractIdMap = new Map(
-        contractIds.rows.map((row: any) => [row.user_id, row.contract_id]),
+        // contractIds.map((row: any) => [row.user_id, row.contract_id]),
       );
 
       const employeeRows = createUserDtos.map((dto) => {
@@ -194,6 +192,7 @@ export class UserService {
         ];
       });
 
+      console.log('Employee rows for bulk insert:', employeeRows);
       await this.db.bulkInsert(
         'hr_schema.employee',
         [

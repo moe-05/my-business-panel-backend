@@ -10,14 +10,15 @@ export class CalculationEngine {
   execute(
     baseSalaryStr: string,
     concepts: PayrollConceptRow[],
-    extras?: Record<string, number>, // Bonus, extra hours, vacations, etc.
+    extras?: Record<string, number | Decimal>, // Bonus, extra hours, vacations, etc.
   ) {
     const baseSalary = new Decimal(baseSalaryStr);
     let totalEarnings = new Decimal(0);
     let totalDeductions = new Decimal(0);
 
+    let taxableGross = baseSalary;
+
     const mov = concepts.map((c) => {
-      
       const strategy = this.stratctx.getStrategy(c.calculation_method, c.code);
 
       const amountToGo =
@@ -28,12 +29,18 @@ export class CalculationEngine {
       const calculatedValue = strategy.calculate({
         baseSalary,
         conceptValue: amountToGo,
-        context: this.mappedToDecimal(extras),
+        context: { ...this.mappedToDecimal(extras), taxableGross },
       });
 
-      c.type === 'earning'
-        ? (totalEarnings = totalEarnings.add(calculatedValue))
-        : (totalDeductions = totalDeductions.add(calculatedValue));
+      if (c.type === 'earning') {
+        totalEarnings = totalEarnings.add(calculatedValue);
+
+        if (c.is_taxable) {
+          taxableGross = taxableGross.add(calculatedValue);
+        }
+      } else {
+        totalDeductions = totalDeductions.add(calculatedValue);
+      }
 
       return {
         concept_id: c.concept_id,
@@ -41,6 +48,7 @@ export class CalculationEngine {
         type: c.type,
         calculated_amount: calculatedValue.toFixed(4),
         appliedValue: amountToGo.toFixed(4),
+        is_taxable: c.is_taxable,
       };
     });
 
@@ -48,6 +56,7 @@ export class CalculationEngine {
       movements: mov,
       totals: {
         grossSalary: baseSalary.add(totalEarnings).toFixed(4),
+        taxableBase: taxableGross.toFixed(4),
         earnings: totalEarnings.toFixed(4),
         deductions: totalDeductions.toFixed(4),
         netSalary: baseSalary
@@ -59,7 +68,7 @@ export class CalculationEngine {
   }
 
   private mappedToDecimal(
-    extras: Record<string, number> | undefined,
+    extras: Record<string, number | Decimal> | undefined,
   ): Record<string, Decimal> {
     const mapped: Record<string, Decimal> = {};
 
@@ -71,7 +80,7 @@ export class CalculationEngine {
       const val = extras[key];
 
       if (val !== undefined && val !== null) {
-        mapped[key] = new Decimal(val);
+        mapped[key] = val instanceof Decimal ? val : new Decimal(val);
       } else {
         mapped[key] = new Decimal(0);
       }
