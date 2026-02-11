@@ -42,3 +42,12 @@ export interface Holidays {
   is_freeday: boolean;
   is_payable: boolean;
 }
+
+export interface Incapacities {
+  employee_id: string,
+  type: string,
+  period_start: string,
+  period_end: string,
+  days_paying: number,
+  percentage_to_pay: number
+}

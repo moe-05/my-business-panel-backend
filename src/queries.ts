@@ -568,6 +568,55 @@ export const queries = createQueries({
     getHolidays: `
       SELECT date::date AS holiday_date, holiday_name, is_freeday, is_payable FROM hr_schema.holiday WHERE is_payable = true
     `,
+    getIncapacities: `
+      SELECT
+        employee_id,
+        type,
+        period_start,
+        period_end,
+        days_paying,
+        percentage_to_pay
+      FROM hr_schema.incapacity
+      WHERE branch_id = $1
+        AND period_start >= $2
+        AND period_end <= $3
+        AND is_active = true
+    `,
+  },
+  incapacities: {
+    create: `
+      INSERT INTO hr_schema.incapacity (
+          employee_id, branch_id, type,
+          period_start, period_end, days_paying, percentage_to_pay
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING incapacity_id;
+    `,
+    byBranch: `
+      SELECT * FROM hr_schema.incapacity
+      WHERE branch_id = $1 AND is_active = true
+    `,
+    byEmployee: `
+      SELECT * FROM hr_schema.incapacity
+      WHERE employee_id = $1
+    `,
+    update: `
+      UPDATE hr_schema.incapacity
+      SET
+        type = COALESCE($2, type),
+        period_start = COALESCE($3, period_start),
+        period_end = COALESCE($4, period_end),
+        days_paying = COALESCE($5, days_paying),
+        percentage_to_pay = COALESCE($6, percentage_to_pay),
+        is_active = COALESCE($7, is_active)
+      WHERE incapacity_id = $1
+      RETURNING incapacity_id;
+    `,
+    deactivate: `
+      UPDATE hr_schema.incapacity
+      SET is_active = false
+      WHERE incapacity_id = $1
+      RETURNING incapacity_id;  
+    `,
   },
   concept: {
     getConceptById: `

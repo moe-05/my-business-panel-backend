@@ -8,6 +8,7 @@ import { CreatePaysheetDto } from '../dto/create-paysheet.dto';
 import {
   EmployeePayrollData,
   HoursWorked,
+  Incapacities,
   PayrollConceptRow,
 } from '../interface/payroll-db.interface';
 import Decimal from 'decimal.js';
@@ -30,9 +31,16 @@ export class PayrollService {
     console.log('Starting payroll processing for paysheet:', paysheetId);
 
     const concepts = await this.repo.getConceptsPerTenant(tenantId);
+    const incomes = concepts.filter((c) => c.type === 'earning');
+    const deductions = concepts.filter((c) => c.type === 'deduction');
+
+    const incapacities = await this.repo.getIncapacities(
+      branchId,
+      periodStart,
+      periodEnd,
+    );
 
     const holidays = await this.repo.getHolidays();
-    console.log('Holidays: ', holidays);
 
     const employees = await this.repo.getEmployeeContractForPayroll(
       tenantId,
@@ -76,12 +84,14 @@ export class PayrollService {
 
       await this.calculateAndSavePayroll(
         emp,
-        concepts,
+        incomes,
+        deductions,
         paysheetId,
         empHours,
         empEarn,
         empYearly,
         holidays,
+        incapacities,
       );
     }
 
@@ -91,16 +101,24 @@ export class PayrollService {
 
   private async calculateAndSavePayroll(
     emp: EmployeePayrollData,
-    concepts: PayrollConceptRow[],
+    incomeConcepts: PayrollConceptRow[],
+    deductionConcepts: PayrollConceptRow[],
     paysheetId: string,
     hours: { total: number; work_date: string }[],
     earning50week: number,
     yearlySalary: number,
     dates: string[],
+    incapacities: Incapacities[],
   ) {
-    const time = this.getOvertimeHolidays(hours, dates, emp.turn_type);
-    const incomeConcepts = concepts.filter((c) => c.type == 'earning');
-    const deductionConcepts = concepts.filter((c) => c.type == 'deduction');
+    // const incDates: string[] = []
+    // const incapacitiesDates = incapacities.map(i => {
+    //   incDates.push(i.period_start, i.period_end)
+    // })
+
+    const incapacityInfo = incapacities.find(
+      (i) => i.employee_id === emp.employee_id,
+    );
+    const time = this.getOvertimeHolidays(hours, dates, emp.turn_type, []);
 
     console.log('Calculating payroll for employee:', emp.employee_id);
     console.log('calculating income for base salary: ', emp.base_salary);
@@ -110,16 +128,25 @@ export class PayrollService {
       totalEarnings: earning50week,
       yearlySalary,
       turnType: emp.turn_type,
+      incapacityDays: incapacityInfo ? incapacityInfo.days_paying : 0,
+      incapacityPercentage: incapacityInfo
+        ? incapacityInfo.percentage_to_pay
+        : 0,
+      percentage: incapacityInfo ? incapacityInfo.percentage_to_pay : 0,
     });
 
-    const currentGrossSalary = incomeResult.totals.grossSalary;
+    console.log(
+      'taxable gross after income calculation:',
+      incomeResult.totals.taxableBase,
+    );
+    const currentGrossSalary = incomeResult.totals.taxableBase;
     console.log('calculating deduction');
 
     const deductionResult = this.engine.execute(
       emp.base_salary,
       deductionConcepts,
       {
-        gross: Number(currentGrossSalary),
+        gross: new Decimal(currentGrossSalary),
       },
     );
 
@@ -145,7 +172,7 @@ export class PayrollService {
 
     const sqlQueries = [queries.payroll.insertDetail];
 
-    const params: (string | number | Date | null)[][] = [
+    const params: (string | number | Date | null | Decimal)[][] = [
       [
         paysheetId,
         emp.employee_id,
@@ -154,7 +181,7 @@ export class PayrollService {
         allTotals.grossSalary,
         allTotals.earnings,
         allTotals.deductions,
-        netSalary.toString(),
+        allTotals.netSalary,
         new Date(),
       ],
     ];
@@ -253,6 +280,7 @@ export class PayrollService {
     clockingDates: { total: number; work_date: string }[],
     holidays: string[],
     turn: number,
+    incapacities: string[],
   ) {
     let holidaysHours = new Decimal(0);
     let ordinaryHours = new Decimal(0);
@@ -270,6 +298,11 @@ export class PayrollService {
       const formattedDate = new Date(date.work_date)
         .toISOString()
         .split('T')[0];
+      // const incapacitaded = incapacities.includes(formattedDate);
+      // if(incapacitaded) {
+      //   console.log('Date skipped due to incapacity:', formattedDate);
+      //   return;
+      // }
       const isHoliday = holidays.some((h) => h === formattedDate);
 
       const extraHours = Decimal.max(
@@ -277,7 +310,6 @@ export class PayrollService {
         new Decimal(date.total).minus(new Decimal(turn)),
       );
 
-      console.log(extraHours);
       if (isHoliday) {
         holidaysHours = holidaysHours.plus(extraHours);
       } else {

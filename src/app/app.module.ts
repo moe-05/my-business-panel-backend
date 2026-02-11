@@ -30,6 +30,7 @@ import { PayrollMovementsModule } from '@/modules/payroll_movements/payroll_move
 import { PayrollModule } from '@/modules/payroll/payroll.module';
 import { PaysheetModule } from '@/modules/paysheet/paysheet.module';
 import { SuppliersModule } from '@/modules/suppliers/suppliers.module';
+import { IncapacityModule } from '@/modules/incapacity/incapacity.module';
 require('dotenv').config();
 
 console.log(
@@ -68,6 +69,7 @@ console.log(
     PaysheetModule,
     WarehouseModule,
     SuppliersModule,
+    IncapacityModule,
   ],
   controllers: [AppController],
   providers: [AppService],

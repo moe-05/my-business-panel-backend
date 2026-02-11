@@ -85,8 +85,8 @@ export class HolidayStrategy implements IPayrollStrategy {
 export class ISRDeduction implements IPayrollStrategy {
   calculate(input: CalculatorInput): Decimal {
     console.log(input.context?.gross);
-    const currentGross = new Decimal(input.context?.gross || 0);
-    const gross = currentGross.mul(new Decimal(0.1067));
+    const currentGross = input.context?.gross || new Decimal(0);
+    const gross = currentGross.mul(new Decimal(0.1083));
     const val = currentGross.minus(gross);
 
     const brackets = [
@@ -118,5 +118,53 @@ export class ISRDeduction implements IPayrollStrategy {
 
     console.log('Tax total: ', totalTax);
     return totalTax.toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+  }
+}
+
+export class IncapacityStrategy implements IPayrollStrategy {
+  calculate(input: CalculatorInput): Decimal {
+    const base = input.baseSalary;
+    const dailyRate = base.dividedBy(new Decimal(30));
+    const days = new Decimal(input.context?.incapacityDays || 0);
+    const percentage = new Decimal(input.context?.percentage || 0);
+
+    if (!days || days.isZero()) return new Decimal(0);
+
+    const incapacityPayment = dailyRate
+      .mul(percentage.dividedBy(new Decimal(100)))
+      .mul(days);
+
+    console.log('Incapacity calculation details:', {
+      base: base.toFixed(2),
+      dailyRate: dailyRate.toFixed(2),
+      days: days.toFixed(2),
+      percentage: percentage.toFixed(2),
+      incapacityPayment: incapacityPayment.toFixed(2),
+    });
+
+    return incapacityPayment.toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+  }
+}
+
+export class IncapacityDeductionStrategy implements IPayrollStrategy {
+  calculate(input: CalculatorInput): Decimal {
+    const base = input.baseSalary;
+    const dailyRate = base.dividedBy(new Decimal(30));
+    const days = new Decimal(input.context?.incapacityDays || 0);
+
+    if (!days || days.isZero()) return new Decimal(0);
+
+    const incapacityDeduction = dailyRate.mul(days);
+
+    console.log('Incapacity Deduction calculation details:', {
+      base: base.toFixed(2),
+      dailyRate: dailyRate.toFixed(2),
+      days: days.toFixed(2),
+      incapacityDeduction: incapacityDeduction.toFixed(2),
+    });
+
+    return incapacityDeduction
+      .mul(new Decimal(-1))
+      .toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
   }
 }
