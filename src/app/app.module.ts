@@ -31,6 +31,9 @@ import { PayrollModule } from '@/modules/payroll/payroll.module';
 import { PaysheetModule } from '@/modules/paysheet/paysheet.module';
 import { SuppliersModule } from '@/modules/suppliers/suppliers.module';
 import { IncapacityModule } from '@/modules/incapacity/incapacity.module';
+import { SuspentionModule } from '@/modules/suspention/suspention.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { TurnsModule } from '@/modules/turns/turns.module';
 require('dotenv').config();
 
 console.log(
@@ -40,6 +43,7 @@ console.log(
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     AuthModule,
     CustomerModule,
     DocumentTypeModule,
@@ -70,6 +74,8 @@ console.log(
     WarehouseModule,
     SuppliersModule,
     IncapacityModule,
+    SuspentionModule,
+    TurnsModule
   ],
   controllers: [AppController],
   providers: [AppService],

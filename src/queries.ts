@@ -411,16 +411,16 @@ export const queries = createQueries({
       $3::integer,        
       $4::numeric,        
       $5::text,           
-      $6::integer
+      $6::integer,
       $7::uuid,           
       $8::uuid,           
-      $9::uuid,           
-      $10::varchar,        
+      $9::varchar,        
+      $10::varchar,       
       $11::varchar,       
       $12::varchar,       
       $13::varchar,       
-      $14::varchar,       
-      $15::integer        
+      $14::integer,        
+      $15::uuid        
     ) AS employee_id
   `,
   },
@@ -699,6 +699,62 @@ export const queries = createQueries({
       SELECT * FROM hr_schema.payroll_movement WHERE detail_id = $1
     `,
   },
+  suspention: {
+    create: `
+      INSERT INTO hr_schema.suspention(employee_id, suspention_start, suspention_end, reason, branch_id)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING suspention_id;
+    `,
+    getByBranch: `
+      SELECT * FROM hr_schema.suspention WHERE branch_id = $1 AND is_active = true
+    `,
+    getById: `
+      SELECT * FROM hr_schema.suspention WHERE suspention_id = $1 LIMIT 1
+    `,
+    getByEmployee: `
+      SELECT * FROM hr_schema.suspention WHERE employee_id = $1 AND is_active = true
+    `,
+    updateSuspention: `
+      UPDATE hr_schema.suspention
+      SET
+        suspention_start = COALESCE($1, suspention_start),
+        suspention_end = COALESCE($2, suspention_end),
+        reason = COALESCE($3, reason)
+      WHERE suspention_id = $4 AND is_active = true
+      RETURNING suspention_id;
+    `,
+    closeSuspention: `
+      UPDATE hr_schema.suspention
+      SET
+        is_active = false
+      WHERE suspention_id = $1
+      RETURNING suspention_id;
+    `,
+    cronJobSuspention: `
+      SELECT hr_schema.close_suspention()
+    `
+  },
+  turns: {
+    create: `
+      INSERT INTO hr_schema.turn (branch_id, entry, out)
+      VALUES ($1, $2, $3)
+      RETURNING turn_id;
+    `,
+    getByBranch: `
+      SELECT * FROM hr_schema.turn WHERE branch_id = $1
+    `,
+    updateTurn: `
+      UPDATE hr_schema.turn
+      SET
+        entry = COALESCE($1, entry),
+        out = COALESCE($2, out)
+      WHERE turn_id = $3
+      RETURNING turn_id;
+    `,
+    deleteTurn: `
+      DELETE FROM hr_schema.turn WHERE turn_id = $1 RETURNING turn_id;
+    `
+  }
 });
 
 export const bulkItems = [
