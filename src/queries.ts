@@ -369,7 +369,7 @@ export const queries = createQueries({
   },
   employee: {
     getById: `
-      SELECT e.first_name, e.last_name, e.doc_number, e.phone, e.email, e.is_active, c.start_date, c.end_date, c.hours, c.base_salary, c.duties
+      SELECT e.first_name, e.last_name, e.doc_number, e.phone, e.email, e.is_active, c.start_date, c.end_date, c.hours, c.base_salary, c.duties, c.turn_id
       FROM hr_schema.employee e 
       INNER JOIN hr_schema.contract c USING(contract_id)
       WHERE e.employee_id = $1 LIMIT 1
@@ -412,15 +412,16 @@ export const queries = createQueries({
       $4::numeric,        
       $5::text,           
       $6::integer,
-      $7::uuid,           
+      $7::integer,
       $8::uuid,           
-      $9::varchar,        
-      $10::varchar,       
+      $9::uuid,           
+      $10::varchar,        
       $11::varchar,       
       $12::varchar,       
       $13::varchar,       
-      $14::integer,        
-      $15::uuid        
+      $14::varchar,       
+      $15::integer,        
+      $16::uuid        
     ) AS employee_id
   `,
   },
@@ -732,13 +733,19 @@ export const queries = createQueries({
     `,
     cronJobSuspention: `
       SELECT hr_schema.close_suspention()
-    `
+    `,
   },
   turns: {
     create: `
       INSERT INTO hr_schema.turn (branch_id, entry, out)
       VALUES ($1, $2, $3)
       RETURNING turn_id;
+    `,
+    getEntry: `
+      SELECT entry FROM hr_schema.turn WHERE turn_id = $1 LIMIT 1
+    `,
+    getOut: `
+      SELECT out FROM hr_schema.turn WHERE turn_id = $1 LIMIT 1
     `,
     getByBranch: `
       SELECT * FROM hr_schema.turn WHERE branch_id = $1
@@ -753,8 +760,48 @@ export const queries = createQueries({
     `,
     deleteTurn: `
       DELETE FROM hr_schema.turn WHERE turn_id = $1 RETURNING turn_id;
+    `,
+  },
+  foul: {
+    create: `
+      INSERT INTO hr_schema.foul(employee_id, branch_id, identificator, foul_date, foul_hour, description)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING foul_id;
+    `,
+    foulCounts: `
+      SELECT COUNT(*) AS total_fouls
+      FROM hr_schema.foul
+      WHERE employee_id = $1
+        AND foul_date >= (CURRENT_DATE - INTERVAL '30 days')
+      GROUP BY employee_id;
+    `,
+    getByBranch: `
+      SELECT employee_id, identificator, foul_date, foul_hour, description
+      FROM hr_schema.foul
+      WHERE branch_id = $1
+        AND foul_date >= (CURRENT_DATE - INTERVAL '30 days')
+    `,
+    foulCountByBranch: `
+      SELECT COUNT(*) AS total_fouls
+      FROM hr_schema.foul
+      WHERE branch_id = $1
+        AND foul_date >= (CURRENT_DATE - INTERVAL '30 days')
+    `,
+    getByEmployee: `
+      SELECT * FROM hr_schema.foul WHERE employee_id = $1
+    `,
+    getByPeriod: `
+      SELECT * FROM hr_schema.foul
+      WHERE foul_date >= $1 AND foul_date <= $2 
+    `,
+    cleanOldFouls: `
+      DELETE FROM hr_schema.foul
+      WHERE branch_id = $1 AND foul_date < (CURRENT_DATE - INTERVAL '1 month' * $2)
+    `,
+    getConfigforBranch: `
+      SELECT branch_id, foul_expiration_months FROM hr_schema.config 
     `
-  }
+  },
 });
 
 export const bulkItems = [

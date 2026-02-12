@@ -22,6 +22,10 @@ export class ClockingService {
       throw new EmployeeNotFoundError(employeeId);
     }
 
+    const turn = await this.db.query(queries.turns.getEntry, [
+      employee.turn_id,
+    ]);
+
     const clockInRecord = await this.db.query(queries.clocking.clock_in, [
       employeeId,
       branchId,
@@ -31,13 +35,46 @@ export class ClockingService {
       throw new Error('Failed to register clock-in. Check the provided data.');
     }
 
+    let alertMessage = 'Clock-in registered successfully';
+
+    if (turn.rows.length > 0) {
+      const entry = turn.rows[0].entry;
+      const now = new Date();
+      const [hours, minutes] = entry.split(':').map(Number);
+
+      const scheduled = new Date();
+      scheduled.setHours(hours, minutes, 0, 0);
+
+      if (now > scheduled) {
+        const diffInMinutes = Math.floor(
+          (now.getTime() - scheduled.getTime()) / 60000,
+        );
+        alertMessage += `. Note: You are clocking in ${diffInMinutes} minutes late.`;
+        console.warn(alertMessage);
+      } else {
+        const diffInMinutes = Math.floor(
+          (scheduled.getTime() - now.getTime()) / 60000,
+        );
+        alertMessage += `. Note: You are clocking in ${diffInMinutes} minutes early.`;
+        console.warn(alertMessage);
+      }
+    }
+
     return {
-      message: 'Clock-in registered successfully',
+      message: alertMessage,
       clockIn: clockInRecord.rows[0].clocking_id,
     };
   }
 
   async registerClockOut(employeeId: string) {
+    const emp = await this.employeeService.getEmployeeById(employeeId);
+
+    if (!emp) {
+      throw new EmployeeNotFoundError(employeeId);
+    }
+
+    const turn = await this.db.query(queries.turns.getOut, [emp.turn_id]);
+
     const clockOutRecord = await this.db.query(queries.clocking.clock_out, [
       employeeId,
     ]);
@@ -46,8 +83,34 @@ export class ClockingService {
       throw new Error('Failed to register clock-out. Check the provided data.');
     }
 
+    let alertMessage = 'Clock-out registered successfully';
+
+    if (turn.rows.length > 0) {
+      const out = turn.rows[0].out;
+      const now = new Date();
+      const [hours, minutes] = out.split(':').map(Number);
+
+      const scheduled = new Date();
+      scheduled.setHours(hours, minutes, 0, 0);
+      if (now < scheduled) {
+        const diffInMinutes = Math.floor(
+          (scheduled.getTime() - now.getTime()) / 60000,
+        );
+        alertMessage += `. Note: You are clocking out ${diffInMinutes} minutes early.`;
+        console.warn(alertMessage);
+      } else {
+        const diffInMinutes = Math.floor(
+          (now.getTime() - scheduled.getTime()) / 60000,
+        );
+        if (diffInMinutes > 0) {
+          alertMessage += `. Note: You are clocking out ${diffInMinutes} minutes late.`;
+          console.warn(alertMessage);
+        }
+      }
+    }
+
     return {
-      message: 'Clock-out registered successfully',
+      message: alertMessage,
       clockOut: clockOutRecord.rows[0].clocking_id,
     };
   }

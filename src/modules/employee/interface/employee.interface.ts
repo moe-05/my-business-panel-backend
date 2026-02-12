@@ -24,6 +24,7 @@ export interface IEmployee {
   hours: number;
   base_salary: number;
   duties: string;
+  turn_id: number;
 }
 
 export interface Contract {

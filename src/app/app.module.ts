@@ -34,6 +34,7 @@ import { IncapacityModule } from '@/modules/incapacity/incapacity.module';
 import { SuspentionModule } from '@/modules/suspention/suspention.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TurnsModule } from '@/modules/turns/turns.module';
+import { FoulModule } from '@/modules/foul/foul.module';
 require('dotenv').config();
 
 console.log(
@@ -75,7 +76,8 @@ console.log(
     SuppliersModule,
     IncapacityModule,
     SuspentionModule,
-    TurnsModule
+    TurnsModule,
+    FoulModule
   ],
   controllers: [AppController],
   providers: [AppService],

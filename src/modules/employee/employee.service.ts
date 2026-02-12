@@ -65,6 +65,7 @@ export class EmployeeService {
       contractData.base_salary,
       contractData.duties,
       contractData.turn_type,
+      contractData.turn_id,
       user_id,
       tenant_id,
       first_name,
