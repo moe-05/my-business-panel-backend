@@ -32,6 +32,10 @@ import { PaysheetModule } from '@/modules/paysheet/paysheet.module';
 import { SuppliersModule } from '@/modules/suppliers/suppliers.module';
 import { PurchaseModule } from '@/modules/purchase/purchase.module';
 import { IncapacityModule } from '@/modules/incapacity/incapacity.module';
+import { SuspentionModule } from '@/modules/suspention/suspention.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { TurnsModule } from '@/modules/turns/turns.module';
+import { FoulModule } from '@/modules/foul/foul.module';
 require('dotenv').config();
 
 console.log(
@@ -41,6 +45,7 @@ console.log(
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     AuthModule,
     CustomerModule,
     DocumentTypeModule,
@@ -72,6 +77,9 @@ console.log(
     SuppliersModule,
     PurchaseModule,
     IncapacityModule,
+    SuspentionModule,
+    TurnsModule,
+    FoulModule
   ],
   controllers: [AppController],
   providers: [AppService],
