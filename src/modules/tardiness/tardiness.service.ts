@@ -19,7 +19,7 @@ export class TardinessService {
 
       return {
         tardiness: res.rows,
-        totalCount: count.rows[0]?.total_count || 0,
+        totalCount: count.rows[0].total,
       };
     } catch (error) {
       throw new Error(
@@ -38,7 +38,7 @@ export class TardinessService {
       ]);
       return {
         tardiness: res.rows,
-        totalCount: count.rows[0]?.total_count || 0,
+        totalCount: count.rows[0].total,
       };
     } catch (error) {
       throw new Error(
@@ -66,7 +66,7 @@ export class TardinessService {
       ]);
       return {
         tardiness: res.rows,
-        totalCount: count.rows[0]?.total_count || 0,
+        totalCount: count.rows[0].total,
       };
     } catch (error) {
       throw new Error(
