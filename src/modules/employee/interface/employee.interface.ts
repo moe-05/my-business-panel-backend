@@ -25,6 +25,7 @@ export interface IEmployee {
   base_salary: number;
   duties: string;
   turn_id: number;
+  branch_id: string;
 }
 
 export interface Contract {

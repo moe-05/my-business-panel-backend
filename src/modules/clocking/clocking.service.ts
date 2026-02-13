@@ -49,13 +49,25 @@ export class ClockingService {
         const diffInMinutes = Math.floor(
           (now.getTime() - scheduled.getTime()) / 60000,
         );
-        alertMessage += `. Note: You are clocking in ${diffInMinutes} minutes late.`;
+        alertMessage += `. Note: Clocking in ${diffInMinutes} minutes late.`;
+        await this.db.query(queries.tardiness.create, [
+          employeeId,
+          branchId,
+          'late',
+          `${employee.first_name} ${employee.last_name} clocked in ${diffInMinutes} minutes late on ${new Date().toISOString()}`,
+        ]);
         console.warn(alertMessage);
       } else {
         const diffInMinutes = Math.floor(
           (scheduled.getTime() - now.getTime()) / 60000,
         );
-        alertMessage += `. Note: You are clocking in ${diffInMinutes} minutes early.`;
+        alertMessage += `. Note: Clocking in ${diffInMinutes} minutes early.`;
+        await this.db.query(queries.tardiness.create, [
+          employeeId,
+          branchId,
+          'early',
+          `${employee.first_name} ${employee.last_name} clocked in ${diffInMinutes} minutes early on ${new Date().toISOString()}`,
+        ]);
         console.warn(alertMessage);
       }
     }
@@ -97,6 +109,12 @@ export class ClockingService {
           (scheduled.getTime() - now.getTime()) / 60000,
         );
         alertMessage += `. Note: You are clocking out ${diffInMinutes} minutes early.`;
+        await this.db.query(queries.tardiness.create, [
+          employeeId,
+          emp.branch_id,
+          'early',
+          `${emp.first_name} ${emp.last_name} clocked out ${diffInMinutes} minutes early on ${new Date().toISOString()}`,
+        ]);
         console.warn(alertMessage);
       } else {
         const diffInMinutes = Math.floor(
@@ -104,6 +122,12 @@ export class ClockingService {
         );
         if (diffInMinutes > 0) {
           alertMessage += `. Note: You are clocking out ${diffInMinutes} minutes late.`;
+          await this.db.query(queries.tardiness.create, [
+            employeeId,
+            emp.branch_id,
+            'late',
+            `${emp.first_name} ${emp.last_name} clocked out ${diffInMinutes} minutes late on ${new Date().toISOString()}`,
+          ]);
           console.warn(alertMessage);
         }
       }

@@ -369,7 +369,7 @@ export const queries = createQueries({
   },
   employee: {
     getById: `
-      SELECT e.first_name, e.last_name, e.doc_number, e.phone, e.email, e.is_active, c.start_date, c.end_date, c.hours, c.base_salary, c.duties, c.turn_id
+      SELECT e.first_name, e.last_name, e.doc_number, e.phone, e.email, e.is_active, c.start_date, c.end_date, c.hours, c.base_salary, c.duties, c.turn_id, e.branch_id 
       FROM hr_schema.employee e 
       INNER JOIN hr_schema.contract c USING(contract_id)
       WHERE e.employee_id = $1 LIMIT 1
@@ -582,6 +582,11 @@ export const queries = createQueries({
         AND period_start >= $2
         AND period_end <= $3
         AND is_active = true
+    `,
+    getSuspentionPeriod: `
+      SELECT employee_id, suspention_start, suspention_end FROM hr_schema.suspention
+      WHERE is_active = true
+      AND (suspention_start, suspention_end) OVERLAPS ($1, $2)
     `,
   },
   incapacities: {
@@ -800,7 +805,42 @@ export const queries = createQueries({
     `,
     getConfigforBranch: `
       SELECT branch_id, foul_expiration_months FROM hr_schema.config 
-    `
+    `,
+  },
+  tardiness: {
+    getByBranch: `
+      SELECT type, log, registered_at FROM hr_schema.tardiness
+      WHERE branch_id = $1
+        AND registered_at >= (CURRENT_DATE - INTERVAL '30 days')
+    `,
+    getByEmployee: `
+      SELECT type, log, registered_at FROM hr_schema.tardiness
+      WHERE employee_id = $1
+        AND registered_at >= (CURRENT_DATE - INTERVAL '30 days')
+    `,
+    getByPeriod: `
+      SELECT type, log, registered_at FROM hr_schema.tardiness
+      WHERE registered_at >= $1 AND registered_at <= $2 AND branch_id = $3 
+    `,
+    create: `
+      INSERT INTO hr_schema.tardiness (employee_id, branch_id, type, log, registered_at)
+      VALUES ($1, $2, $3, $4, NOW())
+      RETURNING tardiness_id;
+    `,
+    getCountByEmployee: `
+      SELECT COUNT(*) AS total FROM hr_schema.tardiness
+      WHERE employee_id = $1
+        AND registered_at >= (CURRENT_DATE - INTERVAL '30 days')
+    `,
+    getCountByBranch: `
+      SELECT COUNT(*) AS total FROM hr_schema.tardiness
+      WHERE branch_id = $1
+        AND registered_at >= (CURRENT_DATE - INTERVAL '30 days')
+    `,
+    getCountByPeriod: `
+      SELECT COUNT(*) AS total FROM hr_schema.tardiness
+      WHERE registered_at >= $1 AND registered_at <= $2 AND branch_id = $3
+    `,
   },
 });
 
