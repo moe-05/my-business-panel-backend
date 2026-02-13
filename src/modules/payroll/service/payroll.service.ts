@@ -181,7 +181,7 @@ export class PayrollService {
         allTotals.grossSalary,
         allTotals.earnings,
         allTotals.deductions,
-        allTotals.netSalary,
+        allTotals.netSalary.toString(),
         new Date(),
       ],
     ];

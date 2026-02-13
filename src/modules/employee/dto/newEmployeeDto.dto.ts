@@ -26,6 +26,9 @@ export class ContractDto {
 
   @IsNumber()
   turn_type!: number;
+
+  @IsNumber()
+  turn_id!: number;
 }
 
 export class NewEmployeeDto {
