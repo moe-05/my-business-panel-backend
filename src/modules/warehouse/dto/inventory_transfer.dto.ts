@@ -29,5 +29,5 @@ export class InventoryTransferProductDto {
 
   @IsNumber()
   @IsPositive()
-  quantity!: number;
+  amount!: number;
 }
