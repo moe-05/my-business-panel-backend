@@ -33,6 +33,10 @@ export class ContractDataDto {
   @IsNotEmpty()
   @IsNumber()
   turn_type!: number;
+
+  @IsNotEmpty()
+  @IsNumber()
+  turn_id!: number;
 }
 
 export class EmployeeInfoDto {

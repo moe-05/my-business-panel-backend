@@ -58,13 +58,9 @@ export class PayrollRepository {
 
   async getYearlySalary(
     branchId: string,
-    periodStart: string,
-    periodEnd: string,
   ): Promise<YearlySalary[]> {
     const res = await this.db.query(queries.payroll.getAguinaldos, [
       branchId,
-      periodStart,
-      periodEnd,
     ]);
     return res.rows;
   }

@@ -561,8 +561,8 @@ export const queries = createQueries({
       FROM hr_schema.paysheet_detail pd
       INNER JOIN hr_schema.paysheet p USING(paysheet_id)
       WHERE p.branch_id = $1
-        AND p.period_start >= $2  -- '2025-12-01' (Diciembre año anterior) Teniendo en cuenta la info compartida por el cliente
-        AND p.period_end <= $3    -- '2026-11-30' (Noviembre año actual)
+        AND p.period_start >= (date_trunc('year', CURRENT_DATE) - INTERVAL '1 month')  -- '2025-12-01' (Diciembre año anterior) Teniendo en cuenta la info compartida por el cliente
+        AND p.period_end <= (date_trunc('year', CURRENT_DATE) + INTERVAL '11 months' - INTERVAL '1 day')    -- '2026-11-30' (Noviembre año actual)
         AND p.status_id = 2
       GROUP BY pd.employee_id;
     `,

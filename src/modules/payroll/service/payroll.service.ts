@@ -45,6 +45,8 @@ export class PayrollService {
       periodEnd,
     );
 
+    console.log('suspention: ', suspentions);
+
     const suspentionMap = new Map<
       string,
       { suspention_start: string; suspention_end: string }
@@ -73,9 +75,9 @@ export class PayrollService {
 
     const yearly = await this.repo.getYearlySalary(
       branchId,
-      periodStart,
-      periodEnd,
     );
+
+    console.log("Yearly: ", yearly);
 
     const historicalEarnings = await this.repo.getHistoricalEarnings(branchId);
 
@@ -83,7 +85,7 @@ export class PayrollService {
 
     hoursWorked.forEach((hw) => {
       const current = hoursMap.get(hw.employee_id) || [];
-      current.push({ total: hw.total_hours, work_date: hw.work_date });
+      current.push({ total: Number(hw.total_hours), work_date: hw.work_date });
       hoursMap.set(hw.employee_id, current);
     });
 
@@ -249,18 +251,18 @@ export class PayrollService {
   }
 
   async createPaysheetHeader(data: CreatePaysheetDto) {
-    const exist = await this.db.query(queries.payroll.checkExistingPeriod, [
-      data.branchId,
-      data.tenantId,
-      data.periodStart,
-      data.periodEnd,
-    ]);
+    // const exist = await this.db.query(queries.payroll.checkExistingPeriod, [
+    //   data.branchId,
+    //   data.tenantId,
+    //   data.periodStart,
+    //   data.periodEnd,
+    // ]); 
 
-    if (exist.rows.length > 0) {
-      throw new Error(
-        'Paysheet for the specified period already exists for this branch and tenant.',
-      );
-    }
+    // if (exist.rows.length > 0) {
+    //   throw new Error(
+    //     'Paysheet for the specified period already exists for this branch and tenant.',
+    //   );
+    // }
 
     const newPaysheet = await this.db.query(queries.payroll.insertPaysheet, [
       data.tenantId,
@@ -310,6 +312,7 @@ export class PayrollService {
     turn: number,
     incapacities: string[],
   ) {
+    
     let holidaysHours = new Decimal(0);
     let ordinaryHours = new Decimal(0);
 
@@ -373,7 +376,7 @@ export class PayrollService {
     const timeDiff = effectiveEnd.getTime() - effectiveStart.getTime();
 
     const dayDiff = Math.max(Math.ceil(timeDiff / (1000 * 3600 * 24)) + 1, 0);
-    const dailySalary = base_salary.dividedBy(30); 
+    const dailySalary = base_salary.dividedBy(30);
 
     discount = dailySalary.times(dayDiff).toNumber();
     console.log('Suspention discount calculation: ', {
