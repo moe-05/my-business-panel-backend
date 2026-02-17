@@ -11,7 +11,6 @@ import {
   YearlySalary,
 } from '../interface/payroll-db.interface';
 import { queries } from '@/queries';
-import { payrollQueries } from '../payroll.queries';
 
 @Injectable()
 export class PayrollRepository {
@@ -59,13 +58,9 @@ export class PayrollRepository {
 
   async getYearlySalary(
     branchId: string,
-    periodStart: string,
-    periodEnd: string,
   ): Promise<YearlySalary[]> {
     const res = await this.db.query(queries.payroll.getAguinaldos, [
       branchId,
-      periodStart,
-      periodEnd,
     ]);
     return res.rows;
   }
@@ -101,6 +96,24 @@ export class PayrollRepository {
       ...r,
       period_start: r.period_start instanceof Date ? r.period_start.toISOString().split('T')[0] : String(r.period_start).split('T')[0],
       period_end: r.period_end instanceof Date ? r.period_end.toISOString().split('T')[0] : String(r.period_end).split('T')[0],
+    }));
+  }
+
+  async getSuspentionInPeriod(
+    periodStart: string,
+    periodEnd: string
+  ) {
+    const res = await this.db.query(queries.payroll.getSuspentionPeriod, [
+      periodStart,
+      periodEnd
+    ]);
+
+    if(res.rows.length === 0) return [];
+
+    return res.rows.map(r => ({
+      ...r,
+      suspention_start: r.suspention_start instanceof Date ? r.suspention_start.toISOString().split('T')[0] : String(r.suspention_start).split('T')[0],
+      suspention_end: r.suspention_end instanceof Date ? r.suspention_end.toISOString().split('T')[0] : String(r.suspention_end).split('T')[0],
     }));
   }
 }
