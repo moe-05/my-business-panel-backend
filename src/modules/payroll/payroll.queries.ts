@@ -30,7 +30,7 @@ export const payrollQueries = createQueries({
         c.contract_id,
         c.base_salary,
         c.hours,
-        e.schedule_id
+        e.payment_schedule_id
       FROM hr_schema.employee e
       INNER JOIN hr_schema.contract c USING(contract_id)
       WHERE e.tenant_id = $1 AND e.branch_id = $2 AND e.is_active = true
@@ -113,6 +113,6 @@ export const payrollQueries = createQueries({
       WHERE p.branch_id = $1
         AND p.period_start >= (CURRENT_DATE - INTERVAL '1 year')
       GROUP BY pd.employee_id;
-    `
+    `,
   },
 });

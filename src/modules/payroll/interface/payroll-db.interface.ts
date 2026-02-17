@@ -6,7 +6,7 @@ export interface EmployeePayrollData {
   base_salary: string;
   hours: number;
   turn_type: number;
-  schedule_id: number;
+  payment_schedule_id: number;
 }
 
 export interface PayrollConceptRow {
@@ -44,10 +44,10 @@ export interface Holidays {
 }
 
 export interface Incapacities {
-  employee_id: string,
-  type: string,
-  period_start: string,
-  period_end: string,
-  days_paying: number,
-  percentage_to_pay: number
+  employee_id: string;
+  type: string;
+  period_start: string;
+  period_end: string;
+  days_paying: number;
+  percentage_to_pay: number;
 }

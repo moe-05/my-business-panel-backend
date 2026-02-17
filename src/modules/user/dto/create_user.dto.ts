@@ -33,6 +33,10 @@ export class ContractDataDto {
   @IsNotEmpty()
   @IsNumber()
   turn_type!: number;
+
+  @IsNotEmpty()
+  @IsNumber()
+  turn_id!: number;
 }
 
 export class EmployeeInfoDto {
@@ -66,7 +70,7 @@ export class EmployeeInfoDto {
 
   @IsNotEmpty()
   @IsNumber()
-  schedule_id!: number;
+  payment_schedule_id!: number;
 
   @ValidateNested()
   @Type(() => ContractDataDto)

@@ -54,7 +54,7 @@ export class EmployeeService {
       doc_number,
       phone,
       email,
-      schedule_id,
+      payment_schedule_id,
       contractData,
     } = data;
 
@@ -73,7 +73,7 @@ export class EmployeeService {
       doc_number,
       phone,
       email,
-      schedule_id,
+      payment_schedule_id,
       branch_id,
     ]);
 
@@ -95,7 +95,7 @@ export class EmployeeService {
       doc_number,
       phone,
       email,
-      schedule_id,
+      payment_schedule_id,
     } = data;
 
     const newEmp = await this.db.query(queries.employee.create, [
@@ -106,7 +106,7 @@ export class EmployeeService {
       doc_number,
       phone,
       email,
-      schedule_id,
+      payment_schedule_id,
     ]);
 
     if (newEmp.rowCount === 0) return new CreateFullEmployeeError();
@@ -123,8 +123,14 @@ export class EmployeeService {
     ]);
     if (existingEmp.rows.length === 0) return new Error('Employee not found.');
 
-    const { first_name, last_name, doc_number, phone, email, schedule_id } =
-      data;
+    const {
+      first_name,
+      last_name,
+      doc_number,
+      phone,
+      email,
+      payment_schedule_id,
+    } = data;
 
     const updatedEmp = await this.db.query(queries.employee.update, [
       first_name,
@@ -132,7 +138,7 @@ export class EmployeeService {
       doc_number,
       phone,
       email,
-      schedule_id,
+      payment_schedule_id,
       employee_id,
     ]);
 
