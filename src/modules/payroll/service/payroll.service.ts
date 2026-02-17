@@ -40,6 +40,26 @@ export class PayrollService {
       periodEnd,
     );
 
+    const suspentions = await this.repo.getSuspentionInPeriod(
+      periodStart,
+      periodEnd,
+    );
+
+    console.log('suspention: ', suspentions);
+
+    const suspentionMap = new Map<
+      string,
+      { suspention_start: string; suspention_end: string }
+    >(
+      suspentions.map((s) => [
+        s.employee_id,
+        {
+          suspention_start: s.suspention_start,
+          suspention_end: s.suspention_end,
+        },
+      ]),
+    );
+
     const holidays = await this.repo.getHolidays();
 
     const employees = await this.repo.getEmployeeContractForPayroll(
@@ -55,9 +75,9 @@ export class PayrollService {
 
     const yearly = await this.repo.getYearlySalary(
       branchId,
-      periodStart,
-      periodEnd,
     );
+
+    console.log("Yearly: ", yearly);
 
     const historicalEarnings = await this.repo.getHistoricalEarnings(branchId);
 
@@ -65,7 +85,7 @@ export class PayrollService {
 
     hoursWorked.forEach((hw) => {
       const current = hoursMap.get(hw.employee_id) || [];
-      current.push({ total: hw.total_hours, work_date: hw.work_date });
+      current.push({ total: Number(hw.total_hours), work_date: hw.work_date });
       hoursMap.set(hw.employee_id, current);
     });
 
@@ -81,6 +101,18 @@ export class PayrollService {
       const empHours = hoursMap.get(emp.employee_id) || [];
       const empEarn = historicalEarningsMap.get(emp.employee_id) || 0;
       const empYearly = yearlyMap.get(emp.employee_id) || 0;
+      const empSuspentions = suspentionMap.get(emp.employee_id) || {
+        suspention_start: '',
+        suspention_end: '',
+      };
+
+      const susDiscount = this.calculateSuspentionDiscount(
+        empSuspentions.suspention_start,
+        empSuspentions.suspention_end,
+        periodStart,
+        periodEnd,
+        new Decimal(emp.base_salary),
+      );
 
       await this.calculateAndSavePayroll(
         emp,
@@ -92,10 +124,10 @@ export class PayrollService {
         empYearly,
         holidays,
         incapacities,
+        susDiscount,
       );
     }
 
-    console.log('All employee payrolls processed for paysheet:', paysheetId);
     return this.closePayroll(paysheetId, employees.length);
   }
 
@@ -109,38 +141,40 @@ export class PayrollService {
     yearlySalary: number,
     dates: string[],
     incapacities: Incapacities[],
+    discount: number | 0,
   ) {
-    // const incDates: string[] = []
-    // const incapacitiesDates = incapacities.map(i => {
-    //   incDates.push(i.period_start, i.period_end)
-    // })
-
     const incapacityInfo = incapacities.find(
       (i) => i.employee_id === emp.employee_id,
     );
     const time = this.getOvertimeHolidays(hours, dates, emp.turn_type, []);
 
-    console.log('Calculating payroll for employee:', emp.employee_id);
-    console.log('calculating income for base salary: ', emp.base_salary);
-    const incomeResult = this.engine.execute(emp.base_salary, incomeConcepts, {
-      standardHours: time.ordinaryHours,
-      holidaysHours: time.holidaysHours,
-      totalEarnings: earning50week,
-      yearlySalary,
-      turnType: emp.turn_type,
-      incapacityDays: incapacityInfo ? incapacityInfo.days_paying : 0,
-      incapacityPercentage: incapacityInfo
-        ? incapacityInfo.percentage_to_pay
-        : 0,
-      percentage: incapacityInfo ? incapacityInfo.percentage_to_pay : 0,
-    });
+    const salaryWithDiscount = new Decimal(emp.base_salary).minus(
+      new Decimal(discount),
+    );
+
+    console.log('calculating income for base salary: ', salaryWithDiscount);
+    const incomeResult = this.engine.execute(
+      salaryWithDiscount.toString(),
+      incomeConcepts,
+      {
+        standardHours: time.ordinaryHours,
+        holidaysHours: time.holidaysHours,
+        totalEarnings: earning50week,
+        yearlySalary,
+        turnType: emp.turn_type,
+        incapacityDays: incapacityInfo ? incapacityInfo.days_paying : 0,
+        incapacityPercentage: incapacityInfo
+          ? incapacityInfo.percentage_to_pay
+          : 0,
+        percentage: incapacityInfo ? incapacityInfo.percentage_to_pay : 0,
+      },
+    );
 
     console.log(
       'taxable gross after income calculation:',
       incomeResult.totals.taxableBase,
     );
     const currentGrossSalary = incomeResult.totals.taxableBase;
-    console.log('calculating deduction');
 
     const deductionResult = this.engine.execute(
       emp.base_salary,
@@ -207,10 +241,6 @@ export class PayrollService {
     });
 
     try {
-      console.log(
-        'Executing payroll transaction for employee:',
-        emp.employee_id,
-      );
       await this.db.transaction(sqlQueries, params, dependencies);
     } catch (error) {
       console.error('Error processing payroll transaction:', error);
@@ -221,18 +251,18 @@ export class PayrollService {
   }
 
   async createPaysheetHeader(data: CreatePaysheetDto) {
-    const exist = await this.db.query(queries.payroll.checkExistingPeriod, [
-      data.branchId,
-      data.tenantId,
-      data.periodStart,
-      data.periodEnd,
-    ]);
+    // const exist = await this.db.query(queries.payroll.checkExistingPeriod, [
+    //   data.branchId,
+    //   data.tenantId,
+    //   data.periodStart,
+    //   data.periodEnd,
+    // ]); 
 
-    if (exist.rows.length > 0) {
-      throw new Error(
-        'Paysheet for the specified period already exists for this branch and tenant.',
-      );
-    }
+    // if (exist.rows.length > 0) {
+    //   throw new Error(
+    //     'Paysheet for the specified period already exists for this branch and tenant.',
+    //   );
+    // }
 
     const newPaysheet = await this.db.query(queries.payroll.insertPaysheet, [
       data.tenantId,
@@ -282,6 +312,7 @@ export class PayrollService {
     turn: number,
     incapacities: string[],
   ) {
+    
     let holidaysHours = new Decimal(0);
     let ordinaryHours = new Decimal(0);
 
@@ -298,11 +329,7 @@ export class PayrollService {
       const formattedDate = new Date(date.work_date)
         .toISOString()
         .split('T')[0];
-      // const incapacitaded = incapacities.includes(formattedDate);
-      // if(incapacitaded) {
-      //   console.log('Date skipped due to incapacity:', formattedDate);
-      //   return;
-      // }
+
       const isHoliday = holidays.some((h) => h === formattedDate);
 
       const extraHours = Decimal.max(
@@ -325,5 +352,42 @@ export class PayrollService {
       holidaysHours,
       ordinaryHours,
     };
+  }
+
+  calculateSuspentionDiscount(
+    start: string,
+    end: string,
+    periodStart: string,
+    periodEnd: string,
+    base_salary: Decimal,
+  ) {
+    if (!start || !end || start === '' || end === '') return 0;
+
+    let discount = 0;
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    const periodStartDate = new Date(periodStart);
+    const periodEndDate = new Date(periodEnd);
+
+    const effectiveStart =
+      startDate > periodStartDate ? startDate : periodStartDate;
+    const effectiveEnd = endDate < periodEndDate ? endDate : periodEndDate;
+
+    const timeDiff = effectiveEnd.getTime() - effectiveStart.getTime();
+
+    const dayDiff = Math.max(Math.ceil(timeDiff / (1000 * 3600 * 24)) + 1, 0);
+    const dailySalary = base_salary.dividedBy(30);
+
+    discount = dailySalary.times(dayDiff).toNumber();
+    console.log('Suspention discount calculation: ', {
+      start,
+      end,
+      effectiveStart: effectiveStart.toISOString().split('T')[0],
+      effectiveEnd: effectiveEnd.toISOString().split('T')[0],
+      dayDiff,
+      dailySalary: dailySalary.toFixed(2),
+      discount: discount.toFixed(2),
+    });
+    return discount;
   }
 }
