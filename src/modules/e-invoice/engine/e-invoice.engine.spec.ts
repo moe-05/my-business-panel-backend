@@ -11,7 +11,8 @@ describe('EInvoiceEngine - Generation test', () => {
     engine = new XmlGeneratorEngine();
   });
 
-  it('should generate a valid XML', () => {
+  it('should generate a valid XML', async () => {
+    const start = performance.now();
     const mock: EInvoice = {
       clave: '50602011800310123556700100001010000000001100000001',
       codigoActividad: '722001',
@@ -87,25 +88,29 @@ describe('EInvoiceEngine - Generation test', () => {
       },
     };
 
-    const xml = engine['buildXml'](mock);
+    await engine.buildXml(mock);
+    const end = performance.now();
+    console.log(`XML generation took ${(end - start).toFixed(2)} ms`);
 
-    const templatesDir = path.join(
+    const filePath = path.join(
       process.cwd(),
       'src',
       'modules',
       'e-invoice',
       'templates',
+      `invoice_${mock.numeroConsecutivo}.xml`,
     );
 
-    if (!fs.existsSync(templatesDir)) {
-      fs.mkdirSync(templatesDir, { recursive: true });
-    }
-
-    const filePath = path.join(templatesDir, 'test_invoice.xml');
-
-    fs.writeFileSync(filePath, xml, 'utf-8');
+    // if (!fs.existsSync(filePath)) {
+    //   fs.mkdirSync(filePath, { recursive: true });
+    // }
 
     expect(fs.existsSync(filePath)).toBeTruthy();
+    const generatedXml = fs.readFileSync(filePath, 'utf-8');
+    expect(generatedXml).toContain(
+      '<Clave>50602011800310123556700100001010000000001100000001</Clave>',
+    );
+    expect(generatedXml).toContain('<Nombre>Empresa de Prueba S.A.</Nombre>');
 
     console.log('XML generated successfully at:', filePath);
   });
