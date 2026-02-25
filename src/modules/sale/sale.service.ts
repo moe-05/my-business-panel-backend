@@ -11,7 +11,7 @@ import { randomUUID } from 'crypto';
 import { BillService } from '../bill/bill.service';
 import { CustomerPaymentService } from '../customer_payment/customer_payment.service';
 import { SaleItemService } from '../sale-item/sale-item.service';
-import { SaleFromDb } from './interface/sale.interface';
+import { Condition, SaleFromDb } from './interface/sale.interface';
 import { WarehouseService } from '../warehouse/warehouse.service';
 
 @Injectable()
@@ -25,19 +25,25 @@ export class SaleService {
   ) {}
 
   async createSingleSale(data: NewSingleSaleDto) {
-    const res = await this.db.query(queries.sales.singleSale, [
+    const { rows } = await this.db.query(queries.sales.singleSale, [
       data.sale_id,
       data.branch_id,
+      data.tenant_customer_id,
+      data.sale_condition,
       data.sale_date,
       data.currency_id,
+      data.subtotal_amount,
+      data.tax_amount,
       data.total_amount,
       data.is_completed,
+      data.has_electronic_invoice,
     ]);
 
-    return res.rows[0].sale_id;
+    return rows[0].sale_id;
   }
 
   async createFullSale(data: FullSaleDto) {
+    //TODO: Cambiar esto a que utilize el metodo .transaction de la libreria e integrar la generacion de la factura
     await this.db.query('BEGIN');
     try {
       //Generacion de las uuid necesarias (factura y venta)
@@ -47,10 +53,15 @@ export class SaleService {
       const sale = await this.createSingleSale({
         sale_id: sale_uuid,
         branch_id: data.branch_id,
+        tenant_customer_id: data.tenant_customer_id,
+        sale_condition: data.sale_condition,
         sale_date: new Date(),
         currency_id: data.currency_id,
+        subtotal_amount: data.subtotal_amount,
+        tax_amount: data.tax_amount,
         total_amount: data.total_amount,
         is_completed: data.is_completed,
+        has_electronic_invoice: data.has_electronic_invoice,
       });
 
       //Se generan los pagos de la venta
@@ -85,7 +96,10 @@ export class SaleService {
 
       await this.db.query('COMMIT');
 
-      return { message: 'Full sale created successfully', billId: newBill.bill.bill_id };
+      return {
+        message: 'Full sale created successfully',
+        billId: newBill.bill.bill_id,
+      };
     } catch (error) {
       await this.db.query('ROLLBACK');
       throw new InternalServerErrorException('Failed to create full sale');
@@ -97,5 +111,11 @@ export class SaleService {
       branch_id,
     ]);
     return res.rows;
+  }
+
+  async getAllConditions(): Promise<Condition[]> {
+    const { rows } = await this.db.query(queries.sales.getConditions);
+
+    return rows;
   }
 }

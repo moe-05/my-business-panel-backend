@@ -9,9 +9,9 @@ export class DocumentTypeService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
   //Delete this when the database is implemented
 
-  async findAll(): Promise<DocumentType[]> {
-    const query = await this.db.query(queries.document_type.all);
-    return query.rows;
+  async getAll(): Promise<DocumentType[]> {
+    const { rows } = await this.db.query(queries.document_type.all);
+    return rows;
   }
 
   /**
@@ -19,15 +19,15 @@ export class DocumentTypeService {
    * @param id: string
    * @returns: DocumentType | undefined
    */
-  async findById(id: string): Promise<DocumentType> {
-    const document = await this.db.query(queries.document_type.byId, [id]);
-    return document.rows[0];
+  async getById(id: string): Promise<DocumentType> {
+    const { rows } = await this.db.query(queries.document_type.byId, [id]);
+    return rows[0];
   }
 
   async delete(id: string) {
-    const result = await this.db.query(queries.document_type.delete, [id]);
+    const { rows } = await this.db.query(queries.document_type.delete, [id]);
     return {
-      message: `Document type with ID ${result.rows[0].document_type_id} deleted successfully`,
+      message: `Document type with ID ${rows[0].document_type_id} deleted successfully`,
     };
   }
 }

@@ -24,6 +24,11 @@ export class SaleController {
     return this.saleService.getAllSalesByBranch(branch_id);
   }
 
+  @Get()
+  async getSaleConditions() {
+    return this.saleService.getAllConditions;
+  }
+
   @Post()
   async createFullSale(@Body() req: FullSaleDto) {
     return this.saleService.createFullSale(req);
