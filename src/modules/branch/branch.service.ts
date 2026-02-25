@@ -36,7 +36,7 @@ export class BranchService {
     user_tenant_id: string,
     createBranchDto: CreateBranchDto,
   ): Promise<Branch> {
-    const { tenant_id, branch_name, address, contact_email, is_main_branch } =
+    const { tenant_id, branch_name, branch_number, address, contact_email, is_main_branch } =
       createBranchDto;
 
     if (user_tenant_id !== tenant_id)
@@ -45,6 +45,7 @@ export class BranchService {
     const { rows } = await this.db.query(queries.branch.create, [
       tenant_id,
       branch_name,
+      branch_number,
       address || null,
       contact_email || null,
       is_main_branch,
@@ -62,7 +63,7 @@ export class BranchService {
     branch_id: string,
     updateBranchDto: UpdateBranchDto,
   ): Promise<Branch> {
-    const { branch_name, address, contact_email, is_main_branch } =
+    const { branch_name, branch_number, address, contact_email, is_main_branch } =
       updateBranchDto;
 
     await this.validateBranch(branch_id);
@@ -70,6 +71,7 @@ export class BranchService {
     const { rows } = await this.db.query(queries.branch.update, [
       branch_id,
       branch_name,
+      branch_number,
       address || null,
       contact_email || null,
       is_main_branch,

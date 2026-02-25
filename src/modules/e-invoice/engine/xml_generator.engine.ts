@@ -196,4 +196,8 @@ export class XmlGeneratorEngine {
       writableStream.on('error', rej);
     });
   }
+  //TODO: Crear metodos requeridos para la generacion de una factura que Hacienda pueda aceptar
+  //Firma de XML
+  //Generador de NumeroConsecutivo(20 digitos) y Clave (50 digitos)
+  //Generador de QR para Hacienda
 }

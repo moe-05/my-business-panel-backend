@@ -27,30 +27,30 @@ export class CustomerService {
    * @returns: Customer
    */
   async findCustomerByDocumentId(clientId: string): Promise<Customer> {
-    const customer = await this.db.query(queries.customer.getInfo, [clientId]);
+    const { rows } = await this.db.query(queries.customer.getInfo, [clientId]);
 
-    if (!customer || customer.rows.length === 0) {
+    if (!rows || rows.length === 0) {
       throw new NotFoundException('Customer not found');
     }
 
-    return customer.rows[0];
+    return rows[0];
   }
 
   async findCustomerById(customerId: string): Promise<Customer> {
-    const customer = await this.db.query(queries.customer.byId, [customerId]);
-    if (!customer || customer.rows.length === 0) {
+    const { rows } = await this.db.query(queries.customer.byId, [customerId]);
+    if (!rows || rows.length === 0) {
       throw new NotFoundException('Customer not found');
     }
 
-    return customer.rows[0];
+    return rows[0];
   }
 
   /**
    * @returns: Customer[]
    */
   async getAllCustomers(tenantId: string): Promise<Customer[]> {
-    const customers = await this.db.query(queries.customer.all, [tenantId]);
-    return customers.rows;
+    const { rows } = await this.db.query(queries.customer.all, [tenantId]);
+    return rows;
   }
 
   /**
@@ -65,6 +65,7 @@ export class CustomerService {
       last_name,
       document_type_id,
       document_number,
+      economic_activity,
       email,
       phone,
       birthdate,
@@ -72,12 +73,13 @@ export class CustomerService {
       is_tenant,
     } = customerData;
 
-    const newCustomer = await this.db.query(queries.customer.create, [
+    const { rows } = await this.db.query(queries.customer.create, [
       tenant_id,
       first_name,
       last_name,
       document_type_id,
       document_number,
+      economic_activity,
       email,
       phone,
       birthdate || null,
@@ -85,8 +87,8 @@ export class CustomerService {
       is_tenant || false,
     ]);
 
-    if (newCustomer.rows.length == 0) throw new ClientCreateError(email);
-    return { message: 'Customer created', customer: newCustomer.rows[0] };
+    if (rows.length == 0) throw new ClientCreateError(email);
+    return { message: 'Customer created', customer: rows[0] };
   }
 
   /**
