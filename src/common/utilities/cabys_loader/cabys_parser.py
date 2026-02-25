@@ -118,3 +118,30 @@ def save_tree_to_json(tree: Dict[str, CabysNode], output_file: str):
     
     print(f"Successfully saved JSON to {output_file}")
 
+def list_tax_rates(dataframe: DataFrame, tax_column_name: str = "impuesto") -> set[float]:
+    
+    tax_col = next((c for c in dataframe.columns if tax_column_name in c.lower()), None)
+    
+    if not tax_col:
+        raise ValueError(f"Error: Could not find a column with {tax_column_name} in the name.")
+
+    raw_values = dataframe[tax_col].dropna().unique()
+    
+    cleaned_taxes = set()
+    
+    for val in raw_values:
+        s = str(val).strip().lower()
+        if s in ('exento', 'nan', 'na', '', 'null'):
+            cleaned_taxes.add(0.0)
+        elif '%' in s:
+            try:
+                cleaned_taxes.add(float(s.replace('%', '')) / 100.0)
+            except ValueError:
+                pass
+        else:
+            try:
+                cleaned_taxes.add(float(s))
+            except ValueError:
+                pass
+    
+    return cleaned_taxes
