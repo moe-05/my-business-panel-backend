@@ -36,6 +36,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { TurnsModule } from '@/modules/turns/turns.module';
 import { FoulModule } from '@/modules/foul/foul.module';
 import { TardinessModule } from '@/modules/tardiness/tardiness.module';
+import { EInvoiceModule } from '@/modules/e-invoice/e-invoice.module';
 require('dotenv').config();
 
 console.log(
@@ -79,7 +80,8 @@ console.log(
     SuspentionModule,
     TurnsModule,
     FoulModule,
-    TardinessModule
+    TardinessModule,
+    EInvoiceModule
   ],
   controllers: [AppController],
   providers: [AppService],

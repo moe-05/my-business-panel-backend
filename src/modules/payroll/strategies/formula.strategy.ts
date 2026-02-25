@@ -86,8 +86,14 @@ export class ISRDeduction implements IPayrollStrategy {
   calculate(input: CalculatorInput): Decimal {
     console.log(input.context?.gross);
     const currentGross = input.context?.gross || new Decimal(0);
-    const gross = currentGross.mul(new Decimal(0.1083));
-    const val = currentGross.minus(gross);
+    let val: Decimal;
+
+    if (input.context?.has_ccss) {
+      const gross = currentGross.mul(new Decimal(0.1083));
+      val = currentGross.minus(gross);
+    } else {
+      val = currentGross;
+    } 
 
     const brackets = [
       { upTo: new Decimal(929000), taxApply: new Decimal(0) },
