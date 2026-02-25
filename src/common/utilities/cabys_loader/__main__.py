@@ -4,42 +4,89 @@ from typing import Dict, List, Optional
 import excel_handler
 import cabys_parser
 from cabys_parser import CabysNode
-from pprint import pprint
+from db import DatabaseClient
+from pprint import pprint, PrettyPrinter
 
 def main():
     parser = argparse.ArgumentParser(description="CABYS Loader")
     parser.add_argument("input_file", type=pathlib.Path, help="Path to the input file")
+    parser.add_argument("--conn-string", type=str, help="URL for database connection")
     parser.add_argument("--header", type=int, default=0, help="Row number to use as column names (default: 0)")
     parser.add_argument("--last-column", type=int, default=None, help="Last column to include in the data (optional)")
+    parser.add_argument("--reload-rates", action="store_true", help="Whether to reload tax rates into the database")
     args = parser.parse_args()
+
+    printer = PrettyPrinter(indent=3, compact=False, underscore_numbers=True)
 
     input_file: pathlib.Path = args.input_file
     header: int = args.header
     last_column: int = int(args.last_column)
+    conn_string: str = args.conn_string 
+
+    if not conn_string:
+        raise ValueError("Error: --conn-string must be provided for database connection.")
 
     if not input_file.exists():
-        print(f"Error: The file {input_file} does not exist.")
-        return
+        raise ValueError(f"Error: The file {input_file} does not exist.")
     
     dataframe = excel_handler.read_excel(input_file, header=header, last_column=last_column)
-    column_names = cabys_parser.categorize_columns(dataframe)
+    tax_rates = cabys_parser.list_tax_rates(dataframe)
+
+    supabase = DatabaseClient(conn_string)
+    supabase.connect()
+
+    if args.reload_rates:
+        print(f"Loading tax rates into the database: {tax_rates}")
+        supabase.load_tax_rates(list(tax_rates))
+        print("Tax rates loaded successfully.")
+
+    fetched_rates = supabase.get_tax_rates()
+    print(f"Fetched tax rates from database:")
+    printer.pprint(fetched_rates)
+
+    tree = cabys_parser.build_cabys_tree(dataframe)
+    # column_names = cabys_parser.categorize_columns(dataframe)
     
     # pprint(f"Categories Columns: {column_names.categories}")
     # print()
     # pprint(f"Descriptions Columns: {column_names.descriptions}")
 
-    tree = cabys_parser.build_cabys_tree(dataframe)
-    # cabys_parser.save_tree_to_json(tree, "cabys_tree.json")
-    move_inside_tree(tree)
+    # print(f"Fetched tax rates:")
 
-def move_inside_tree(tree: Dict[str, CabysNode]) -> Optional[CabysNode]:
+
+    move_inside_tree(tree, supabase)
+
+    supabase.permanent_connection.commit()
+    print(f"Finished loading CABYS data into the database.")
+    supabase.disconnect()
+    # cabys_parser.save_tree_to_json(tree, "cabys_tree.json")
+
+
+global loaded_nodes
+loaded_nodes = 0    
+
+def move_inside_tree(tree: Dict[str, CabysNode], client: DatabaseClient) -> Optional[CabysNode]:
     def _walk(node: CabysNode, parent_code: Optional[str] = None):
+        global loaded_nodes
         if node is None:
             return
+        
         if node.data.tax_rate is not None:
-            load_product(node)
+            loaded_nodes += 1
+            client.insert_product(
+                code=node.data.code,
+                description=node.data.description,
+                tax_rate=node.data.tax_rate,
+                category_code=parent_code
+            )
+
         else:
-            load_category(node)
+            client.insert_category(
+                code=node.data.code,
+                description=node.data.description,
+                hierarchy_level=0,  # You can calculate this based on the depth in the tree
+                parent_code=parent_code
+            )
 
         children = getattr(node, "children", None)
         if not children:
@@ -56,11 +103,6 @@ def move_inside_tree(tree: Dict[str, CabysNode]) -> Optional[CabysNode]:
     return None
 
 
-def load_product(node: CabysNode):
-    print(f"Loading product: {node.data.code} - {node.data.description} (Tax: {node.data.tax_rate})")
-
-def load_category(node: CabysNode):
-    return
     # print(f"Loading category: {node.data.code} - {node.data.description}")
 
 if __name__ == "__main__":
