@@ -4,7 +4,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
-import Database from '@crane-technologies/database';
+import Database, { Dependency } from '@crane-technologies/database';
 import { FullSaleDto, NewSingleSaleDto } from './dto/sales.dto';
 import { queries } from '@/queries';
 import { randomUUID } from 'crypto';
@@ -13,6 +13,8 @@ import { CustomerPaymentService } from '../customer_payment/customer_payment.ser
 import { SaleItemService } from '../sale-item/sale-item.service';
 import { Condition, SaleFromDb } from './interface/sale.interface';
 import { WarehouseService } from '../warehouse/warehouse.service';
+import { XmlGeneratorEngine } from '../e-invoice/engine/xml_generator.engine';
+import { SaleCreationError } from '@/common/errors/sale_creation.error';
 
 @Injectable()
 export class SaleService {
@@ -22,6 +24,7 @@ export class SaleService {
     private readonly customerPaymentService: CustomerPaymentService,
     private readonly billService: BillService,
     private readonly warehouseService: WarehouseService,
+    private readonly xmlgen: XmlGeneratorEngine,
   ) {}
 
   async createSingleSale(data: NewSingleSaleDto) {
@@ -43,66 +46,79 @@ export class SaleService {
   }
 
   async createFullSale(data: FullSaleDto) {
-    //TODO: Cambiar esto a que utilize el metodo .transaction de la libreria e integrar la generacion de la factura
-    await this.db.query('BEGIN');
+
+    //TODO: Revision de esquema de items + metodos de verificacion de montos
     try {
-      //Generacion de las uuid necesarias (factura y venta)
-      const sale_uuid = randomUUID();
+      const { items, payments } = data;
 
-      //Primero se genera la venta para que los items y los pagos puedan referenciarla
-      const sale = await this.createSingleSale({
-        sale_id: sale_uuid,
-        branch_id: data.branch_id,
-        tenant_customer_id: data.tenant_customer_id,
-        sale_condition: data.sale_condition,
-        sale_date: new Date(),
-        currency_id: data.currency_id,
-        subtotal_amount: data.subtotal_amount,
-        tax_amount: data.tax_amount,
-        total_amount: data.total_amount,
-        is_completed: data.is_completed,
-        has_electronic_invoice: data.has_electronic_invoice,
-      });
+      const { rows } = await this.db.query(queries.sales.singleSale, [
+        data.branch_id,
+        data.tenant_customer_id,
+        data.sale_condition,
+        data.sale_date,
+        data.currency_id,
+        data.subtotal_amount,
+        data.tax_amount,
+        data.total_amount,
+        data.is_completed,
+        data.has_electronic_invoice,
+      ]);
 
-      //Se generan los pagos de la venta
-      await this.customerPaymentService.bulkInsert(data.payments, sale);
+      const saleId = rows[0].sale_id;
 
-      //Se guardan los productos de la venta en bd
-      await this.saleItemService.bulkInsert(data.items, sale);
+      await this.db.bulkInsert(
+        'sale_item',
+        [
+          'sale_id',
+          'tenant_id',
+          'product_variant_id',
+          'quantity',
+          'unit_price',
+          'total_price',
+        ],
+        items.map((item) => [
+          saleId,
+          item.tenant_id,
+          item.product_variant_id,
+          item.quantity,
+          item.unit_price,
+          item.total_price,
+        ]),
+      );
 
-      // TODO: Se reduce el stock de los productos en los almacenes correspondientes
-      // const warehouse = await this.warehouseService.getWarehousesByTenant(data.tenant_id);
+      await this.db.bulkInsert(
+        'customer_payment',
+        [
+          'tenant_customer_id',
+          'sale_id',
+          'payment_method_id',
+          'is_points_redemption',
+          'points_redeemed',
+          'points_to_currency_rate',
+          'payment_amount',
+          'payment_date',
+          'currency_id',
+          'verified',
+        ],
+        payments.map((p) => [
+          p.tenant_customer_id,
+          saleId,
+          p.payment_method_id,
+          p.is_points_redemption,
+          p.points_redeemed,
+          p.points_to_currency_rate,
+          p.payment_amount,
+          p.payment_date,
+          p.currency_id,
+          p.verified,
+        ]),
+      );
 
-      // for (const item of data.items) {
-      //   await this.warehouseService.removeStockFromProduct(
-      //     item.warehouse_id,
-      //     item.product_id,
-      //     data.tenant_id,
-      //     item.quantity,
-      //   );
-      // }
-
-      //Se genera la factura y la devolvemos al frontend
-      const newBill = await this.billService.createBill({
-        tenant_customer_id: data.tenant_customer_id,
-        currency_id: data.currency_id,
-        subtotal_amount: data.subtotal_amount,
-        tax_amount: data.tax_amount,
-        total_amount: data.total_amount,
-        billed_at: new Date(),
-        updated_at: new Date(),
-        sale_id: sale,
-      });
-
-      await this.db.query('COMMIT');
-
-      return {
-        message: 'Full sale created successfully',
-        billId: newBill.bill.bill_id,
-      };
+      if(data.has_electronic_invoice) {
+        //Call the generator here
+      }
     } catch (error) {
-      await this.db.query('ROLLBACK');
-      throw new InternalServerErrorException('Failed to create full sale');
+      throw new SaleCreationError();
     }
   }
 

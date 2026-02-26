@@ -64,7 +64,7 @@ export class XmlGeneratorEngine {
     ubicacion.ele('OtrasSenas').txt(content.emisor.ubicacion.otrasSenas).up();
     ubicacion.up();
     emisor.ele('CorreoElectronico').txt(content.emisor.correoElectronico).up();
-    emisor.up(); 
+    emisor.up();
 
     if (content.receptor) {
       const receptor = xml.ele('Receptor');
@@ -118,7 +118,7 @@ export class XmlGeneratorEngine {
       }
 
       linea.ele('MontoTotalLinea').txt(line.montoTotalLinea.toFixed(5)).up();
-      linea.up(); 
+      linea.up();
     }
     detalleNode.up();
 
@@ -195,9 +195,52 @@ export class XmlGeneratorEngine {
       writableStream.on('finish', res);
       writableStream.on('error', rej);
     });
+
+    //Convertir XML a BASE64
   }
   //TODO: Crear metodos requeridos para la generacion de una factura que Hacienda pueda aceptar
   //Firma de XML
-  //Generador de NumeroConsecutivo(20 digitos) y Clave (50 digitos)
+
+  //Generador de NumeroConsecutivo(20 digitos)
+  // 01 = "Factura Electronica", 04 = "Tiquet"
+  generateConsecutive(
+    docType: '01' | '04',
+    terminal: number,
+    pos: number,
+    num: number, //Numero del comprobante
+  ): string {
+    const pv = pos.toString().padStart(5, '0');
+    const term = terminal.toString().padStart(3, '0');
+    const n = num.toString().padStart(10, '0');
+
+    return `${term}${pv}${docType}${n}`;
+  }
+
+  //Generador de Clave (50 digitos)
+  generateClave(
+    issuerId: string,
+    consecutive: string,
+    situation: '1' | '2' | '3' = '1',
+  ): string {
+    const now = new Date();
+    const day = now.getDate().toString().padStart(2, '0');
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    let year = now.getFullYear().toString().substring(2);
+
+    const id = issuerId.replace(/-/g, '').padStart(12, '0');
+    const randomSecure = Math.floor(Math.random() * 99999999)
+      .toString()
+      .padStart(8, '0');
+
+    const key = `506${day}${month}${year}${id}${consecutive}${situation}${randomSecure}`;
+
+    if (key.length !== 50) {
+      throw new Error(`Error generating key: wrong length (${key.length})`);
+    }
+
+    return key;
+  }
   //Generador de QR para Hacienda
+  
+  //Calculo de Resumen de Factura
 }
