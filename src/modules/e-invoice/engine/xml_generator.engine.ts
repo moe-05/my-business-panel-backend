@@ -4,40 +4,27 @@ import { EInvoice } from '../interface/e-invoice.interface';
 import { create, createCB } from 'xmlbuilder2';
 import * as fs from 'fs';
 import * as path from 'path';
+import encodeQR from 'qr';
 
 @Injectable()
 export class XmlGeneratorEngine {
   //Refinar el dto para asegurar que se tenga toda la información necesaria para generar la factura electrónica.
   generate(data: CreateInvoiceDto) {}
 
-  async buildXml(content: EInvoice): Promise<void> {
-    const template = path.join(
-      process.cwd(),
-      'src',
-      'modules',
-      'e-invoice',
-      'templates',
-    );
-    const fileName = `invoice_${content.numeroConsecutivo}.xml`;
-    if (!fs.existsSync(template)) {
-      fs.mkdirSync(template, { recursive: true });
-    }
+  async buildXml(content: EInvoice): Promise<String> {
 
-    const writableStream = fs.createWriteStream(path.join(template, fileName));
-
-    const xml = createCB({
-      data: (chunk: any) => writableStream.write(chunk),
-      end: () => writableStream.end(),
-    });
-
-    xml
-      .ele('FacturaElectronica', {
+    const xml = create({ version: '1.0', encoding: 'utf-8' }).ele(
+      'FacturaElectronica',
+      {
         xmlns:
           'https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/facturaElectronica',
         'xmlns:ds': 'http://www.w3.org/2000/09/xmldsig#',
         'xmlns:xs': 'http://www.w3.org/2001/XMLSchema',
         version: '4.4',
-      })
+      },
+    );
+
+    xml
       .ele('Clave')
       .txt(content.clave)
       .up()
@@ -90,8 +77,10 @@ export class XmlGeneratorEngine {
       linea.ele('NumeroLinea').txt(line.numeroLinea.toString()).up();
       if (line.partidaArancelaria)
         linea.ele('PartidaArancelaria').txt(line.partidaArancelaria).up();
-      if (line.codigo) linea.ele('Codigo').txt(line.codigo).up();
-      linea.ele('Cantidad').txt(line.cantidad.toFixed(3)).up();
+
+      linea.ele('CodigoCABYS').txt(line.codigo).up();
+
+      linea.ele('Cantidad').txt(line.cantidad.toFixed(5)).up();
       linea.ele('UnidadMedida').txt(line.unidadMedida).up();
       linea.ele('Detalle').txt(line.detalle).up();
       linea.ele('PrecioUnitario').txt(line.precioUnitario.toFixed(5)).up();
@@ -118,9 +107,9 @@ export class XmlGeneratorEngine {
       }
 
       linea.ele('MontoTotalLinea').txt(line.montoTotalLinea.toFixed(5)).up();
-      linea.up();
+      linea.up(); 
     }
-    detalleNode.up();
+    detalleNode.up(); 
 
     const res = xml.ele('ResumenFactura');
     const mon = res.ele('CodigoTipoMoneda');
@@ -134,72 +123,71 @@ export class XmlGeneratorEngine {
     res
       .ele('TotalServGravados')
       .txt(content.resumenFactura.totalServGravados.toFixed(5))
-      .up();
-    res
+      .up()
       .ele('TotalServExentos')
       .txt(content.resumenFactura.totalServExentos.toFixed(5))
-      .up();
-    res
+      .up()
       .ele('TotalServExonerados')
       .txt(content.resumenFactura.totalServExonerados.toFixed(5))
-      .up();
-    res
+      .up()
       .ele('TotalMercanciasGravadas')
       .txt(content.resumenFactura.totalMercanciasGravadas.toFixed(5))
-      .up();
-    res
+      .up()
       .ele('TotalMercanciasExentas')
       .txt(content.resumenFactura.totalMercanciasExentas.toFixed(5))
-      .up();
-    res
+      .up()
       .ele('TotalMercanciasExoneradas')
       .txt(content.resumenFactura.totalMercanciasExoneradas.toFixed(5))
-      .up();
-    res
+      .up()
       .ele('TotalGravados')
       .txt(content.resumenFactura.totalGravados.toFixed(5))
-      .up();
-    res
+      .up()
       .ele('TotalExentos')
       .txt(content.resumenFactura.totalExentos.toFixed(5))
-      .up();
-    res
+      .up()
       .ele('TotalExonerados')
       .txt(content.resumenFactura.totalExonerados.toFixed(5))
-      .up();
-    res
+      .up()
       .ele('TotalVenta')
       .txt(content.resumenFactura.totalVenta.toFixed(5))
-      .up();
-    res
+      .up()
       .ele('TotalDescuentos')
       .txt(content.resumenFactura.totalDescuentos.toFixed(5))
-      .up();
-    res
+      .up()
       .ele('TotalVentaNeta')
       .txt(content.resumenFactura.totalVentaNeta.toFixed(5))
-      .up();
-    res
+      .up()
       .ele('TotalImpuesto')
       .txt(content.resumenFactura.totalImpuestos.toFixed(5))
-      .up();
-    res
+      .up()
       .ele('TotalComprobante')
       .txt(content.resumenFactura.totalComprobante.toFixed(5))
       .up();
     res.up();
 
-    xml.end();
+    const xmlString = xml.end({ prettyPrint: true });
 
-    return new Promise((res, rej) => {
-      writableStream.on('finish', res);
-      writableStream.on('error', rej);
-    });
+    //Esto genera el archivo xml para auditoria y verificacion de que se cree correctamente
+    const templateDir = path.join(
+      process.cwd(),
+      'src',
+      'modules',
+      'e-invoice',
+      'templates',
+    );
+    if (!fs.existsSync(templateDir))
+      fs.mkdirSync(templateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(templateDir, `invoice_${content.numeroConsecutivo}.xml`),
+      xmlString,
+    );
 
-    //Convertir XML a BASE64
+    //XML formateado a Base64 ==> EL FORMATEO SE DEBE HACER DESPUES DE FIRMAR EL XML
+    return Buffer.from(xmlString).toString('base64');
   }
   //TODO: Crear metodos requeridos para la generacion de una factura que Hacienda pueda aceptar
-  //Firma de XML
+  //Firma de XM -> Investigar sobre la firma XAdES-EPES, y que compone la firma del xml
+  signXML() {}
 
   //Generador de NumeroConsecutivo(20 digitos)
   // 01 = "Factura Electronica", 04 = "Tiquet"
@@ -221,7 +209,7 @@ export class XmlGeneratorEngine {
     issuerId: string,
     consecutive: string,
     situation: '1' | '2' | '3' = '1',
-  ): string {
+  ) {
     const now = new Date();
     const day = now.getDate().toString().padStart(2, '0');
     const month = (now.getMonth() + 1).toString().padStart(2, '0');
@@ -238,9 +226,11 @@ export class XmlGeneratorEngine {
       throw new Error(`Error generating key: wrong length (${key.length})`);
     }
 
-    return key;
+    const qr = encodeQR(key, 'ascii');
+
+    return { key, qr };
   }
   //Generador de QR para Hacienda
-  
+
   //Calculo de Resumen de Factura
 }
