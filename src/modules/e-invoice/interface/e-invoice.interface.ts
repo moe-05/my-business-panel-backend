@@ -48,7 +48,7 @@ export interface IReceptor {
 export interface IDetailLine {
   numeroLinea: number;
   partidaArancelaria?: string;
-  codigo?: string;
+  codigo: string;
   cantidad: Decimal;
   unidadMedida: string;
   detalle: string;

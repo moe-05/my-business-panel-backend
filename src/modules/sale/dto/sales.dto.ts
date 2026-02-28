@@ -80,6 +80,11 @@ export class FullSaleDto {
   sale_condition!: string;
 
   @IsNotEmpty()
+  @Type(() => Date)
+  @IsString()
+  sale_date!: string
+
+  @IsNotEmpty()
   @IsNumber()
   total_amount!: number;
 
