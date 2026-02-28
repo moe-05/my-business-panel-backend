@@ -4,31 +4,43 @@ import Database from '@crane-technologies/database';
 import { queries } from '@/queries';
 import { NewTenantDto } from './dto/newTenant.dto';
 import { UpdateTenantDto } from './dto/updateTenant.dto';
+import { Tenant } from './interface/tenant.interface';
 
 @Injectable()
 export class TenantService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
-  async getAllTenants() {
-    const tenants = await this.db.query(queries.tenant.all);
-    return tenants.rows;
+  async getAllTenants(): Promise<Tenant[]> {
+    const { rows } = await this.db.query(queries.tenant.all);
+    return rows;
   }
 
-  async getTenantById(tenantId: string) {
-    const tenant = await this.db.query(queries.tenant.byId, [tenantId]);
-    return tenant.rows[0];
+  async getTenantById(tenantId: string): Promise<Tenant> {
+    const { rows } = await this.db.query(queries.tenant.byId, [tenantId]);
+    return rows[0];
   }
 
   async createTenant(tenantInfo: NewTenantDto) {
-    const { tenant_name, contact_email, is_subscribed, region_id } = tenantInfo;
-
-    const newTenant = await this.db.query(queries.tenant.create, [
+    const {
       tenant_name,
       contact_email,
       is_subscribed,
       region_id,
+      economic_activity,
+      sign,
+      identification,
+    } = tenantInfo;
+
+    const { rows } = await this.db.query(queries.tenant.create, [
+      tenant_name,
+      contact_email,
+      identification,
+      economic_activity,
+      sign,
+      is_subscribed,
+      region_id,
     ]);
-    return newTenant.rows[0];
+    return rows[0];
   }
 
   async updateTenant(tenantId: string, tenantData: UpdateTenantDto) {

@@ -23,6 +23,10 @@ export class CreateBranchDto {
   @IsString()
   contact_email?: string;
 
+  @IsNotEmpty()
+  @IsString()
+  branch_number!: string;
+
   @IsOptional()
   @IsBoolean()
   is_main_branch: boolean = true;

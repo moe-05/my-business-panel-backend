@@ -33,7 +33,9 @@ export const queries = createQueries({
         end_date = COALESCE($2, end_date),
         hours = COALESCE($3, hours),
         base_salary = COALESCE($4, base_salary),
-        duties = COALESCE($5, duties)
+        duties = COALESCE($5, duties),
+        turn_type = COALESCE($6, turn_type),
+        turn_id = COALESCE($7, turn_id)
       WHERE contract_id = $6
       RETURNING contract_id
     `,
@@ -52,15 +54,15 @@ export const queries = createQueries({
     all: 'SELECT * FROM general_schema.tenant_customer WHERE tenant_id = $1',
     byId: 'SELECT * FROM general_schema.tenant_customer WHERE tenant_customer_id = $1',
     getInfo: `
-      SELECT tc.first_name, tc.last_name, d.type_name, tc.document_number, t.tenant_name, c.segment_name FROM general_schema.tenant_customer tc
+      SELECT tc.first_name, tc.last_name, d.type_name, tc.document_number, tc.econ_activity, t.tenant_name, c.segment_name FROM general_schema.tenant_customer tc
       INNER JOIN general_schema.tenant t USING(tenant_id)
       INNER JOIN general_schema.customer_segment c USING(customer_segment_id)
       INNER JOIN general_schema.document_type d USING(document_type_id)
       WHERE tc.document_number = $1
     `,
     create: `
-      INSERT INTO general_schema.tenant_customer (tenant_id, first_name, last_name, document_type_id, document_number, email, phone, birthdate, address, created_at, updated_at, is_tenant)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW(), $10)
+      INSERT INTO general_schema.tenant_customer (tenant_id, first_name, last_name, document_type_id, document_number, econ_activity, email, phone, birthdate, address, created_at, updated_at, is_tenant)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 10$, NOW(), NOW(), $11)
       RETURNING *
     `,
     byEmail: 'SELECT * FROM general_schema.tenant_customer WHERE email = $1',
@@ -71,8 +73,8 @@ export const queries = createQueries({
     all: 'SELECT * FROM general_schema.tenant',
     byId: 'SELECT * FROM general_schema.tenant WHERE tenant_id = $1',
     create: `
-      INSERT INTO general_schema.tenant (tenant_name, contact_email, is_subscribed, created_at, updated_at, region_id)
-      VALUES ($1, $2, $3, NOW(), NOW(), $4)
+      INSERT INTO general_schema.tenant (tenant_name, contact_email, identification, econ_activity, sign, is_subscribed, created_at, updated_at, region_id)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), $7)
       RETURNING *
     `,
     delete: 'DELETE FROM general_schema.tenant WHERE tenant_id = $1',
@@ -165,8 +167,8 @@ export const queries = createQueries({
   },
   sales: {
     singleSale: `
-      INSERT INTO pos_schema.sale (sale_id, branch_id, sale_date, currency_id, total_amount, is_completed)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO pos_schema.sale ( branch_id, tenant_customer_id, sale_condition, sale_date, currency_id, subtotal_amount, tax_amount, total_amount, is_completed, has_electronic_invoice)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING sale_id
     `,
     getSalesByBranch: `
@@ -174,6 +176,15 @@ export const queries = createQueries({
       INNER JOIN general_schema.branch b USING(branch_id)
       INNER JOIN general_schema.currency c USING(currency_id)
       WHERE s.branch_id = $1
+    `,
+    getSaleInfo: `
+      SELECT * FROM pos_schema.sale s
+      INNER JOIN general_schema.branch b USING(branch_id)
+      INNER JOIN general_schema.currency c USING(currency_id)
+      INNER JOIN general_schema.tenant_customer t USING(tenant_customer_id)
+    `, //Pongan aqui cualquier info que requieran de la venta
+    getConditions: `
+      SELECT * FROM pos_schema.sale_condition
     `,
   },
   items: {
@@ -251,6 +262,7 @@ export const queries = createQueries({
     update: `
       UPDATE general_schema.branch SET 
         branch_name = COALESCE($2, branch_name),
+        branch_number = COALESCE($3, branch_number),
         address = COALESCE($3, address),
         contact_email = COALESCE($4, contact_email),
         is_main_branch = COALESCE($5, is_main_branch),
@@ -259,8 +271,8 @@ export const queries = createQueries({
       RETURNING *
     `,
     create: `
-      INSERT INTO general_schema.branch (tenant_id, branch_name, branch_address, contact_email, is_main_branch, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+      INSERT INTO general_schema.branch (tenant_id, branch_name, branch_number, address, contact_email, is_main_branch, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
       RETURNING *
     `,
     delete: `DELETE FROM general_schema.branch WHERE branch_id = $1 RETURNING *`,
@@ -840,6 +852,24 @@ export const queries = createQueries({
     getCountByPeriod: `
       SELECT COUNT(*) AS total FROM hr_schema.tardiness
       WHERE registered_at >= $1 AND registered_at <= $2 AND branch_id = $3
+    `,
+  },
+  eInvoice: {
+    create: '',
+    getInvoicesByBranch: `
+      SELECT * FROM pos_schema.electronic_sale_invoice e
+      INNER JOIN pos_schema.sale s USING(sale_id)
+      WHERE s.branch_id = $1;
+    `,
+    getInvoiceForSale: `
+      SELECT * FROM pos_schema.electronic_sale_invoice e
+      INNER JOIN pos_schema.sale s USING(sale_id)
+      WHERE e.sale_id = $1;
+    `,
+    getInvoiceById: `
+      SELECT * FROM pos_schema.electronic_sale_invoice e
+      INNER JOIN pos_schema.sale s USING(sale_id)
+      WHERE e.electronic_sale_invoice_id = $1; 
     `,
   },
 });
