@@ -12,10 +12,41 @@ export class PurchaseService {
     private readonly state: StateService,
   ) {}
 
-  async createPurchaseOrder(createPurchaseDto: CreatePurchaseDto) {
-    return 'This action adds a new purchase';
+  //TODO: esta funcion debe llamar a la base de datos para crear una orden de compra.
+  async createPurchaseOrder(param: CreatePurchaseDto) {
+    try {
+      // 1. desestructuramos el DTO para obtener los datos necesarios para crear la orden de compra
+      const {
+        supplier_id,
+        warehouse_id,
+        expected_delivery_date,
+        items,
+        has_invoice,
+        payment_condition,
+      } = param;
+
+      // 2. insercion de la orden de compra en la base de datos
+      const result = await this.db.query(
+        'SELECT create_purchase_order($1, $2, $3, $4, $5, $6)',
+        [
+          supplier_id,
+          warehouse_id,
+          expected_delivery_date,
+          items,
+          has_invoice,
+          payment_condition,
+        ],
+      );
+
+      //3. retornamos el resultado de la consulta
+      return result.rows[0];
+    } catch (error) {
+      console.error('Error creating purchase order:', error);
+      throw new Error('Failed to create purchase order');
+    }
   }
 
+  //TODO: tras haber recibido la mercancia y pagado la totalidad de la factura, se debe ejecutar esta funci
   async threeWayMatching(createPurchaseDto: CreatePurchaseDto) {
     return 'This action performs three-way matching for a purchase';
   }

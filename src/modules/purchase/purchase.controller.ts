@@ -7,17 +7,17 @@ import { UpdatePurchaseDto } from './dto/update-purchase.dto';
 export class PurchaseController {
   constructor(private readonly purchaseService: PurchaseService) {}
 
-  @Post()
+  @Post() // POST /purchase
   createPurchaseOrder(@Body() createPurchaseDto: CreatePurchaseDto) {
     return this.purchaseService.createPurchaseOrder(createPurchaseDto);
   }
 
-  @Post()
+  @Post('twm') // POST /purchase/twm
   threeWayMatching(@Body() createPurchaseDto: CreatePurchaseDto) {
     return this.purchaseService.threeWayMatching(createPurchaseDto);
   }
 
-  @Get()
+  @Get() // GET /purchase
   getAllPurchaseOrders() {
     return this.purchaseService.getAllPurchaseOrders();
   }
