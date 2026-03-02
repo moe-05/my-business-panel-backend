@@ -68,8 +68,15 @@ export class UserService {
 
     const userId = newUser.rows[0].user_id;
 
-    const { base_salary, hours, start_date, end_date, duties } =
-      employeeInfo.contractData;
+    const {
+      base_salary,
+      hours,
+      start_date,
+      end_date,
+      duties,
+      turn_type,
+      turn_id,
+    } = employeeInfo.contractData;
 
     const newEmployee = await this.db.query(queries.employee.full, [
       start_date,
@@ -77,15 +84,17 @@ export class UserService {
       hours,
       base_salary,
       duties,
+      turn_type,
+      turn_id,
       userId,
       employeeInfo.tenant_id,
-      employeeInfo.branch_id,
       employeeInfo.first_name,
       employeeInfo.last_name,
       employeeInfo.doc_number,
       employeeInfo.phone,
       employeeInfo.email,
-      employeeInfo.schedule_id,
+      employeeInfo.payment_schedule_id,
+      employeeInfo.branch_id,
     ]);
 
     if (newEmployee.rows.length === 0) {
@@ -95,13 +104,11 @@ export class UserService {
     return { message: 'user created successfully!' };
   }
 
-  // ! Marlon: esta funcion, createUsersBulk, está muerta. al enviar la request se devuelve a postman error 400 bad request. no se ve ningun detalle del error en consola. ni siquiera se muestra el console.log del controlador de user.
-  async createUsersBulk(createUserDtos: CreateUserDto[]) {
+  async createUsersBulk(createUserDto: CreateUserDto[]) {
     try {
       const saltRounds = this.state.getConstant<number>('PASSWORD_SALT_ROUNDS');
 
-      console.log('Entre al primer mapa');
-      const rows = createUserDtos.map((dto) => {
+      const rows = createUserDto.map((dto) => {
         const validTenant =
           isUUID(dto.tenant_id) && this.state.getTenant(dto.tenant_id);
         if (!validTenant) throw new InvalidTenantError(dto.tenant_id);
@@ -111,28 +118,26 @@ export class UserService {
         return [dto.tenant_id, dto.email, password_hash, dto.role_id];
       });
 
-      console.log('Bulk Insert para Users: ', rows);
-      await this.db.bulkInsert(
+      const userResult = await this.db.bulkInsert(
         'general_schema.users',
         ['tenant_id', 'email', 'password_hash', 'role_id'],
         rows,
-        { header: false },
+        { header: false, returnFields: ['user_id', 'email'] },
       );
 
-      const emails = createUserDtos.map((dto) => dto.email);
+      // ✅ Mapear por índice en lugar de email
+      const userIds = (userResult.fields || []).map((row: any) => row.user_id);
 
-      const insertedUsers = await this.db.query(queries.user.getByEmails, [
-        emails,
-      ]);
-
-      const userIdMap = new Map(
-        insertedUsers.rows.map((row: any) => [row.email, row.user_id]),
-      );
-
-      const contractRows = createUserDtos.map((dto) => {
-        const userId = userIdMap.get(dto.email);
-        const { start_date, end_date, hours, base_salary, duties } =
-          dto.employeeInfo.contractData;
+      const contractRows = createUserDto.map((dto) => {
+        const {
+          start_date,
+          end_date,
+          hours,
+          base_salary,
+          duties,
+          turn_type,
+          turn_id,
+        } = dto.employeeInfo.contractData;
         return [
           dto.tenant_id,
           start_date,
@@ -140,12 +145,12 @@ export class UserService {
           hours,
           base_salary,
           duties,
+          turn_type,
+          turn_id,
         ];
       });
 
-      console.log('Contract rows for bulk insert:', contractRows);
-
-      const contractIds = await this.db.bulkInsert(
+      const contractResult = await this.db.bulkInsert(
         'hr_schema.contract',
         [
           'tenant_id',
@@ -154,20 +159,30 @@ export class UserService {
           'hours',
           'base_salary',
           'duties',
+          'turn_type',
+          'turn_id',
         ],
         contractRows,
-        // { header: false, returningFields: ['contract_id'] }
+        { header: false, returnFields: ['contract_id'] },
       );
 
-    
-
-      const contractIdMap = new Map(
-        // contractIds.map((row: any) => [row.user_id, row.contract_id]),
+      const contractIds = (contractResult.fields || []).map(
+        (row: any) => row.contract_id,
       );
 
-      const employeeRows = createUserDtos.map((dto) => {
-        const userId = userIdMap.get(dto.email);
-        const contractId = contractIdMap.get(userId);
+      const employeeRows = createUserDto.map((dto, index) => {
+        const userId = userIds[index];
+        const contractId = contractIds[index];
+
+        if (!userId) {
+          throw new Error(
+            `User ID not found for index: ${index} (email: ${dto.email})`,
+          );
+        }
+        if (!contractId) {
+          throw new Error(`Contract ID not found for index: ${index}`);
+        }
+
         const {
           tenant_id,
           branch_id,
@@ -176,7 +191,7 @@ export class UserService {
           doc_number,
           phone,
           email,
-          schedule_id,
+          payment_schedule_id,
         } = dto.employeeInfo;
         return [
           userId,
@@ -187,12 +202,11 @@ export class UserService {
           doc_number,
           phone,
           email,
-          schedule_id,
+          payment_schedule_id,
           contractId,
         ];
       });
 
-      console.log('Employee rows for bulk insert:', employeeRows);
       await this.db.bulkInsert(
         'hr_schema.employee',
         [
@@ -204,7 +218,7 @@ export class UserService {
           'doc_number',
           'phone',
           'email',
-          'schedule_id',
+          'payment_schedule_id',
           'contract_id',
         ],
         employeeRows,
@@ -214,7 +228,7 @@ export class UserService {
       return {
         message: 'users created successfully!',
         count: rows.length,
-        users: insertedUsers.rows.map((row: any) => ({
+        users: (userResult.fields || []).map((row: any) => ({
           user_id: row.user_id,
           email: row.email,
         })),

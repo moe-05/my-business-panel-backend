@@ -70,7 +70,7 @@ export class EmployeeInfoDto {
 
   @IsNotEmpty()
   @IsNumber()
-  schedule_id!: number;
+  payment_schedule_id!: number;
 
   @ValidateNested()
   @Type(() => ContractDataDto)

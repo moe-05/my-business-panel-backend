@@ -3,7 +3,7 @@ import { createQueries } from '@crane-technologies/database';
 export const queries = createQueries({
   user: {
     all: 'SELECT user_id, email, role_id, tenant_id FROM general_schema.users',
-    byId: 'SELECT user_id, email, role_id FROM general_schema.users WHERE users_id = $1 LIMIT 1',
+    byId: 'SELECT user_id, email, role_id FROM general_schema.users WHERE user_id = $1 LIMIT 1',
     byEmail:
       'SELECT user_id, email, role_id FROM general_schema.users WHERE email = $1 LIMIT 1',
     byTenant:
@@ -17,7 +17,7 @@ export const queries = createQueries({
       RETURNING *
     `,
     assignRole:
-      'UPDATE general_schema.users SET role_id = $1 WHERE users_id = $2',
+      'UPDATE general_schema.users SET role_id = $1 WHERE user_id = $2',
     getByEmails: `
       SELECT user_id, email FROM general_schema.users 
       WHERE email = ANY($1) 
@@ -185,8 +185,7 @@ export const queries = createQueries({
     `, //Pongan aqui cualquier info que requieran de la venta
     getConditions: `
       SELECT * FROM pos_schema.sale_condition
-    `
-
+    `,
   },
   items: {
     getItems: `
@@ -395,7 +394,7 @@ export const queries = createQueries({
       WHERE branch_id = $1 AND tenant_id = $2 AND is_active = true
     `,
     create: `
-      INSERT INTO hr_schema.employee (user_id, tenant_id, first_name, last_name, doc_number, phone, email, schedule_id)
+      INSERT INTO hr_schema.employee (user_id, tenant_id, first_name, last_name, doc_number, phone, email, payment_schedule_id)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING employee_id
     `,
@@ -407,7 +406,7 @@ export const queries = createQueries({
         doc_number = COALESCE($3, doc_number),
         phone = COALESCE($4, phone),
         email = COALESCE($5, email),
-        schedule_id = COALESCE($6, schedule_id)
+        payment_schedule_id = COALESCE($6, payment_schedule_id)
       WHERE employee_id = $7
       RETURNING employee_id
     `,
@@ -483,7 +482,7 @@ export const queries = createQueries({
         c.base_salary,
         c.hours,
         c.turn_type,
-        e.schedule_id
+        e.payment_schedule_id
       FROM hr_schema.employee e
       INNER JOIN hr_schema.contract c USING(contract_id)
       WHERE e.tenant_id = $1 AND e.branch_id = $2 AND e.is_active = true
@@ -856,7 +855,7 @@ export const queries = createQueries({
     `,
   },
   eInvoice: {
-    create: "",
+    create: '',
     getInvoicesByBranch: `
       SELECT * FROM pos_schema.electronic_sale_invoice e
       INNER JOIN pos_schema.sale s USING(sale_id)
@@ -871,8 +870,8 @@ export const queries = createQueries({
       SELECT * FROM pos_schema.electronic_sale_invoice e
       INNER JOIN pos_schema.sale s USING(sale_id)
       WHERE e.electronic_sale_invoice_id = $1; 
-    `
-  }
+    `,
+  },
 });
 
 export const bulkItems = [

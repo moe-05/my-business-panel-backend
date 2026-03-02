@@ -8,7 +8,7 @@ export interface Employee {
   phone: string;
   email: string;
   contract_id: string;
-  schedule_id: number;
+  payment_schedule_id: number;
   is_active: boolean;
 }
 

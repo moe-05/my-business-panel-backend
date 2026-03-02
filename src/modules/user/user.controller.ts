@@ -31,9 +31,8 @@ export class UserController {
   }
 
   @Post('bulk')
-  // @RequiredLevel(3)
+  @RequiredLevel(3)
   async createUsersBulk(@Body() createUserDtos: CreateUserBulkDto) {
-    console.log(createUserDtos);
     return this.userService.createUsersBulk(createUserDtos.users);
   }
 

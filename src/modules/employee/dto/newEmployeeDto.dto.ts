@@ -57,7 +57,7 @@ export class NewEmployeeDto {
   email!: string;
 
   @IsNumber()
-  schedule_id!: number;
+  payment_schedule_id!: number;
 
   @ValidateNested()
   @Type(() => ContractDto)
@@ -87,7 +87,7 @@ export class CreateUserEmployeeInfoDto {
   email!: string;
 
   @IsNumber()
-  schedule_id!: number;
+  payment_schedule_id!: number;
 
   @ValidateNested()
   @Type(() => ContractDto)
@@ -117,5 +117,5 @@ export class NewSingleEmployeeDto {
   email!: string;
 
   @IsNumber()
-  schedule_id!: number;
+  payment_schedule_id!: number;
 }
