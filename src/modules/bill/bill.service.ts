@@ -5,63 +5,64 @@ import {
 } from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
 import Database from '@crane-technologies/database';
-import { Bill, BillDB, FullBill } from './interface/bill.interface';
+import { Invoice, InvoiceDB, FullInvoice } from './interface/bill.interface';
 import { queries } from '@/queries';
-import { getCustomerBillsDto } from './dto/getBills.dto';
-import { InvalidBill } from '@/common/errors/invalid_bill.error';
+import { InvalidInvoice } from '@/common/errors/invalid_bill.error';
 
 @Injectable()
-export class BillService {
+export class InvoiceService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
-  async createBill(data: Bill) {
+  async createInvoice(data: Invoice) {
     const {
       tenant_customer_id,
       currency_id,
       subtotal_amount,
       tax_amount,
       total_amount,
-      billed_at,
+      invoiced_at,
       updated_at,
       sale_id,
     } = data;
-    const res = await this.db.query(queries.bill.create, [
+    const res = await this.db.query(queries.invoice.create, [
       tenant_customer_id,
       currency_id,
       subtotal_amount,
       tax_amount,
       total_amount,
-      billed_at,
+      invoiced_at,
       updated_at,
       sale_id,
     ]);
-    if (res.rows.length == 0) throw new InvalidBill();
-    return { message: 'Bill created!', bill: res.rows[0] };
+    if (res.rows.length == 0) throw new InvalidInvoice();
+    return { message: 'Invoice created!', invoice: res.rows[0] };
   }
 
-  async getBills(tenantId: string): Promise<BillDB[]> {
-    const result = await this.db.query(queries.bill.getBills, [tenantId]);
+  async getBills(tenantId: string): Promise<InvoiceDB[]> {
+    const result = await this.db.query(queries.invoice.getBills, [tenantId]);
     return result.rows;
   }
 
-  async getCustomerBills(billId: string, doc: string): Promise<BillDB[]> {
-    const result = await this.db.query(queries.bill.getCustomerBills, [
-      billId,
+  async getCustomerBills(tenantId: string, doc: string): Promise<InvoiceDB[]> {
+    const result = await this.db.query(queries.invoice.getCustomerBills, [
+      tenantId,
       doc,
     ]);
     return result.rows;
   }
 
-  async getBillById(billId: string): Promise<FullBill> {
-    const result = await this.db.query(queries.bill.getBillById, [billId]);
-    if (result.rows.length == 0) throw new InvalidBill();
+  async getBillById(invoiceId: string): Promise<FullInvoice> {
+    const result = await this.db.query(queries.invoice.getBillById, [
+      invoiceId,
+    ]);
+    if (result.rows.length == 0) throw new InvalidInvoice();
     return result.rows[0];
   }
 
-  async deleteBillFromDb(billId: string) {
-    const result = await this.db.query(queries.bill.delete, [billId]);
+  async deleteBillFromDb(invoiceId: string) {
+    const result = await this.db.query(queries.invoice.delete, [invoiceId]);
     if (result.rows.length == 0)
-      throw new InternalServerErrorException('Error deleting bill from db.');
-    return { message: `Bill with id: ${billId} deleted` };
+      throw new InternalServerErrorException('Error deleting invoice from db.');
+    return { message: `Invoice with id: ${invoiceId} deleted` };
   }
 }

@@ -13,7 +13,7 @@ import { ProductModule } from '@/modules/product/product.module';
 import { CustomerPaymentModule } from '@/modules/customer_payment/customer_payment.module';
 import { SaleModule } from '@/modules/sale/sale.module';
 import { SaleItemModule } from '@/modules/sale-item/sale-item.module';
-import { BillModule } from '@/modules/bill/bill.module';
+import { InvoiceModule } from '@/modules/bill/bill.module';
 import { PromosModule } from '@/modules/promos/promos.module';
 import { SegmentModule } from '@/modules/segment/segment.module';
 import { ReturnsModule } from '@/modules/returns/returns.module';
@@ -60,7 +60,7 @@ console.log(
     StripeModule,
     SaleModule,
     SaleItemModule,
-    BillModule,
+    InvoiceModule,
     PromosModule,
     SegmentModule,
     ReturnsModule,

@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FacturaElectronica xmlns="https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/facturaElectronica" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:xs="http://www.w3.org/2001/XMLSchema" version="4.4">
+  <Clave>50605032600310123456700000001010000000003159648360</Clave>
+  <CodigoActividad>742101</CodigoActividad>
+  <NumeroConsecutivo>00000001010000000003</NumeroConsecutivo>
+  <FechaEmision>2026-03-05T17:59:04-06:00</FechaEmision>
+  <Emisor>
+    <Nombre>Distribuidora Demo S.A.</Nombre>
+    <Identificacion>
+      <Tipo>02</Tipo>
+      <Numero>3101234567</Numero>
+    </Identificacion>
+    <Ubicacion>
+      <Provincia>1</Provincia>
+      <Canton>01</Canton>
+      <Distrito>01</Distrito>
+      <OtrasSenas/>
+    </Ubicacion>
+    <CorreoElectronico>demo@distribuidora.cr</CorreoElectronico>
+  </Emisor>
+  <Receptor>
+    <Nombre>María Rodríguez Vega</Nombre>
+    <Identificacion>
+      <Tipo>01</Tipo>
+      <Numero>106780001</Numero>
+    </Identificacion>
+    <CorreoElectronico>maria.rodriguez@gmail.com</CorreoElectronico>
+  </Receptor>
+  <CondicionVenta>01</CondicionVenta>
+  <MedioPago>01</MedioPago>
+  <DetalleServicio>
+    <LineaDetalle>
+      <NumeroLinea>1</NumeroLinea>
+      <CodigoCABYS>0111100009900</CodigoCABYS>
+      <Cantidad>2.00000</Cantidad>
+      <UnidadMedida>Unid</UnidadMedida>
+      <Detalle>Cuaderno universitario 100 hojas</Detalle>
+      <PrecioUnitario>1500.00000</PrecioUnitario>
+      <MontoTotal>3000.00000</MontoTotal>
+      <SubTotal>3000.00000</SubTotal>
+      <Impuesto>
+        <Codigo>01</Codigo>
+        <CodigoTarifa/>
+        <Tarifa>0.01</Tarifa>
+        <Monto>0.30000</Monto>
+      </Impuesto>
+      <MontoTotalLinea>3000.30000</MontoTotalLinea>
+    </LineaDetalle>
+  </DetalleServicio>
+  <ResumenFactura>
+    <CodigoTipoMoneda>
+      <CodigoMoneda>CRC</CodigoMoneda>
+      <TipoCambio>1.00000</TipoCambio>
+    </CodigoTipoMoneda>
+    <TotalServGravados>0.00000</TotalServGravados>
+    <TotalServExentos>0.00000</TotalServExentos>
+    <TotalServExonerados>0.00000</TotalServExonerados>
+    <TotalMercanciasGravadas>3000.00000</TotalMercanciasGravadas>
+    <TotalMercanciasExentas>0.00000</TotalMercanciasExentas>
+    <TotalMercanciasExoneradas>0.00000</TotalMercanciasExoneradas>
+    <TotalGravados>3000.00000</TotalGravados>
+    <TotalExentos>0.00000</TotalExentos>
+    <TotalExonerados>0.00000</TotalExonerados>
+    <TotalVenta>3000.00000</TotalVenta>
+    <TotalDescuentos>0.00000</TotalDescuentos>
+    <TotalVentaNeta>3000.00000</TotalVentaNeta>
+    <TotalImpuesto>390.00000</TotalImpuesto>
+    <TotalComprobante>3390.00000</TotalComprobante>
+  </ResumenFactura>
+</FacturaElectronica>

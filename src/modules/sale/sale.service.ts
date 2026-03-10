@@ -1,20 +1,16 @@
-import {
-  Inject,
-  Injectable,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
-import Database, { Dependency } from '@crane-technologies/database';
+import Database from '@crane-technologies/database';
 import { FullSaleDto, NewSingleSaleDto } from './dto/sales.dto';
 import { queries } from '@/queries';
-import { randomUUID } from 'crypto';
-import { BillService } from '../bill/bill.service';
+
 import { CustomerPaymentService } from '../customer_payment/customer_payment.service';
 import { SaleItemService } from '../sale-item/sale-item.service';
 import { Condition, SaleFromDb } from './interface/sale.interface';
 import { WarehouseService } from '../warehouse/warehouse.service';
-import { XmlGeneratorEngine } from '../e-invoice/engine/xml_generator.engine';
 import { SaleCreationError } from '@/common/errors/sale_creation.error';
+import { EInvoiceService } from '../e-invoice/e-invoice.service';
+import { InvoiceService } from '../bill/bill.service';
 
 @Injectable()
 export class SaleService {
@@ -22,9 +18,9 @@ export class SaleService {
     @Inject(DATABASE) private readonly db: Database,
     private readonly saleItemService: SaleItemService,
     private readonly customerPaymentService: CustomerPaymentService,
-    private readonly billService: BillService,
     private readonly warehouseService: WarehouseService,
-    private readonly xmlgen: XmlGeneratorEngine,
+    private readonly eInvoiceService: EInvoiceService,
+    private readonly invoiceService: InvoiceService,
   ) {}
 
   async createSingleSale(data: NewSingleSaleDto) {
@@ -46,7 +42,6 @@ export class SaleService {
   }
 
   async createFullSale(data: FullSaleDto) {
-
     //TODO: Revision de esquema de items + metodos de verificacion de montos
     try {
       const { items, payments } = data;
@@ -61,13 +56,13 @@ export class SaleService {
         data.tax_amount,
         data.total_amount,
         data.is_completed,
-        data.has_electronic_invoice,
+        false,
       ]);
 
       const saleId = rows[0].sale_id;
 
       await this.db.bulkInsert(
-        'sale_item',
+        'pos_schema.sale_item',
         [
           'sale_id',
           'tenant_id',
@@ -87,7 +82,7 @@ export class SaleService {
       );
 
       await this.db.bulkInsert(
-        'customer_payment',
+        'pos_schema.customer_payment',
         [
           'tenant_customer_id',
           'sale_id',
@@ -114,10 +109,32 @@ export class SaleService {
         ]),
       );
 
-      if(data.has_electronic_invoice) {
-        //Call the generator here
+      await this.invoiceService.createInvoice({
+        tenant_customer_id: data.tenant_customer_id,
+        currency_id: data.currency_id,
+        subtotal_amount: data.subtotal_amount,
+        tax_amount: data.tax_amount,
+        total_amount: data.total_amount,
+        invoiced_at: new Date(),
+        updated_at: new Date(),
+        sale_id: saleId,
+      });
+
+      if (data.has_electronic_invoice) {
+        try {
+          await this.eInvoiceService.generateEInvoiceForSale(saleId);
+        } catch (eInvoiceError) {
+          console.error('Error generating e-invoice for sale:', eInvoiceError);
+          // Sale is committed — return success with a warning so the client
+          // knows the sale was saved and can retry e-invoice generation later.
+          return { saleId, eInvoiceWarning: (eInvoiceError as Error).message };
+        }
       }
+
+      return { saleId };
     } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      console.error('Error creating full sale:', error);
       throw new SaleCreationError();
     }
   }

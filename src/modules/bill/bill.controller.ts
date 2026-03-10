@@ -1,37 +1,30 @@
-import {
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Query,
-} from '@nestjs/common';
-import { BillService } from './bill.service';
-import { Response } from 'express';
+import { Controller, Delete, Get, Param, Query } from '@nestjs/common';
+import { InvoiceService } from './bill.service';
 
-@Controller('bill')
-export class BillController {
-  constructor(private readonly billService: BillService) {}
+@Controller('invoice')
+export class InvoiceController {
+  constructor(private readonly invoiceService: InvoiceService) {}
 
   @Get(':id')
-  async getTenantBills(@Param('id') id: string) {
-    return this.billService.getBills(id);
+  async getTenantInvoices(@Param('id') id: string) {
+    return this.invoiceService.getBills(id);
   }
 
-  @Get("details/:id")
-  async getBillById(@Param('id') id: string) {
-    return this.billService.getBillById(id);
+  @Get('details/:id')
+  async getInvoiceById(@Param('id') id: string) {
+    return this.invoiceService.getBillById(id);
   }
 
   @Get()
-  async getCustomerBills(
+  async getCustomerInvoices(
     @Query('id') tenantId: string,
     @Query('doc') doc: string,
   ) {
-    return this.billService.getCustomerBills(tenantId, doc);
+    return this.invoiceService.getCustomerBills(tenantId, doc);
   }
 
   @Delete(':id')
-  async deleteBill(@Param('id') id: string) {
-    return this.billService.deleteBillFromDb(id);
+  async deleteInvoice(@Param('id') id: string) {
+    return this.invoiceService.deleteBillFromDb(id);
   }
 }
