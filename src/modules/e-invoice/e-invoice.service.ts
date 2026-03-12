@@ -3,12 +3,15 @@ import { DATABASE } from '../db/db.provider';
 import Database from '@crane-technologies/database';
 import { queries } from '@/queries';
 import { XmlGeneratorEngine } from './engine/xml_generator.engine';
+import { HaciendaService } from './hacienda/hacienda.service';
+import { HaciendaPayload } from './interface';
 
 @Injectable()
 export class EInvoiceService {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     private readonly xmlgen: XmlGeneratorEngine,
+    private readonly hacienda: HaciendaService,
   ) {}
 
   async getInvoiceByBranch(branchId: string) {
@@ -101,15 +104,52 @@ export class EInvoiceService {
     const xmlSigned = this.xmlgen.generate(eInvoice, p12Buffer, p12Pass);
     const xmlSignedB64 = Buffer.from(xmlSigned).toString('base64');
 
+    // Enviar a Hacienda ANTES de persistir en BD.
+    // Usa eInvoice.fechaEmision directamente → coincide exactamente con el XML.
+    const haciendaPayload: HaciendaPayload = {
+      clave: key,
+      fecha: eInvoice.fechaEmision,
+      emisor: {
+        tipoIdentificacion: eInvoice.emisor.identificacion.tipo,
+        numeroIdentificacion: eInvoice.emisor.identificacion.numero,
+      },
+      ...(eInvoice.receptor && {
+        receptor: {
+          tipoIdentificacion: eInvoice.receptor.identificacion.tipo,
+          numeroIdentificacion: eInvoice.receptor.identificacion.numero,
+        },
+      }),
+      comprobanteXml: xmlSignedB64,
+    };
+
+    await this.hacienda.sendInvoice(haciendaPayload);
+
+    // Insertar en BD con status pendiente (1); se actualiza tras consultar estado
     const { rows: invoiceRows } = await this.db.query(queries.eInvoice.create, [
       saleId,
       key,
       consecutive,
       xmlSignedB64,
     ]);
-
-    // #5: persistir los ítems en electronic_sale_invoice_items
     const electronicInvoiceId = invoiceRows[0].electronic_sale_invoice_id;
+
+    // Consultar estado en Hacienda y persistir respuesta
+    const haciendaStatus = await this.hacienda.checkInvoiceStatus(key);
+    const statusId = this.mapIndEstadoToStatusId(haciendaStatus.indEstado);
+    const responseXml = haciendaStatus.respuestaXml ?? null;
+    await this.db.query(queries.eInvoice.updateHaciendaResponse, [
+      electronicInvoiceId,
+      responseXml,
+      statusId,
+    ]);
+
+    if (statusId === 3) {
+      throw new Error(
+        `Hacienda rechazó el comprobante: ${haciendaStatus.respuestaTxt ?? 'sin detalle'}`,
+      );
+    }
+
+    // Persistir ítems de la factura electrónica
     for (const item of items) {
       await this.db.query(queries.eInvoice.insertItem, [
         electronicInvoiceId,
@@ -129,6 +169,18 @@ export class EInvoiceService {
       electronicInvoiceId,
       key,
       qr,
+      haciendaEstado: haciendaStatus.indEstado,
     };
+  }
+
+  private mapIndEstadoToStatusId(indEstado: string): number {
+    switch (indEstado) {
+      case 'aceptado':
+        return 2;
+      case 'rechazado':
+        return 3;
+      default:
+        return 1; // 'recibido' | 'procesando' → pendiente
+    }
   }
 }

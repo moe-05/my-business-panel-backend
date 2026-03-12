@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { EInvoice } from '../interface/e-invoice.interface';
 import Decimal from 'decimal.js';
 import { create } from 'xmlbuilder2';
-import * as fs from 'fs';
-import * as path from 'path';
+// import * as fs from 'fs';
+// import * as path from 'path';
 import * as crypto from 'crypto';
 import encodeQR from 'qr';
 import * as forge from 'node-forge';
@@ -182,22 +182,22 @@ export class XmlGeneratorEngine {
 
     const xmlString = xml.end({ prettyPrint: true });
 
-    // Auditoría: escritura no-bloqueante (fire-and-forget)
-    const templateDir = path.join(
-      process.cwd(),
-      'src',
-      'modules',
-      'e-invoice',
-      'templates',
-    );
-    const auditPath = path.join(
-      templateDir,
-      `invoice_${content.numeroConsecutivo}.xml`,
-    );
-    fs.promises
-      .mkdir(templateDir, { recursive: true })
-      .then(() => fs.promises.writeFile(auditPath, xmlString))
-      .catch((err) => console.error('Error writing audit XML:', err));
+    // // Auditoría: escritura no-bloqueante (fire-and-forget)
+    // const templateDir = path.join(
+    //   process.cwd(),
+    //   'src',
+    //   'modules',
+    //   'e-invoice',
+    //   'templates',
+    // );
+    // const auditPath = path.join(
+    //   templateDir,
+    //   `invoice_${content.numeroConsecutivo}.xml`,
+    // );
+    // fs.promises
+    //   .mkdir(templateDir, { recursive: true })
+    //   .then(() => fs.promises.writeFile(auditPath, xmlString))
+    //   .catch((err) => console.error('Error writing audit XML:', err));
 
     // Retorna XML plano. El llamador firma con signXML() y luego codifica a base64 para almacenar.
     return xmlString;

@@ -882,6 +882,16 @@ export const queries = createQueries({
     markSaleAsElectronicInvoiced: `
       UPDATE pos_schema.sale SET has_electronic_invoice = true WHERE sale_id = $1
     `,
+    // $1 = electronic_sale_invoice_id, $2 = hacienda_response_xml (TEXT), $3 = status_id
+    // status_id: 1=pendiente, 2=aceptada, 3=rechazada
+    updateHaciendaResponse: `
+      UPDATE pos_schema.electronic_sale_invoice
+      SET hacienda_response_xml  = $2,
+          hacienda_response_date = NOW(),
+          status_id              = $3,
+          updated_at             = NOW()
+      WHERE electronic_sale_invoice_id = $1
+    `,
     getInvoicesByBranch: `
       SELECT * FROM pos_schema.electronic_sale_invoice e
       INNER JOIN pos_schema.sale s USING(sale_id)
