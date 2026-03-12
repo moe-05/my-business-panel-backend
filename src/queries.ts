@@ -868,12 +868,30 @@ export const queries = createQueries({
         SET next_seq = branch_einvoice_seq.next_seq + 1
       RETURNING next_seq
     `,
-    // #1: status_id=1 (pending) en lugar de hacienda_status inexistente
+    // #1: status_id=1 (pending). next_check_at=NOW()+30s activa el cron como baseline.
     create: `
       INSERT INTO pos_schema.electronic_sale_invoice
-      (sale_id, key_number, consecutive_number, xml_signed, status_id, created_at)
-      VALUES ($1, $2, $3, $4, 1, NOW())
+      (sale_id, key_number, consecutive_number, xml_signed, status_id, check_attempts, next_check_at, created_at)
+      VALUES ($1, $2, $3, $4, 1, 0, NOW() + INTERVAL '30 seconds', NOW())
       RETURNING electronic_sale_invoice_id
+    `,
+    // Cron: facturas pendientes cuyo next_check_at ya venció (máx. 100 por tick)
+    getPendingInvoices: `
+      SELECT electronic_sale_invoice_id, key_number, check_attempts
+      FROM pos_schema.electronic_sale_invoice
+      WHERE status_id = 1
+        AND check_attempts < 20
+        AND next_check_at <= NOW()
+      ORDER BY next_check_at
+      LIMIT 100
+    `,
+    // $1 = electronic_sale_invoice_id, $2 = check_attempts, $3 = next_check_at
+    updateCheckAttempt: `
+      UPDATE pos_schema.electronic_sale_invoice
+      SET check_attempts = $2,
+          next_check_at  = $3,
+          updated_at     = NOW()
+      WHERE electronic_sale_invoice_id = $1
     `,
     // #5: persiste los ítems en electronic_sale_invoice_items
     insertItem: `

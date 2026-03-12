@@ -1,13 +1,21 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { DATABASE } from '../db/db.provider';
 import Database from '@crane-technologies/database';
 import { queries } from '@/queries';
 import { XmlGeneratorEngine } from './engine/xml_generator.engine';
 import { HaciendaService } from './hacienda/hacienda.service';
-import { HaciendaPayload } from './interface';
+import { HaciendaPayload, HaciendaStatusResponse } from './interface';
 
 @Injectable()
 export class EInvoiceService {
+  private readonly logger = new Logger(EInvoiceService.name);
+
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     private readonly xmlgen: XmlGeneratorEngine,
@@ -130,7 +138,8 @@ export class EInvoiceService {
 
     await this.hacienda.sendInvoice(haciendaPayload);
 
-    // Insertar en BD con status pendiente (1); se actualiza tras consultar estado
+    // Insertar con status pendiente (1).
+    // next_check_at = NOW()+30s: baseline para el cron si el quick-poll no resuelve.
     const { rows: invoiceRows } = await this.db.query(queries.eInvoice.create, [
       saleId,
       key,
@@ -139,19 +148,44 @@ export class EInvoiceService {
     ]);
     const electronicInvoiceId = invoiceRows[0].electronic_sale_invoice_id;
 
-    // Consultar estado en Hacienda y persistir respuesta
-    const haciendaStatus = await this.hacienda.checkInvoiceStatus(key);
-    const statusId = this.mapIndEstadoToStatusId(haciendaStatus.indEstado);
-    const responseXml = haciendaStatus.respuestaXml ?? null;
-    await this.db.query(queries.eInvoice.updateHaciendaResponse, [
-      electronicInvoiceId,
-      responseXml,
-      statusId,
-    ]);
+    // Opción A — Quick-poll: esperar 3s y hacer un único intento de resolución.
+    // Si Hacienda ya procesó el comprobante, persiste el estado final aquí mismo.
+    // Si aún está procesando, el cron (Opción C) retomará con backoff exponencial.
+    let indEstado = 'recibido';
+    let statusId = 1;
+    let respuestaTxt: string | undefined;
+    try {
+      await this.sleep(3000);
+      const haciendaStatus: HaciendaStatusResponse =
+        await this.hacienda.checkInvoiceStatus(key);
+      indEstado = haciendaStatus.indEstado;
+      respuestaTxt = haciendaStatus.respuestaTxt;
+      statusId = this.mapIndEstadoToStatusId(indEstado);
+
+      if (statusId !== 1) {
+        // Resuelto en el primer intento: persistir estado final directamente
+        await this.db.query(queries.eInvoice.updateHaciendaResponse, [
+          electronicInvoiceId,
+          haciendaStatus.respuestaXml ?? null,
+          statusId,
+        ]);
+      } else {
+        // Aún procesando: registrar intento #1 y reprogramar con backoff
+        await this.db.query(queries.eInvoice.updateCheckAttempt, [
+          electronicInvoiceId,
+          1,
+          this.nextCheckAt(1),
+        ]);
+      }
+    } catch (pollErr) {
+      // Si el quick-poll falla (red, timeout de Hacienda), el cron retomará
+      // usando el next_check_at=NOW()+30s que quedó del INSERT.
+      console.error('Quick-poll fallido, el cron reintentará:', pollErr);
+    }
 
     if (statusId === 3) {
       throw new Error(
-        `Hacienda rechazó el comprobante: ${haciendaStatus.respuestaTxt ?? 'sin detalle'}`,
+        `Hacienda rechazó el comprobante: ${respuestaTxt ?? 'sin detalle'}`,
       );
     }
 
@@ -175,8 +209,62 @@ export class EInvoiceService {
       electronicInvoiceId,
       key,
       qr,
-      haciendaEstado: haciendaStatus.indEstado,
+      haciendaEstado: indEstado,
     };
+  }
+
+  /**
+   * Cron job que se ejecuta cada minuto para verificar facturas electrónicas pendientes.
+   * Delega en reconcilePendingInvoices() para mantener la lógica de negocio centralizada.
+   */
+  @Cron(CronExpression.EVERY_MINUTE)
+  async handlePendingInvoices(): Promise<void> {
+    this.logger.debug('Verificando facturas electrónicas pendientes...');
+    await this.reconcilePendingInvoices();
+  }
+
+  /**
+   * Opción C — consultado por el cron cada minuto.
+   * Procesa hasta 100 facturas pendientes cuyo next_check_at ya venció,
+   * actualizando su estado o reagendando con backoff exponencial.
+   */
+  async reconcilePendingInvoices(): Promise<void> {
+    const { rows } = await this.db.query(queries.eInvoice.getPendingInvoices);
+
+    for (const invoice of rows) {
+      try {
+        const haciendaStatus: HaciendaStatusResponse =
+          await this.hacienda.checkInvoiceStatus(invoice.key_number);
+        const statusId = this.mapIndEstadoToStatusId(haciendaStatus.indEstado);
+
+        if (statusId !== 1) {
+          // Resuelto (aceptado o rechazado): persistir estado final
+          await this.db.query(queries.eInvoice.updateHaciendaResponse, [
+            invoice.electronic_sale_invoice_id,
+            haciendaStatus.respuestaXml ?? null,
+            statusId,
+          ]);
+        } else {
+          const attempts: number = Number(invoice.check_attempts) + 1;
+          if (attempts >= 20) {
+            // Sin respuesta tras 20 intentos (~7.5h): marcar como timeout (status 4)
+            await this.db.query(queries.eInvoice.updateHaciendaResponse, [
+              invoice.electronic_sale_invoice_id,
+              null,
+              4,
+            ]);
+          } else {
+            await this.db.query(queries.eInvoice.updateCheckAttempt, [
+              invoice.electronic_sale_invoice_id,
+              attempts,
+              this.nextCheckAt(attempts),
+            ]);
+          }
+        }
+      } catch (err) {
+        console.error(`Error al verificar factura ${invoice.key_number}:`, err);
+      }
+    }
   }
 
   private mapIndEstadoToStatusId(indEstado: string): number {
@@ -188,5 +276,28 @@ export class EInvoiceService {
       default:
         return 1; // 'recibido' | 'procesando' → pendiente
     }
+  }
+
+  /** Espera no-bloqueante. */
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Calcula el próximo intento con backoff exponencial:
+   * delay = min(0.5 × 2^attempt, 30) minutos.
+   *
+   * | attempt | delay  |
+   * |---------|--------|
+   * | 1       | 1 min  |
+   * | 2       | 2 min  |
+   * | 3       | 4 min  |
+   * | 4       | 8 min  |
+   * | 5       | 16 min |
+   * | 6+      | 30 min |
+   */
+  private nextCheckAt(attempt: number): Date {
+    const delayMs = Math.min(0.5 * Math.pow(2, attempt), 30) * 60 * 1000;
+    return new Date(Date.now() + delayMs);
   }
 }

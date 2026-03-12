@@ -22,8 +22,8 @@ export class SaleController {
   ) {}
 
   @Get()
-  async getSaleConditions() {
-    return this.saleService.getAllConditions;
+  getSaleConditions() {
+    return this.saleService.getAllConditions();
   }
 
   @Post()
