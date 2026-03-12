@@ -858,6 +858,16 @@ export const queries = createQueries({
     `,
   },
   eInvoice: {
+    // Atomic upsert: increments the per-branch counter and returns the claimed value.
+    // The row-level lock from INSERT ... ON CONFLICT DO UPDATE prevents race conditions.
+    // $1 = branch_id (UUID)
+    getNextInvoiceSequence: `
+      INSERT INTO pos_schema.branch_einvoice_seq (branch_id, next_seq)
+      VALUES ($1, 1)
+      ON CONFLICT (branch_id) DO UPDATE
+        SET next_seq = branch_einvoice_seq.next_seq + 1
+      RETURNING next_seq
+    `,
     // #1: status_id=1 (pending) en lugar de hacienda_status inexistente
     create: `
       INSERT INTO pos_schema.electronic_sale_invoice
@@ -910,6 +920,7 @@ export const queries = createQueries({
     getSaleForElectronicInvoice: `
       SELECT
         s.sale_id,
+        s.branch_id,
         s.sale_condition,
         s.is_completed,
         s.has_electronic_invoice,

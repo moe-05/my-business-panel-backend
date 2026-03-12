@@ -76,11 +76,17 @@ export class EInvoiceService {
       );
     }
 
+    const { rows: seqRows } = await this.db.query(
+      queries.eInvoice.getNextInvoiceSequence,
+      [sale.branch_id],
+    );
+    const invoiceSequence = Number(seqRows[0].next_seq);
+
     const consecutive = this.xmlgen.generateConsecutive(
       '01',
       sale.terminal_number ?? 1,
       sale.pos_number ?? 1,
-      Number(sale.invoice_sequence) + 1,
+      invoiceSequence,
     );
 
     const { key, qr } = this.xmlgen.generateClave(

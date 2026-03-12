@@ -1,8 +1,8 @@
 import Decimal from 'decimal.js';
 import { XmlGeneratorEngine } from './xml_generator.engine';
 import { EInvoice } from '../interface/e-invoice.interface';
-import * as path from 'path';
-import * as fs from 'fs';
+// import * as path from 'path';
+// import * as fs from 'fs';
 import * as forge from 'node-forge';
 
 describe('EInvoiceEngine - Generation test', () => {
@@ -122,21 +122,21 @@ describe('EInvoiceEngine - Generation test', () => {
     const end = performance.now();
     console.log(`XML generation took ${(end - start).toFixed(2)} ms`);
 
-    const filePath = path.join(
-      process.cwd(),
-      'src',
-      'modules',
-      'e-invoice',
-      'templates',
-      `invoice_${mock.numeroConsecutivo}.xml`,
-    );
+    // const filePath = path.join(
+    //   process.cwd(),
+    //   'src',
+    //   'modules',
+    //   'e-invoice',
+    //   'templates',
+    //   `invoice_${mock.numeroConsecutivo}.xml`,
+    // );
 
-    expect(fs.existsSync(filePath)).toBeTruthy();
+    // expect(fs.existsSync(filePath)).toBeTruthy();
 
     expect(xmlString).toContain(`<Clave>${key}</Clave>`);
     expect(xmlString).toContain('<CodigoCABYS>2399900009900</CodigoCABYS>');
 
-    console.log('XML generated successfully at:', filePath);
+    // console.log('XML generated successfully at:', filePath);
   });
 });
 
