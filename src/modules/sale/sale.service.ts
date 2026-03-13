@@ -1,20 +1,16 @@
-import {
-  Inject,
-  Injectable,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
-import Database, { Dependency } from '@crane-technologies/database';
+import Database from '@crane-technologies/database';
 import { FullSaleDto, NewSingleSaleDto } from './dto/sales.dto';
 import { queries } from '@/queries';
-import { randomUUID } from 'crypto';
-import { BillService } from '../bill/bill.service';
+
 import { CustomerPaymentService } from '../customer_payment/customer_payment.service';
 import { SaleItemService } from '../sale-item/sale-item.service';
 import { Condition, SaleFromDb } from './interface/sale.interface';
 import { WarehouseService } from '../warehouse/warehouse.service';
-import { XmlGeneratorEngine } from '../e-invoice/engine/xml_generator.engine';
 import { SaleCreationError } from '@/common/errors/sale_creation.error';
+import { EInvoiceService } from '../e-invoice/e-invoice.service';
+import { DInvoiceService } from '../d-invoice/d-invoice.service';
 
 @Injectable()
 export class SaleService {
@@ -22,36 +18,13 @@ export class SaleService {
     @Inject(DATABASE) private readonly db: Database,
     private readonly saleItemService: SaleItemService,
     private readonly customerPaymentService: CustomerPaymentService,
-    private readonly billService: BillService,
     private readonly warehouseService: WarehouseService,
-    private readonly xmlgen: XmlGeneratorEngine,
+    private readonly eInvoiceService: EInvoiceService,
+    private readonly dInvoiceService: DInvoiceService,
   ) {}
 
-  async createSingleSale(data: NewSingleSaleDto) {
-    const { rows } = await this.db.query(queries.sales.singleSale, [
-      data.sale_id,
-      data.branch_id,
-      data.tenant_customer_id,
-      data.sale_condition,
-      data.sale_date,
-      data.currency_id,
-      data.subtotal_amount,
-      data.tax_amount,
-      data.total_amount,
-      data.is_completed,
-      data.has_electronic_invoice,
-    ]);
-
-    return rows[0].sale_id;
-  }
-
-  async createFullSale(data: FullSaleDto) {
-
-    //TODO: Revision de esquema de items + metodos de verificacion de montos
-    try {
-      const { items, payments } = data;
-
-      const { rows } = await this.db.query(queries.sales.singleSale, [
+  async createSale(data: NewSingleSaleDto) {
+    const params = [
         data.branch_id,
         data.tenant_customer_id,
         data.sale_condition,
@@ -62,62 +35,114 @@ export class SaleService {
         data.total_amount,
         data.is_completed,
         data.has_electronic_invoice,
-      ]);
+      ],
+      { rows } = await this.db.query(queries.sales.createSale, params);
 
-      const saleId = rows[0].sale_id;
+    return rows[0].sale_id;
+  }
 
-      await this.db.bulkInsert(
-        'sale_item',
-        [
-          'sale_id',
-          'tenant_id',
-          'product_variant_id',
-          'quantity',
-          'unit_price',
-          'total_price',
-        ],
-        items.map((item) => [
-          saleId,
-          item.tenant_id,
-          item.product_variant_id,
-          item.quantity,
-          item.unit_price,
-          item.total_price,
-        ]),
-      );
+  async createFullSale(data: FullSaleDto) {
+    const txn = await this.db.transaction();
+    try {
+      const { items, payments } = data;
 
-      await this.db.bulkInsert(
-        'customer_payment',
-        [
-          'tenant_customer_id',
-          'sale_id',
-          'payment_method_id',
-          'is_points_redemption',
-          'points_redeemed',
-          'points_to_currency_rate',
-          'payment_amount',
-          'payment_date',
-          'currency_id',
-          'verified',
-        ],
-        payments.map((p) => [
-          p.tenant_customer_id,
-          saleId,
-          p.payment_method_id,
-          p.is_points_redemption,
-          p.points_redeemed,
-          p.points_to_currency_rate,
-          p.payment_amount,
-          p.payment_date,
-          p.currency_id,
-          p.verified,
-        ]),
-      );
+      let saleId: string;
+      try {
+        const { rows } = await txn.query(queries.sales.createSale, [
+          data.branch_id,
+          data.tenant_customer_id,
+          data.sale_condition,
+          new Date(data.sale_date),
+          data.currency_id,
+          data.subtotal_amount,
+          data.tax_amount,
+          data.total_amount,
+          data.is_completed,
+          data.has_electronic_invoice,
+        ]);
+        saleId = rows[0].sale_id;
 
-      if(data.has_electronic_invoice) {
-        //Call the generator here
+        await txn.bulkInsert(
+          'pos_schema.sale_item',
+          [
+            'sale_id',
+            'tenant_id',
+            'product_variant_id',
+            'quantity',
+            'unit_price',
+            'total_price',
+          ],
+          items.map((item) => [
+            saleId,
+            item.tenant_id,
+            item.product_variant_id,
+            item.quantity,
+            item.unit_price,
+            item.total_price,
+          ]),
+        );
+
+        await txn.bulkInsert(
+          'pos_schema.customer_payment',
+          [
+            'tenant_customer_id',
+            'sale_id',
+            'payment_method_id',
+            'is_points_redemption',
+            'points_redeemed',
+            'points_to_currency_rate',
+            'payment_amount',
+            'payment_date',
+            'currency_id',
+            'verified',
+          ],
+          payments.map((p) => [
+            p.tenant_customer_id,
+            saleId,
+            p.payment_method_id,
+            p.is_points_redemption,
+            p.points_redeemed,
+            p.points_to_currency_rate,
+            p.payment_amount,
+            p.payment_date,
+            p.currency_id,
+            p.verified,
+          ]),
+        );
+
+        await this.dInvoiceService.createDInvoice(
+          {
+            tenant_customer_id: data.tenant_customer_id,
+            currency_id: data.currency_id,
+            subtotal_amount: data.subtotal_amount,
+            tax_amount: data.tax_amount,
+            total_amount: data.total_amount,
+            invoiced_at: new Date(),
+            updated_at: new Date(),
+            sale_id: saleId,
+          },
+          txn,
+        );
+
+        await txn.commit();
+      } catch (txnError) {
+        await txn.rollback();
+        throw txnError;
       }
+
+      if (data.has_electronic_invoice) {
+        try {
+          await this.eInvoiceService.createEInvoiceForSale(saleId);
+        } catch (eInvoiceError) {
+          console.error('Error generating e-invoice for sale:', eInvoiceError);
+          return { saleId, eInvoiceWarning: (eInvoiceError as Error).message };
+        }
+      }
+
+      return { saleId };
     } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      console.error('Error creating full sale:', error);
       throw new SaleCreationError();
     }
   }
