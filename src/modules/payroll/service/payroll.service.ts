@@ -1,5 +1,5 @@
 import { DATABASE } from '@/modules/db/db.provider';
-import Database, { Dependency } from '@crane-technologies/database';
+import Database from '@crane-technologies/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { PayrollRepository } from '../repositories/payroll.repository';
 import { CalculationEngine } from './calc-engine.service';
@@ -73,11 +73,9 @@ export class PayrollService {
       periodEnd,
     );
 
-    const yearly = await this.repo.getYearlySalary(
-      branchId,
-    );
+    const yearly = await this.repo.getYearlySalary(branchId);
 
-    console.log("Yearly: ", yearly);
+    console.log('Yearly: ', yearly);
 
     const historicalEarnings = await this.repo.getHistoricalEarnings(branchId);
 
@@ -245,7 +243,7 @@ export class PayrollService {
     //   data.tenantId,
     //   data.periodStart,
     //   data.periodEnd,
-    // ]); 
+    // ]);
 
     // if (exist.rows.length > 0) {
     //   throw new Error(
@@ -301,7 +299,6 @@ export class PayrollService {
     turn: number,
     incapacities: string[],
   ) {
-    
     let holidaysHours = new Decimal(0);
     let ordinaryHours = new Decimal(0);
 
