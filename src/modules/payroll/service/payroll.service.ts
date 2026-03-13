@@ -131,7 +131,7 @@ export class PayrollService {
     return this.closePayroll(paysheetId, employees.length);
   }
 
-  private async calculateAndSavePayroll(
+ private async calculateAndSavePayroll(
     emp: EmployeePayrollData,
     incomeConcepts: PayrollConceptRow[],
     deductionConcepts: PayrollConceptRow[],
@@ -204,10 +204,9 @@ export class PayrollService {
       allTotals,
     );
 
-    const sqlQueries = [queries.payroll.insertDetail];
-
-    const params: (string | number | Date | null | Decimal)[][] = [
-      [
+    const txn = await this.db.transaction();
+    try {
+      const { rows } = await txn.query(queries.payroll.insertDetail, [
         paysheetId,
         emp.employee_id,
         emp.contract_id,
@@ -217,32 +216,22 @@ export class PayrollService {
         allTotals.deductions,
         allTotals.netSalary.toString(),
         new Date(),
-      ],
-    ];
-
-    const dependencies: Dependency[] = [];
-
-    allMovements.forEach((mov, index) => {
-      sqlQueries.push(queries.payroll.insertMovement);
-
-      params.push([
-        null,
-        mov.concept_id,
-        mov.calculated_amount.toString(),
-        mov.appliedValue.toString(),
-        mov.name,
       ]);
+      const detailId = rows[0].detail_id;
 
-      dependencies.push({
-        sourceIndex: 0,
-        targetIndex: index + 1,
-        targetParamIndex: 0,
-      });
-    });
+      for (const mov of allMovements) {
+        await txn.query(queries.payroll.insertMovement, [
+          detailId,
+          mov.concept_id,
+          mov.calculated_amount.toString(),
+          mov.appliedValue.toString(),
+          mov.name,
+        ]);
+      }
 
-    try {
-      await this.db.transaction(sqlQueries, params, dependencies);
+      await txn.commit();
     } catch (error) {
+      await txn.rollback();
       console.error('Error processing payroll transaction:', error);
       throw new Error(
         'Failed to process payroll for employee ' + emp.employee_id,
