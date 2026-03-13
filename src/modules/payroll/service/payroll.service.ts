@@ -129,7 +129,7 @@ export class PayrollService {
     return this.closePayroll(paysheetId, employees.length);
   }
 
-  private async calculateAndSavePayroll(
+ private async calculateAndSavePayroll(
     emp: EmployeePayrollData,
     incomeConcepts: PayrollConceptRow[],
     deductionConcepts: PayrollConceptRow[],

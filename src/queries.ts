@@ -149,7 +149,7 @@ export const queries = createQueries({
     getPayments: `
       SELECT cp.payment_amount, pm.name, cp.payment_date, cp.verified, tc.first_name, tc.last_name, c.symbol FROM pos_schema.customer_payment cp
       INNER JOIN general_schema.tenant_customer tc USING(tenant_customer_id)
-      INNER JOIN general_schema.payment_method pm USING(payment_method_id)
+      INNER JOIN general_schema.payment_method pm USING(payments_method_id)
       INNER JOIN general_schema.currency c USING(currency_id)
     `,
     getCustomerPayments: `
