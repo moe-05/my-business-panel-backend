@@ -1,17 +1,13 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Inject,
-  Param,
-  Post,
-  Res,
-} from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Post } from '@nestjs/common';
 import { SaleService } from './sale.service';
-import { FullSaleDto, NewSingleSaleDto } from './dto/sales.dto';
+import { FullSaleDto } from './dto/sales.dto';
 import { DATABASE } from '../db/db.provider';
 import Database from '@crane-technologies/database';
 import { EInvoiceService } from '../e-invoice/e-invoice.service';
+import {
+  Paginate,
+  PaginatedResult,
+} from '@/common/decorators/paginator.decorator';
 
 @Controller('sale')
 export class SaleController {
@@ -32,29 +28,38 @@ export class SaleController {
   }
 
   @Get(':branch_id')
-  async getAllSalesByBranch(@Param('branch_id') branch_id: string) {
-    return this.saleService.getAllSalesByBranch(branch_id);
+  @Paginate({
+    table: 'pos_schema.sale',
+    columns: ['sale_id', 'branch_id', 'tenant_customer_id', 'created_at'],
+    pkFields: ['sale_id'],
+    whereFields: ['branch_id'],
+  })
+  getAllSalesByBranch(
+    @Param('branch_id') branch_id: string,
+    @PaginatedResult() result: any,
+  ) {
+    return result;
   }
 
   // E-invoice routes — serviced by EInvoiceModule
 
   @Get('e-invoice/branch/:branch_id')
-  async getInvoicesByBranch(@Param('branch_id') branchId: string) {
-    return this.eInvoiceService.getInvoiceByBranch(branchId);
+  async getEInvoicesByBranch(@Param('branch_id') branchId: string) {
+    return this.eInvoiceService.getEInvoiceByBranch(branchId);
   }
 
   @Get('e-invoice/:invoice_id')
-  async getInvoiceById(@Param('invoice_id') invoiceId: string) {
-    return this.eInvoiceService.getInvoiceById(invoiceId);
+  async getEInvoiceById(@Param('invoice_id') invoiceId: string) {
+    return this.eInvoiceService.getEInvoiceById(invoiceId);
   }
 
   @Get(':sale_id/e-invoice')
-  async getInvoiceForSale(@Param('sale_id') saleId: string) {
-    return this.eInvoiceService.getInvoiceForSale(saleId);
+  async getEInvoiceForSale(@Param('sale_id') saleId: string) {
+    return this.eInvoiceService.getEInvoiceForSale(saleId);
   }
 
   @Post(':sale_id/e-invoice')
-  async generateEInvoiceForSale(@Param('sale_id') saleId: string) {
-    return this.eInvoiceService.generateEInvoiceForSale(saleId);
+  async createEInvoiceForSale(@Param('sale_id') saleId: string) {
+    return this.eInvoiceService.createEInvoiceForSale(saleId);
   }
 }

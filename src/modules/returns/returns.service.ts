@@ -54,7 +54,7 @@ export class ReturnsService {
       await this.db.query(updateProducts.query, updateProducts.values);
 
       //Actualizar total de la factura
-      await this.db.query(queries.invoice.updateAmount, [
+      await this.db.query(queries.dInvoice.updateAmount, [
         total_refund_amount,
         invoice_id,
       ]);

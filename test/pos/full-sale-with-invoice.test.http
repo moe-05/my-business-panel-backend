@@ -315,7 +315,7 @@ GET {{baseUrl}}/invoice?id={{tenantId}}&doc=106780001
 ###   2. INSERT sale_items
 ###   3. INSERT customer_payments
 ###   4. INSERT digital_sale_invoice  (InvoiceService.createInvoice)
-###   5. IF has_electronic_invoice → EInvoiceService.generateEInvoiceForSale()
+###   5. IF has_electronic_invoice → EInvoiceService.createEInvoiceForSale()
 ###        → valida venta completada + factura digital existente
 ###        → genera XML con XmlGeneratorEngine
 ###        → firma con p12 (EINVOICE_P12_BASE64 + EINVOICE_P12_PASSWORD)
@@ -639,4 +639,4 @@ GET {{baseUrl}}/e-invoice/sale/{{multiSaleId}}
 
 
 ### 23. Ver ítems de la venta multi-ítem
-GET {{baseUrl}}/items/{{multiSaleId}}
+GET /sale/d98e3350-c2e9-40cf-91f3-4cc25867c122?limit=3&sortBy=created_at&order=DESC

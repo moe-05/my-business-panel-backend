@@ -1,4 +1,4 @@
-export interface Invoice {
+export interface DInvoice {
   tenant_customer_id: string;
   currency_id: number;
   subtotal_amount: number;
@@ -9,7 +9,7 @@ export interface Invoice {
   sale_id: string;
 }
 
-export interface FullInvoice extends Invoice {
+export interface FullInvoice extends DInvoice {
   digital_sale_invoice_id: string;
 }
 

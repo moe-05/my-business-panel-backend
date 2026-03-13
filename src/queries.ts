@@ -167,7 +167,7 @@ export const queries = createQueries({
       'DELETE FROM pos_schema.customer_payment WHERE customer_payment_id = $1',
   },
   sales: {
-    singleSale: `
+    createSale: `
       INSERT INTO pos_schema.sale ( branch_id, tenant_customer_id, sale_condition, sale_date, currency_id, subtotal_amount, tax_amount, total_amount, is_completed, has_electronic_invoice)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING sale_id
@@ -199,7 +199,7 @@ export const queries = createQueries({
     delete:
       'DELETE FROM pos_schema.sale_item WHERE sale_item_id = $1 RETURNING sale_item_id',
   },
-  invoice: {
+  dInvoice: {
     create: `
       INSERT INTO pos_schema.digital_sale_invoice (tenant_customer_id, currency_id, subtotal_amount, tax_amount, total_amount, invoiced_at, updated_at, sale_id)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -212,21 +212,21 @@ export const queries = createQueries({
       INNER JOIN general_schema.tenant t ON t.tenant_id = tc.tenant_id
       WHERE t.tenant_id = $1
     `,
-    getCustomerBills: `
+    getCustomerDInvoices: `
       SELECT t.tenant_name, tc.first_name, tc.last_name, tc.document_number, tc.email, i.subtotal_amount, i.total_amount, i.invoiced_at FROM pos_schema.digital_sale_invoice i
       INNER JOIN general_schema.tenant_customer tc USING(tenant_customer_id)
       INNER JOIN general_schema.currency c USING(currency_id)
       INNER JOIN general_schema.tenant t ON t.tenant_id = tc.tenant_id
       WHERE t.tenant_id = $1 AND tc.document_number = $2
     `,
-    getBillById: `
+    getDInvoiceById: `
       SELECT t.tenant_name, tc.first_name, tc.last_name, tc.document_number, tc.email, i.subtotal_amount, i.total_amount, i.invoiced_at FROM pos_schema.digital_sale_invoice i
       INNER JOIN general_schema.tenant_customer tc USING(tenant_customer_id)
       INNER JOIN general_schema.currency c USING(currency_id)
       INNER JOIN general_schema.tenant t ON t.tenant_id = tc.tenant_id
       WHERE i.digital_sale_invoice_id = $1
     `,
-    delete:
+    deleteDInvoice:
       'DELETE FROM pos_schema.digital_sale_invoice WHERE digital_sale_invoice_id = $1 RETURNING digital_sale_invoice_id',
     updateAmount: `UPDATE pos_schema.digital_sale_invoice SET total_amount = total_amount - $1 WHERE digital_sale_invoice_id = $2`,
   },
@@ -901,13 +901,13 @@ export const queries = createQueries({
       RETURNING electronic_sale_invoice_item_id
     `,
     // #6: verifica que exista una digital_sale_invoice antes de generar la electrónica
-    getDigitalInvoice: `
+    getDInvoice: `
       SELECT digital_sale_invoice_id
       FROM pos_schema.digital_sale_invoice
       WHERE sale_id = $1
       LIMIT 1
     `,
-    markSaleAsElectronicInvoiced: `
+    markSaleAsEInvoiced: `
       UPDATE pos_schema.sale SET has_electronic_invoice = true WHERE sale_id = $1
     `,
     // $1 = electronic_sale_invoice_id, $2 = hacienda_response_xml (TEXT), $3 = status_id
@@ -920,28 +920,31 @@ export const queries = createQueries({
           updated_at             = NOW()
       WHERE electronic_sale_invoice_id = $1
     `,
-    getInvoicesByBranch: `
+    getEInvoicesByBranch: `
       SELECT * FROM pos_schema.electronic_sale_invoice e
       INNER JOIN pos_schema.sale s USING(sale_id)
       WHERE s.branch_id = $1;
     `,
-    getInvoiceForSale: `
+    getEInvoiceForSale: `
       SELECT * FROM pos_schema.electronic_sale_invoice e
       INNER JOIN pos_schema.sale s USING(sale_id)
       WHERE e.sale_id = $1;
     `,
-    getInvoiceById: `
+    getEInvoiceById: `
       SELECT * FROM pos_schema.electronic_sale_invoice e
       INNER JOIN pos_schema.sale s USING(sale_id)
       WHERE e.electronic_sale_invoice_id = $1; 
     `,
-    getSaleForElectronicInvoice: `
+    getSaleForEInvoice: `
       SELECT
         s.sale_id,
         s.branch_id,
         s.sale_condition,
         s.is_completed,
         s.has_electronic_invoice,
+        EXISTS (
+          SELECT 1 FROM pos_schema.electronic_sale_invoice e WHERE e.sale_id = s.sale_id
+        ) AS already_invoiced,
         -- #3: extraer solo los 10 dígitos numéricos (posición 11-20) y castear a bigint
         COALESCE(
           (SELECT MAX(SUBSTRING(seq.consecutive_number FROM 11 FOR 10)::bigint)
@@ -1008,7 +1011,7 @@ export const queries = createQueries({
       WHERE s.sale_id = $1
     `,
 
-    getSaleItemsForElectronicInvoice: `
+    getSaleItemsForEInvoice: `
       SELECT
       ROW_NUMBER() OVER (ORDER BY si.created_at)::integer AS line_number,
       si.sale_item_id,

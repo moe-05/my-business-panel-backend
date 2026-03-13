@@ -15,10 +15,6 @@ import {
 export class NewSingleSaleDto {
   @IsNotEmpty()
   @IsUUID()
-  sale_id!: string;
-
-  @IsNotEmpty()
-  @IsUUID()
   branch_id!: string;
 
   @IsNotEmpty()
@@ -81,7 +77,7 @@ export class FullSaleDto {
 
   @IsNotEmpty()
   @IsString()
-  sale_date!: string
+  sale_date!: string;
 
   @IsNotEmpty()
   @IsNumber()

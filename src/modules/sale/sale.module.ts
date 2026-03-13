@@ -3,7 +3,7 @@ import { SaleService } from './sale.service';
 import { SaleController } from './sale.controller';
 import { SaleItemService } from '../sale-item/sale-item.service';
 import { CustomerPaymentService } from '../customer_payment/customer_payment.service';
-import { InvoiceService } from '../bill/bill.service';
+import { DInvoiceService } from '../d-invoice/d-invoice.service';
 import { WarehouseModule } from '../warehouse/warehouse.module';
 import { EInvoiceModule } from '../e-invoice/e-invoice.module';
 
@@ -12,7 +12,7 @@ import { EInvoiceModule } from '../e-invoice/e-invoice.module';
     SaleService,
     SaleItemService,
     CustomerPaymentService,
-    InvoiceService,
+    DInvoiceService,
   ],
   controllers: [SaleController],
   imports: [WarehouseModule, EInvoiceModule],

@@ -22,32 +22,33 @@ export class EInvoiceService {
     private readonly hacienda: HaciendaService,
   ) {}
 
-  async getInvoiceByBranch(branchId: string) {
-    const { rows } = await this.db.query(queries.eInvoice.getInvoicesByBranch, [
-      branchId,
-    ]);
+  async getEInvoiceByBranch(branchId: string) {
+    const { rows } = await this.db.query(
+      queries.eInvoice.getEInvoicesByBranch,
+      [branchId],
+    );
 
     return rows;
   }
 
-  async getInvoiceForSale(saleId: string) {
-    const { rows } = await this.db.query(queries.eInvoice.getInvoiceForSale, [
+  async getEInvoiceForSale(saleId: string) {
+    const { rows } = await this.db.query(queries.eInvoice.getEInvoiceForSale, [
       saleId,
     ]);
 
     return rows;
   }
 
-  async getInvoiceById(invoiceId: string) {
-    const { rows } = await this.db.query(queries.eInvoice.getInvoiceById, [
+  async getEInvoiceById(invoiceId: string) {
+    const { rows } = await this.db.query(queries.eInvoice.getEInvoiceById, [
       invoiceId,
     ]);
     return rows[0];
   }
 
-  async generateEInvoiceForSale(saleId: string) {
-    const { rows: saleRows } = await this.db.query(
-      queries.eInvoice.getSaleForElectronicInvoice,
+  async createEInvoiceForSale(saleId: string, dbClient?: any) {
+    const { rows: saleRows } = await (dbClient || this.db).query(
+      queries.eInvoice.getSaleForEInvoice,
       [saleId],
     );
 
@@ -57,11 +58,11 @@ export class EInvoiceService {
 
     if (!sale.is_completed)
       throw new BadRequestException('La venta no está completada');
-    if (sale.has_electronic_invoice)
+    if (sale.already_invoiced)
       throw new BadRequestException('Esta venta ya tiene factura electrónica');
 
-    const { rows: digitalRows } = await this.db.query(
-      queries.eInvoice.getDigitalInvoice,
+    const { rows: digitalRows } = await (dbClient || this.db).query(
+      queries.eInvoice.getDInvoice,
       [saleId],
     );
     if (!digitalRows.length)
@@ -69,22 +70,24 @@ export class EInvoiceService {
         'La venta no tiene factura digital generada',
       );
 
-    const { rows: items } = await this.db.query(
-      queries.eInvoice.getSaleItemsForElectronicInvoice,
+    const { rows: items } = await (dbClient || this.db).query(
+      queries.eInvoice.getSaleItemsForEInvoice,
       [saleId],
     );
 
     if (!items.length) throw new BadRequestException('La venta no tiene items');
 
-    const itemsWithoutCabys = items.filter((i) => !i.cabys_code);
+    const itemsWithoutCabys = items.filter((i: any) => !i.cabys_code);
     if (itemsWithoutCabys.length > 0) {
-      const ids = itemsWithoutCabys.map((i) => i.product_variant_id).join(', ');
+      const ids = itemsWithoutCabys
+        .map((i: any) => i.product_variant_id)
+        .join(', ');
       throw new BadRequestException(
         `Los siguientes productos no tienen código CABYS asignado: ${ids}`,
       );
     }
 
-    const { rows: seqRows } = await this.db.query(
+    const { rows: seqRows } = await (dbClient || this.db).query(
       queries.eInvoice.getNextInvoiceSequence,
       [sale.branch_id],
     );
@@ -140,12 +143,10 @@ export class EInvoiceService {
 
     // Insertar con status pendiente (1).
     // next_check_at = NOW()+30s: baseline para el cron si el quick-poll no resuelve.
-    const { rows: invoiceRows } = await this.db.query(queries.eInvoice.create, [
-      saleId,
-      key,
-      consecutive,
-      xmlSignedB64,
-    ]);
+    const { rows: invoiceRows } = await (dbClient || this.db).query(
+      queries.eInvoice.create,
+      [saleId, key, consecutive, xmlSignedB64],
+    );
     const electronicInvoiceId = invoiceRows[0].electronic_sale_invoice_id;
 
     // Opción A — Quick-poll: esperar 3s y hacer un único intento de resolución.
@@ -164,14 +165,13 @@ export class EInvoiceService {
 
       if (statusId !== 1) {
         // Resuelto en el primer intento: persistir estado final directamente
-        await this.db.query(queries.eInvoice.updateHaciendaResponse, [
-          electronicInvoiceId,
-          haciendaStatus.respuestaXml ?? null,
-          statusId,
-        ]);
+        await (dbClient || this.db).query(
+          queries.eInvoice.updateHaciendaResponse,
+          [electronicInvoiceId, haciendaStatus.respuestaXml ?? null, statusId],
+        );
       } else {
         // Aún procesando: registrar intento #1 y reprogramar con backoff
-        await this.db.query(queries.eInvoice.updateCheckAttempt, [
+        await (dbClient || this.db).query(queries.eInvoice.updateCheckAttempt, [
           electronicInvoiceId,
           1,
           this.nextCheckAt(1),
@@ -191,7 +191,7 @@ export class EInvoiceService {
 
     // Persistir ítems de la factura electrónica
     for (const item of items) {
-      await this.db.query(queries.eInvoice.insertItem, [
+      await (dbClient || this.db).query(queries.eInvoice.insertItem, [
         electronicInvoiceId,
         item.tenant_id,
         item.product_variant_id,
@@ -201,7 +201,7 @@ export class EInvoiceService {
       ]);
     }
 
-    await this.db.query(queries.eInvoice.markSaleAsElectronicInvoiced, [
+    await (dbClient || this.db).query(queries.eInvoice.markSaleAsEInvoiced, [
       saleId,
     ]);
 
@@ -228,8 +228,10 @@ export class EInvoiceService {
    * Procesa hasta 100 facturas pendientes cuyo next_check_at ya venció,
    * actualizando su estado o reagendando con backoff exponencial.
    */
-  async reconcilePendingInvoices(): Promise<void> {
-    const { rows } = await this.db.query(queries.eInvoice.getPendingInvoices);
+  async reconcilePendingInvoices(dbClient?: any): Promise<void> {
+    const { rows } = await (dbClient || this.db).query(
+      queries.eInvoice.getPendingInvoices,
+    );
 
     for (const invoice of rows) {
       try {
@@ -239,20 +241,22 @@ export class EInvoiceService {
 
         if (statusId !== 1) {
           // Resuelto (aceptado o rechazado): persistir estado final
-          await this.db.query(queries.eInvoice.updateHaciendaResponse, [
-            invoice.electronic_sale_invoice_id,
-            haciendaStatus.respuestaXml ?? null,
-            statusId,
-          ]);
+          await (dbClient || this.db).query(
+            queries.eInvoice.updateHaciendaResponse,
+            [
+              invoice.electronic_sale_invoice_id,
+              haciendaStatus.respuestaXml ?? null,
+              statusId,
+            ],
+          );
         } else {
           const attempts: number = Number(invoice.check_attempts) + 1;
           if (attempts >= 20) {
             // Sin respuesta tras 20 intentos (~7.5h): marcar como timeout (status 4)
-            await this.db.query(queries.eInvoice.updateHaciendaResponse, [
-              invoice.electronic_sale_invoice_id,
-              null,
-              4,
-            ]);
+            await (dbClient || this.db).query(
+              queries.eInvoice.updateHaciendaResponse,
+              [invoice.electronic_sale_invoice_id, null, 4],
+            );
           } else {
             await this.db.query(queries.eInvoice.updateCheckAttempt, [
               invoice.electronic_sale_invoice_id,
