@@ -143,6 +143,17 @@ export const purchaseQueries = {
     RETURNING purchase_order_id, purchase_order_status_id, updated_at
   `,
 
+  getItemsForInventory: `
+    SELECT
+      poi.product_variant_id,
+      poi.quantity_ordered,
+      poi.tenant_id,
+      po.warehouse_id
+    FROM purchase_schema.purchase_order_item poi
+    JOIN purchase_schema.purchase_order po ON po.purchase_order_id = poi.purchase_order_id
+    WHERE poi.purchase_order_id = $1
+  `,
+
   getMatchingByOrderId: `
     SELECT
       twm.matching_id,
