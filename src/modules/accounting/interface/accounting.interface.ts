@@ -47,6 +47,44 @@ export interface JournalEntryFromDb {
   lines?: JournalEntryLineFromDb[];
 }
 
+// -------------------------------------------------------
+// Journal Generation Params (Phase 2)
+// -------------------------------------------------------
+
+export interface SaleJournalParams {
+  tenantId: string;
+  saleId: string;
+  saleCondition: string; // '01' = contado, '02'+ = crédito
+  subtotalAmount: number;
+  taxAmount: number;
+  totalAmount: number;
+  entryDate: Date;
+}
+
+export interface CogsJournalParams {
+  tenantId: string;
+  saleId: string;
+  totalCost: number;
+  entryDate: Date;
+}
+
+export interface PurchaseJournalParams {
+  tenantId: string;
+  purchaseOrderId: string;
+  subtotalAmount: number;
+  taxAmount: number;
+  totalAmount: number;
+  entryDate: Date;
+}
+
+export interface PaymentJournalParams {
+  tenantId: string;
+  sourceId: string;
+  amount: number;
+  entryDate: Date;
+  description?: string;
+}
+
 export interface JournalEntryLineFromDb {
   line_id: string;
   entry_id: string;

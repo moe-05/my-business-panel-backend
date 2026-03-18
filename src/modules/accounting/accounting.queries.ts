@@ -207,4 +207,33 @@ export const accountingQueries = {
   getJournalEntryStatuses: `
     SELECT * FROM accounting_schema.journal_entry_status ORDER BY status_id
   `,
+
+  // -------------------------------------------------------
+  // JOURNAL GENERATION (Phase 2)
+  // -------------------------------------------------------
+
+  getAccountByCode: `
+    SELECT account_id
+    FROM accounting_schema.chart_of_accounts
+    WHERE tenant_id = $1 AND account_code = $2 AND is_active = TRUE AND allows_transactions = TRUE
+    LIMIT 1
+  `,
+
+  getSourceTypeByName: `
+    SELECT source_type_id
+    FROM accounting_schema.source_type
+    WHERE source_name = $1
+    LIMIT 1
+  `,
+
+  createJournalEntryRaw: `
+    INSERT INTO accounting_schema.journal_entry
+      (tenant_id, source_type_id, source_id, entry_date, description, status_id, total_debit, total_credit)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    RETURNING entry_id
+  `,
+
+  getConfirmedStatusId: `
+    SELECT status_id FROM accounting_schema.journal_entry_status WHERE status_name = 'Confirmado' LIMIT 1
+  `,
 };
