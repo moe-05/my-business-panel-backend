@@ -6,6 +6,7 @@ import { CustomerPaymentService } from '../customer_payment/customer_payment.ser
 import { DInvoiceService } from '../d-invoice/d-invoice.service';
 import { WarehouseModule } from '../warehouse/warehouse.module';
 import { EInvoiceModule } from '../e-invoice/e-invoice.module';
+import { AccountingModule } from '../accounting/accounting.module';
 
 @Module({
   providers: [
@@ -15,6 +16,6 @@ import { EInvoiceModule } from '../e-invoice/e-invoice.module';
     DInvoiceService,
   ],
   controllers: [SaleController],
-  imports: [WarehouseModule, EInvoiceModule],
+  imports: [WarehouseModule, EInvoiceModule, AccountingModule],
 })
 export class SaleModule {}

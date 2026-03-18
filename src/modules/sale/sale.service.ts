@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
 import Database from '@crane-technologies/database';
 import { FullSaleDto, NewSingleSaleDto } from './dto/sales.dto';
@@ -11,9 +11,12 @@ import { WarehouseService } from '../warehouse/warehouse.service';
 import { SaleCreationError } from '@/common/errors/sale_creation.error';
 import { EInvoiceService } from '../e-invoice/e-invoice.service';
 import { DInvoiceService } from '../d-invoice/d-invoice.service';
+import { AccountingJournalService } from '../accounting/accounting-journal.service';
 
 @Injectable()
 export class SaleService {
+  private readonly logger = new Logger(SaleService.name);
+
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     private readonly saleItemService: SaleItemService,
@@ -21,6 +24,7 @@ export class SaleService {
     private readonly warehouseService: WarehouseService,
     private readonly eInvoiceService: EInvoiceService,
     private readonly dInvoiceService: DInvoiceService,
+    private readonly journalService: AccountingJournalService,
   ) {}
 
   async createSale(data: NewSingleSaleDto) {
@@ -123,6 +127,67 @@ export class SaleService {
           },
           txn,
         );
+
+        // --- Accounting: generate journal entries ---
+        try {
+          // 1. Revenue entry (cash or credit)
+          await this.journalService.generateSaleJournal(
+            {
+              tenantId: data.tenant_id,
+              saleId,
+              saleCondition: data.sale_condition,
+              subtotalAmount: data.subtotal_amount,
+              taxAmount: data.tax_amount,
+              totalAmount: data.total_amount,
+              entryDate: new Date(data.sale_date),
+            },
+            txn,
+          );
+
+          // 2. COGS entry — compute total cost from item cost data
+          //    Uses unit_price from product_variant as cost proxy
+          const costResult = await txn.query(
+            `SELECT COALESCE(SUM(pv.unit_price * $2[idx]), 0) AS total_cost
+             FROM unnest($1::uuid[]) WITH ORDINALITY AS u(variant_id, idx)
+             JOIN general_schema.product_variant pv
+               ON pv.product_variant_id = u.variant_id AND pv.tenant_id = $3`,
+            [
+              items.map((i) => i.product_variant_id),
+              items.map((i) => i.quantity),
+              data.tenant_id,
+            ],
+          );
+
+          // Fallback: sum item quantities * variant unit_price individually
+          let totalCost = 0;
+          for (const item of items) {
+            const res = await txn.query(
+              `SELECT unit_price FROM general_schema.product_variant
+               WHERE tenant_id = $1 AND product_variant_id = $2 LIMIT 1`,
+              [data.tenant_id, item.product_variant_id],
+            );
+            if (res.rows.length > 0 && res.rows[0].unit_price != null) {
+              totalCost += Number(res.rows[0].unit_price) * item.quantity;
+            }
+          }
+
+          if (totalCost > 0) {
+            await this.journalService.generateSaleCogsJournal(
+              {
+                tenantId: data.tenant_id,
+                saleId,
+                totalCost,
+                entryDate: new Date(data.sale_date),
+              },
+              txn,
+            );
+          }
+        } catch (accountingError) {
+          // Log but don't fail the sale — accounting is secondary
+          this.logger.error(
+            `Error generating journal entries for sale ${saleId}: ${(accountingError as Error).message}`,
+          );
+        }
 
         await txn.commit();
       } catch (txnError) {

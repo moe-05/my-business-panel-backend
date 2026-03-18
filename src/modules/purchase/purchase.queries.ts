@@ -143,6 +143,46 @@ export const purchaseQueries = {
     RETURNING purchase_order_id, purchase_order_status_id, updated_at
   `,
 
+  getItemsForInventory: `
+    SELECT
+      poi.product_variant_id,
+      poi.quantity_ordered,
+      poi.tenant_id,
+      po.warehouse_id
+    FROM purchase_schema.purchase_order_item poi
+    JOIN purchase_schema.purchase_order po ON po.purchase_order_id = poi.purchase_order_id
+    WHERE poi.purchase_order_id = $1
+  `,
+
+  getOrderAmountsForJournal: `
+    SELECT
+      ap.subtotal AS subtotal_amount,
+      COALESCE(pap.tax_amount, 0) AS tax_amount,
+      (ap.subtotal + COALESCE(pap.tax_amount, 0)) AS total_amount,
+      b.tenant_id
+    FROM purchase_schema.purchase_order po
+    INNER JOIN inventory_schema.warehouse w ON w.warehouse_id = po.warehouse_id
+    INNER JOIN general_schema.branch b ON b.branch_id = w.branch_id
+    LEFT JOIN purchase_schema.purchase_account_payable pap ON pap.purchase_order_id = po.purchase_order_id
+    LEFT JOIN general_schema.account_payable ap ON ap.account_payable_id = pap.account_payable_id
+    WHERE po.purchase_order_id = $1
+    LIMIT 1
+  `,
+
+  getPaymentAmountForJournal: `
+    SELECT
+      pop.amount_paid,
+      b.tenant_id,
+      po.purchase_order_id
+    FROM purchase_schema.purchase_order_payment pop
+    JOIN purchase_schema.purchase_account_payable pap ON pap.purchase_account_payable_id = pop.purchase_account_payable_id
+    JOIN purchase_schema.purchase_order po ON po.purchase_order_id = pap.purchase_order_id
+    JOIN inventory_schema.warehouse w ON w.warehouse_id = po.warehouse_id
+    JOIN general_schema.branch b ON b.branch_id = w.branch_id
+    WHERE pop.purchase_order_payment_id = $1
+    LIMIT 1
+  `,
+
   getMatchingByOrderId: `
     SELECT
       twm.matching_id,

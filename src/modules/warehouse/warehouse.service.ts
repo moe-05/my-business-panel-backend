@@ -298,6 +298,38 @@ export class WarehouseService {
     return rows[0];
   }
 
+  async receiveStockFromPurchase(
+    warehouse_id: string,
+    product_variant_id: string,
+    tenant_id: string,
+    quantity: number,
+  ): Promise<void> {
+    const updateResult = await this.db.query(warehouseQueries.addStock, [
+      quantity,
+      warehouse_id,
+      product_variant_id,
+      tenant_id,
+    ]);
+
+    if (updateResult.rowCount === 0) {
+      await this.db.query(warehouseQueries.insertIntoInventory, [
+        tenant_id,
+        warehouse_id,
+        product_variant_id,
+        quantity,
+        null,
+      ]);
+    }
+
+    await this.db.query(warehouseQueries.logInventoryMovement, [
+      1, // IN
+      warehouse_id,
+      tenant_id,
+      product_variant_id,
+      quantity,
+    ]);
+  }
+
   // TODO: envolver en transacción con this.db.transaction()
   // TODO: se debe registrar el movimiento IN en inventory_log y el movimiento OUT también
   async moveProductToWarehouse(
