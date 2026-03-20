@@ -303,7 +303,26 @@ export class WarehouseService {
     product_variant_id: string,
     tenant_id: string,
     quantity: number,
+    costInfo?: {
+      purchaseOrderId: string;
+      unitCost: number;
+      currencyId?: number;
+      exchangeRate?: number;
+    },
   ): Promise<void> {
+    // Update product cost BEFORE adding stock (weighted avg needs current stock level)
+    if (costInfo && costInfo.unitCost > 0) {
+      await this.db.query(warehouseQueries.updateProductCost, [
+        tenant_id,
+        product_variant_id,
+        costInfo.purchaseOrderId,
+        quantity,
+        costInfo.unitCost,
+        costInfo.currencyId ?? null,
+        costInfo.exchangeRate ?? null,
+      ]);
+    }
+
     const updateResult = await this.db.query(warehouseQueries.addStock, [
       quantity,
       warehouse_id,

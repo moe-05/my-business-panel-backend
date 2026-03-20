@@ -147,8 +147,10 @@ export const purchaseQueries = {
     SELECT
       poi.product_variant_id,
       poi.quantity_ordered,
+      poi.unit_price AS unit_cost,
       poi.tenant_id,
-      po.warehouse_id
+      po.warehouse_id,
+      po.purchase_order_id
     FROM purchase_schema.purchase_order_item poi
     JOIN purchase_schema.purchase_order po ON po.purchase_order_id = poi.purchase_order_id
     WHERE poi.purchase_order_id = $1

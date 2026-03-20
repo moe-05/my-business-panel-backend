@@ -1,4 +1,9 @@
-import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
 import Database from '@crane-technologies/database';
 import { FullSaleDto, NewSingleSaleDto } from './dto/sales.dto';
@@ -128,9 +133,7 @@ export class SaleService {
           txn,
         );
 
-        // --- Accounting: generate journal entries ---
         try {
-          // 1. Revenue entry (cash or credit)
           await this.journalService.generateSaleJournal(
             {
               tenantId: data.tenant_id,
@@ -144,30 +147,19 @@ export class SaleService {
             txn,
           );
 
-          // 2. COGS entry — compute total cost from item cost data
-          //    Uses unit_price from product_variant as cost proxy
-          const costResult = await txn.query(
-            `SELECT COALESCE(SUM(pv.unit_price * $2[idx]), 0) AS total_cost
-             FROM unnest($1::uuid[]) WITH ORDINALITY AS u(variant_id, idx)
-             JOIN general_schema.product_variant pv
-               ON pv.product_variant_id = u.variant_id AND pv.tenant_id = $3`,
-            [
-              items.map((i) => i.product_variant_id),
-              items.map((i) => i.quantity),
-              data.tenant_id,
-            ],
-          );
-
-          // Fallback: sum item quantities * variant unit_price individually
           let totalCost = 0;
           for (const item of items) {
             const res = await txn.query(
-              `SELECT unit_price FROM general_schema.product_variant
+              `SELECT COALESCE(weighted_avg_cost, cost_price, 0) AS item_cost
+               FROM general_schema.product_variant
                WHERE tenant_id = $1 AND product_variant_id = $2 LIMIT 1`,
               [data.tenant_id, item.product_variant_id],
             );
-            if (res.rows.length > 0 && res.rows[0].unit_price != null) {
-              totalCost += Number(res.rows[0].unit_price) * item.quantity;
+            if (res.rows.length > 0) {
+              const itemCost = Number(res.rows[0].item_cost);
+              if (itemCost > 0) {
+                totalCost += itemCost * item.quantity;
+              }
             }
           }
 

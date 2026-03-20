@@ -94,4 +94,8 @@ export const warehouseQueries = {
       (inventory_log_type_id, warehouse_id, tenant_id, product_variant_id, quantity, created_at, updated_at)
     VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
     RETURNING *`,
+  updateProductCost: `
+    SELECT general_schema.update_product_cost_on_receipt(
+      $1::uuid, $2::uuid, $3::uuid, $4::int, $5::numeric, $6::int, $7::numeric
+    )`,
 };

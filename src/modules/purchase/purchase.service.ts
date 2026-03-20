@@ -210,6 +210,10 @@ export class PurchaseService {
             item.product_variant_id,
             item.tenant_id,
             item.quantity_ordered,
+            {
+              purchaseOrderId: item.purchase_order_id,
+              unitCost: Number(item.unit_cost),
+            },
           );
         }
 
