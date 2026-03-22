@@ -39,6 +39,8 @@ import { FoulModule } from '@/modules/foul/foul.module';
 import { TardinessModule } from '@/modules/tardiness/tardiness.module';
 import { EInvoiceModule } from '@/modules/e-invoice/e-invoice.module';
 import { AccountingModule } from '@/modules/accounting/accounting.module';
+import { ExpenseModule } from '@/modules/expense/expense.module';
+import { ReportingModule } from '@/modules/reporting/reporting.module';
 require('dotenv').config();
 
 console.log(
@@ -86,6 +88,8 @@ console.log(
     TardinessModule,
     EInvoiceModule,
     AccountingModule,
+    ExpenseModule,
+    ReportingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

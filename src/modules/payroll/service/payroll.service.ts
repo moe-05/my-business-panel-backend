@@ -1,8 +1,9 @@
 import { DATABASE } from '@/modules/db/db.provider';
 import Database from '@crane-technologies/database';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PayrollRepository } from '../repositories/payroll.repository';
 import { CalculationEngine } from './calc-engine.service';
+import { AccountingJournalService } from '@/modules/accounting/accounting-journal.service';
 import { queries } from '@/queries';
 import { CreatePaysheetDto } from '../dto/create-paysheet.dto';
 import {
@@ -15,10 +16,13 @@ import Decimal from 'decimal.js';
 
 @Injectable()
 export class PayrollService {
+  private readonly logger = new Logger(PayrollService.name);
+
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     private readonly repo: PayrollRepository,
     private readonly engine: CalculationEngine,
+    private readonly journalService: AccountingJournalService,
   ) {}
 
   async processPayrollForEmployee(
@@ -289,6 +293,32 @@ export class PayrollService {
       `Payroll closed for paysheet ${paysheetId} with totals:`,
       totals,
     );
+
+    // Generate payroll journal entry (non-blocking — log errors but don't fail)
+    try {
+      const txn = await this.db.transaction();
+      try {
+        await this.journalService.generatePayrollJournal(
+          {
+            tenantId: totals.tenant_id,
+            paysheetId,
+            totalEarnings: Number(totals.total_earnings),
+            totalDeductions: Number(totals.total_deductions),
+            netTotal: Number(totals.net_total),
+            entryDate: new Date(),
+          },
+          txn,
+        );
+        await txn.commit();
+      } catch (txnError) {
+        await txn.rollback();
+        throw txnError;
+      }
+    } catch (journalError) {
+      this.logger.error(
+        `Error generating payroll journal for paysheet ${paysheetId}: ${(journalError as Error).message}`,
+      );
+    }
 
     return totals;
   }

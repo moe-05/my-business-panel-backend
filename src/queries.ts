@@ -168,8 +168,8 @@ export const queries = createQueries({
   },
   sales: {
     createSale: `
-      INSERT INTO pos_schema.sale ( branch_id, tenant_customer_id, sale_condition, sale_date, currency_id, subtotal_amount, tax_amount, total_amount, is_completed, has_electronic_invoice)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      INSERT INTO pos_schema.sale ( branch_id, tenant_customer_id, sale_condition, sale_date, currency_id, subtotal_amount, tax_amount, total_amount, is_completed, has_electronic_invoice, seller_user_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING sale_id
     `,
     getSalesByBranch: `
@@ -544,7 +544,7 @@ export const queries = createQueries({
         GROUP BY paysheet_id  
       ) AS sub
       WHERE p.paysheet_id = sub.paysheet_id
-      RETURNING p.paysheet_id, p.net_total;
+      RETURNING p.paysheet_id, p.tenant_id, p.total_earnings, p.total_deductions, p.net_total;
     `,
     verifyPaysheet: `
       SELECT COUNT(*) AS total

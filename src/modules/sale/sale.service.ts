@@ -44,6 +44,7 @@ export class SaleService {
         data.total_amount,
         data.is_completed,
         data.has_electronic_invoice,
+        null, // seller_user_id
       ],
       { rows } = await this.db.query(queries.sales.createSale, params);
 
@@ -68,6 +69,7 @@ export class SaleService {
           data.total_amount,
           data.is_completed,
           data.has_electronic_invoice,
+          data.seller_user_id ?? null,
         ]);
         saleId = rows[0].sale_id;
 
@@ -80,6 +82,10 @@ export class SaleService {
             'quantity',
             'unit_price',
             'total_price',
+            'sale_price_type',
+            'promotion_id',
+            'original_price',
+            'discount_applied',
           ],
           items.map((item) => [
             saleId,
@@ -88,6 +94,10 @@ export class SaleService {
             item.quantity,
             item.unit_price,
             item.total_price,
+            item.sale_price_type ?? 'NORMAL',
+            item.promotion_id ?? null,
+            item.original_price ?? item.unit_price,
+            item.discount_applied ?? 0,
           ]),
         );
 
@@ -157,6 +167,13 @@ export class SaleService {
             );
             if (res.rows.length > 0) {
               const itemCost = Number(res.rows[0].item_cost);
+              // Snapshot cost_price_at_sale on the sale_item row
+              await txn.query(
+                `UPDATE pos_schema.sale_item
+                 SET cost_price_at_sale = $1
+                 WHERE sale_id = $2 AND product_variant_id = $3 AND tenant_id = $4`,
+                [itemCost, saleId, item.product_variant_id, item.tenant_id],
+              );
               if (itemCost > 0) {
                 totalCost += itemCost * item.quantity;
               }

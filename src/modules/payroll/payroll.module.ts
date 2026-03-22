@@ -15,6 +15,7 @@ import {
   OvertimeStrategy,
   VacationsStrategy,
 } from './strategies/formula.strategy';
+import { AccountingModule } from '../accounting/accounting.module';
 
 @Module({
   controllers: [PayrollController],
@@ -33,6 +34,6 @@ import {
     IncapacityStrategy,
     IncapacityDeductionStrategy,
   ],
-  imports: [],
+  imports: [AccountingModule],
 })
 export class PayrollModule {}

@@ -4,6 +4,10 @@ export interface Item {
   quantity: number;
   unit_price: number;
   total_price: number;
+  sale_price_type?: 'NORMAL' | 'PROMO' | 'SEGMENT' | 'MANUAL';
+  promotion_id?: string;
+  original_price?: number;
+  discount_applied?: number;
 }
 
 export interface FullItem extends Item {

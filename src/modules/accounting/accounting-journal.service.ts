@@ -8,6 +8,8 @@ import {
   CogsJournalParams,
   PurchaseJournalParams,
   PaymentJournalParams,
+  ExpenseJournalParams,
+  PayrollJournalParams,
 } from './interface/accounting.interface';
 
 // Account codes from the NIIF PYMES template (Phase 1)
@@ -21,6 +23,11 @@ const ACCOUNTS = {
   IVA_DEBITO_FISCAL: '2-1-003',
   INGRESOS_POR_VENTAS: '4-1-001',
   COSTO_DE_VENTAS: '6-1',
+  RETENCIONES_POR_PAGAR: '2-1-004',
+  SALARIOS_POR_PAGAR: '2-1-005',
+  CARGAS_SOCIALES_POR_PAGAR: '2-1-006',
+  SALARIOS_Y_SUELDOS: '5-1-001',
+  IVA_CREDITO_FISCAL_GASTO: '1-1-005',
 } as const;
 
 @Injectable()
@@ -442,6 +449,165 @@ export class AccountingJournalService {
           desc: 'Salida de bancos',
         },
       ],
+      txn,
+    );
+  }
+
+  /**
+   * Generates the journal entry for an operational expense.
+   *
+   * Payment by CASH:
+   *   Debit  [Expense Account]     → subtotal_amount
+   *   Debit  IVA Crédito Fiscal    → tax_amount (if > 0)
+   *   Credit Caja General          → total_amount
+   *
+   * Payment by BANK/TRANSFER/CHECK:
+   *   Debit  [Expense Account]     → subtotal_amount
+   *   Debit  IVA Crédito Fiscal    → tax_amount (if > 0)
+   *   Credit Bancos                → total_amount
+   *
+   * Payment by CREDIT_CARD:
+   *   Debit  [Expense Account]     → subtotal_amount
+   *   Debit  IVA Crédito Fiscal    → tax_amount (if > 0)
+   *   Credit Cuentas por Pagar     → total_amount
+   */
+  async generateExpenseJournal(
+    params: ExpenseJournalParams,
+    txn: ITransaction,
+  ): Promise<string> {
+    const {
+      tenantId,
+      expenseId,
+      accountCode,
+      subtotalAmount,
+      taxAmount,
+      totalAmount,
+      paymentMethod,
+      entryDate,
+      description,
+    } = params;
+
+    // Determine credit account based on payment method
+    let creditAccountCode: string;
+    switch (paymentMethod) {
+      case 'CASH':
+        creditAccountCode = ACCOUNTS.CAJA_GENERAL;
+        break;
+      case 'CREDIT_CARD':
+        creditAccountCode = ACCOUNTS.CUENTAS_POR_PAGAR;
+        break;
+      default: // BANK, TRANSFER, CHECK
+        creditAccountCode = ACCOUNTS.BANCOS;
+        break;
+    }
+
+    const [sourceTypeId, expenseAccountId, creditAccountId, ivaAccountId] =
+      await Promise.all([
+        this.resolveSourceType('EXPENSE', txn),
+        this.resolveAccount(tenantId, accountCode, txn),
+        this.resolveAccount(tenantId, creditAccountCode, txn),
+        this.resolveAccount(tenantId, ACCOUNTS.IVA_CREDITO_FISCAL, txn),
+      ]);
+
+    const lines: {
+      accountId: string;
+      debit: number;
+      credit: number;
+      desc: string;
+    }[] = [
+      {
+        accountId: expenseAccountId,
+        debit: subtotalAmount,
+        credit: 0,
+        desc: `Gasto operativo - ${description ?? accountCode}`,
+      },
+    ];
+
+    if (taxAmount > 0) {
+      lines.push({
+        accountId: ivaAccountId,
+        debit: taxAmount,
+        credit: 0,
+        desc: 'IVA crédito fiscal por gasto',
+      });
+    }
+
+    lines.push({
+      accountId: creditAccountId,
+      debit: 0,
+      credit: totalAmount,
+      desc: `Pago de gasto (${paymentMethod})`,
+    });
+
+    return this.createEntry(
+      tenantId,
+      sourceTypeId,
+      expenseId,
+      entryDate,
+      `Gasto operativo - ${description ?? expenseId}`,
+      lines,
+      txn,
+    );
+  }
+
+  /**
+   * Generates the journal entry when a payroll is closed.
+   *
+   *   Debit  5-1-001 Salarios y Sueldos    → total_earnings
+   *   Credit 2-1-005 Salarios por Pagar    → net_total
+   *   Credit 2-1-004 Retenciones por Pagar → total_deductions
+   */
+  async generatePayrollJournal(
+    params: PayrollJournalParams,
+    txn: ITransaction,
+  ): Promise<string> {
+    const { tenantId, paysheetId, totalEarnings, totalDeductions, netTotal, entryDate } =
+      params;
+
+    const [sourceTypeId, salaryExpenseId, salaryPayableId, retentionPayableId] =
+      await Promise.all([
+        this.resolveSourceType('PAYROLL', txn),
+        this.resolveAccount(tenantId, ACCOUNTS.SALARIOS_Y_SUELDOS, txn),
+        this.resolveAccount(tenantId, ACCOUNTS.SALARIOS_POR_PAGAR, txn),
+        this.resolveAccount(tenantId, ACCOUNTS.RETENCIONES_POR_PAGAR, txn),
+      ]);
+
+    const lines: {
+      accountId: string;
+      debit: number;
+      credit: number;
+      desc: string;
+    }[] = [
+      {
+        accountId: salaryExpenseId,
+        debit: totalEarnings,
+        credit: 0,
+        desc: 'Gasto de nómina - salarios brutos',
+      },
+      {
+        accountId: salaryPayableId,
+        debit: 0,
+        credit: netTotal,
+        desc: 'Salarios netos por pagar',
+      },
+    ];
+
+    if (totalDeductions > 0) {
+      lines.push({
+        accountId: retentionPayableId,
+        debit: 0,
+        credit: totalDeductions,
+        desc: 'Retenciones por pagar (deducciones de nómina)',
+      });
+    }
+
+    return this.createEntry(
+      tenantId,
+      sourceTypeId,
+      paysheetId,
+      entryDate,
+      `Nómina - Planilla ${paysheetId}`,
+      lines,
       txn,
     );
   }

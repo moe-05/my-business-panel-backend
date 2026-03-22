@@ -103,6 +103,10 @@ export class FullSaleDto {
   @IsBoolean()
   has_electronic_invoice?: boolean;
 
+  @IsOptional()
+  @IsUUID()
+  seller_user_id?: string;
+
   @IsNotEmpty()
   @IsArray()
   payments!: Payment[];

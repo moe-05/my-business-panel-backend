@@ -85,6 +85,27 @@ export interface PaymentJournalParams {
   description?: string;
 }
 
+export interface ExpenseJournalParams {
+  tenantId: string;
+  expenseId: string;
+  accountCode: string; // from expense_category → chart of accounts
+  subtotalAmount: number;
+  taxAmount: number;
+  totalAmount: number;
+  paymentMethod: string; // CASH, BANK, CREDIT_CARD, CHECK, TRANSFER
+  entryDate: Date;
+  description?: string;
+}
+
+export interface PayrollJournalParams {
+  tenantId: string;
+  paysheetId: string;
+  totalEarnings: number;
+  totalDeductions: number;
+  netTotal: number;
+  entryDate: Date;
+}
+
 export interface JournalEntryLineFromDb {
   line_id: string;
   entry_id: string;
