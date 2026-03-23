@@ -2,24 +2,26 @@ import { Inject, Injectable } from '@nestjs/common';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
 import Database from '@crane-technologies/database';
 import { FullItem, Item, ItemFromDb } from './interface/sale-item.interface';
-import { bulkItems, queries } from '@/queries';
+import { bulkItems, posQueries } from '@pos/pos.queries';
+
+const { saleItems } = posQueries;
 
 @Injectable()
 export class SaleItemService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
   async getAllItems(sale_id: string): Promise<ItemFromDb[]> {
-    const items = await this.db.query(queries.items.getItems, [sale_id]);
+    const items = await this.db.query(saleItems.getItems, [sale_id]);
     return items.rows;
   }
 
   async getItemById(id: string): Promise<FullItem | null> {
-    const item = await this.db.query(queries.items.getItemById, [id]);
+    const item = await this.db.query(saleItems.getItemById, [id]);
     return item.rows[0] || null;
   }
 
   async deleteItem(id: string) {
-    await this.db.query(queries.items.delete, [id]);
+    await this.db.query(saleItems.delete, [id]);
     return { message: `Deleted item with id ${id}` };
   }
 

@@ -2,9 +2,11 @@ import { Inject, Injectable } from '@nestjs/common';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
 import Database from '@crane-technologies/database';
 import { RegisterFoulDto } from './dto/create_foul.dto';
-import { queries } from '@/queries';
+import { hrQueries } from '@hr/hr.queries';
 import { CreateFoulError } from '@/common/errors/foul_create.error';
 import { Cron, CronExpression } from '@nestjs/schedule';
+
+const { foul } = hrQueries;
 
 @Injectable()
 export class FoulService {
@@ -21,7 +23,7 @@ export class FoulService {
         description,
       } = data;
 
-      const res = await this.db.query(queries.foul.create, [
+      const res = await this.db.query(foul.create, [
         employee_id,
         branch_id,
         identificator,
@@ -44,10 +46,8 @@ export class FoulService {
 
   async getFoulsByEmployee(employeeId: string) {
     try {
-      const count = await this.db.query(queries.foul.foulCounts, [employeeId]);
-      const fouls = await this.db.query(queries.foul.getByEmployee, [
-        employeeId,
-      ]);
+      const count = await this.db.query(foul.foulCounts, [employeeId]);
+      const fouls = await this.db.query(foul.getByEmployee, [employeeId]);
 
       return {
         totalFouls: count.rows[0].total_fouls,
@@ -61,10 +61,8 @@ export class FoulService {
 
   async getFoulsByBranch(branchId: string) {
     try {
-      const count = await this.db.query(queries.foul.foulCountByBranch, [
-        branchId,
-      ]);
-      const fouls = await this.db.query(queries.foul.getByBranch, [branchId]);
+      const count = await this.db.query(foul.foulCountByBranch, [branchId]);
+      const fouls = await this.db.query(foul.getByBranch, [branchId]);
 
       return {
         totalFouls: count.rows[0].total_fouls,
@@ -78,10 +76,7 @@ export class FoulService {
 
   async getFoulsByPeriod(startDate: string, endDate: string) {
     try {
-      const fouls = await this.db.query(queries.foul.getByPeriod, [
-        startDate,
-        endDate,
-      ]);
+      const fouls = await this.db.query(foul.getByPeriod, [startDate, endDate]);
 
       return fouls.rows;
     } catch (error) {
@@ -98,11 +93,11 @@ export class FoulService {
       console.log(
         'Starting scheduled task: Cleaning old fouls for all branches',
       );
-      const config = await this.db.query(queries.foul.getConfigforBranch);
+      const config = await this.db.query(foul.getConfigforBranch);
       console.log(`Fetched configuration for ${config.rows.length} branches`);
 
       for (const c of config.rows) {
-        const res = await this.db.query(queries.foul.cleanOldFouls, [
+        const res = await this.db.query(foul.cleanOldFouls, [
           c.branch_id,
           c.foul_expiration_months,
         ]);

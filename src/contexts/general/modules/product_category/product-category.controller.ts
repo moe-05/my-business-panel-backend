@@ -8,7 +8,7 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { ProductCategoryService } from './product_category.service';
+import { ProductCategoryService } from './product-category.service';
 import { RoleAuthorizationGuard } from '@/common/guards/role_authorization.guard';
 import { LevelAuthorizationGuard } from '@/common/guards/level_authorization.guard';
 
@@ -30,10 +30,7 @@ export class ProductCategoryController {
   }
 
   @Put(':id')
-  async updateCategory(
-    @Param('id') id: string,
-    @Body() req: { name: string },
-  ) {
+  async updateCategory(@Param('id') id: string, @Body() req: { name: string }) {
     return this.productCategoryService.updateCategory(id, req.name);
   }
 

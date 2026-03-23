@@ -5,10 +5,12 @@ import {
   NewSuspentionDto,
   UpdateSuspention,
 } from './dto/create_suspention.dto';
-import { queries } from '@/queries';
+import { hrQueries } from '@hr/hr.queries';
 import { CreateSuspentionError } from '@/common/errors/new_suspention.error';
 import { Suspention } from './interface/suspentions.interface';
 import { Cron, CronExpression } from '@nestjs/schedule';
+
+const { suspention } = hrQueries;
 
 @Injectable()
 export class SuspentionService {
@@ -19,7 +21,7 @@ export class SuspentionService {
       const { employee_id, suspentionStart, suspentionEnd, reason, branchId } =
         data;
 
-      const res = await this.db.query(queries.suspention.create, [
+      const res = await this.db.query(suspention.create, [
         employee_id,
         suspentionStart,
         suspentionEnd,
@@ -42,9 +44,7 @@ export class SuspentionService {
     employeeId: string,
   ): Promise<Suspention[] | { message: string }> {
     try {
-      const res = await this.db.query(queries.suspention.getByEmployee, [
-        employeeId,
-      ]);
+      const res = await this.db.query(suspention.getByEmployee, [employeeId]);
       if (res.rows.length === 0)
         return {
           message: 'No suspentions found for this employee',
@@ -59,9 +59,7 @@ export class SuspentionService {
     branchId: string,
   ): Promise<Suspention[] | { message: string }> {
     try {
-      const res = await this.db.query(queries.suspention.getByBranch, [
-        branchId,
-      ]);
+      const res = await this.db.query(suspention.getByBranch, [branchId]);
       if (res.rows.length === 0)
         return {
           message: 'No suspentions found for this branch',
@@ -74,13 +72,11 @@ export class SuspentionService {
 
   async closeSuspention(suspentionId: string) {
     try {
-      const exists = await this.db.query(queries.suspention.getById, [
-        suspentionId,
-      ]);
+      const exists = await this.db.query(suspention.getById, [suspentionId]);
 
       if (exists.rows.length === 0) throw new Error('Suspention not found');
 
-      const res = await this.db.query(queries.suspention.closeSuspention, [
+      const res = await this.db.query(suspention.closeSuspention, [
         suspentionId,
       ]);
 
@@ -99,7 +95,7 @@ export class SuspentionService {
     try {
       const { suspentionStart, suspentionEnd, reason } = data;
 
-      const res = await this.db.query(queries.suspention.updateSuspention, [
+      const res = await this.db.query(suspention.updateSuspention, [
         suspentionStart,
         suspentionEnd,
         reason,
@@ -119,7 +115,7 @@ export class SuspentionService {
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async checkAndCloseExpiredSuspentions() {
-    const res = await this.db.query(queries.suspention.cronJobSuspention);
+    const res = await this.db.query(suspention.cronJobSuspention);
 
     console.log(res.rows[0].close_suspention, 'suspentions closed.');
   }

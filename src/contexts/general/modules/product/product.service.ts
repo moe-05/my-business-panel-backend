@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
 import Database from '@crane-technologies/database';
-import { bulkProducts, queries } from '@/queries';
+import { bulkProducts, generalQueries } from '@general/general.queries';
 import {
   // NewProductDto,
   ProductInsert,
@@ -16,17 +16,19 @@ import { UpdateProductDto } from './dto/updateProduct.dto';
 import { Product } from './interface/product.interface';
 import { isUUID } from 'class-validator';
 
+const { products } = generalQueries;
+
 @Injectable()
 export class ProductService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
   async getAllProducts(tenantId: string): Promise<Product[]> {
-    const products = await this.db.query(queries.products.getAll, [tenantId]);
-    return products.rows;
+    const result = await this.db.query(products.getAll, [tenantId]);
+    return result.rows;
   }
 
   async getProductBySku(sku: string): Promise<Product> {
-    const product = await this.db.query(queries.products.getBySku, [sku]);
+    const product = await this.db.query(products.getBySku, [sku]);
     return product.rows[0];
   }
 
@@ -37,7 +39,7 @@ export class ProductService {
     if (!isUUID(tenantId)) {
       throw new BadRequestException('Invalid tenant ID format');
     }
-    const product = await this.db.query(queries.products.getById, [
+    const product = await this.db.query(products.getById, [
       productId,
       tenantId,
     ]);
@@ -147,7 +149,7 @@ export class ProductService {
   }
 
   async deleteProduct(productId: string) {
-    await this.db.query(queries.products.delete, [productId]);
+    await this.db.query(products.delete, [productId]);
     return { message: `Product with id ${productId} deleted` };
   }
 }

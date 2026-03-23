@@ -1,26 +1,24 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { DATABASE } from '../../../general/modules/db/db.provider';
 import Database from '@crane-technologies/database';
-import { queries } from '@/queries';
+import { posQueries } from '@pos/pos.queries';
 import { NewLoyalProgramDto } from './dto/newLoyalProgram.dto';
 import { LoyalProgram } from './interface/loyal-program.interface';
 import { UpdateLoyalProgramDto } from './dto/updateLoyalProgram.dto';
+
+const { loyaltyProgram } = posQueries;
 
 @Injectable()
 export class LoyalProgramService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
   async getLoyalProgramsByTenant(tenant_id: string): Promise<LoyalProgram[]> {
-    const programs = await this.db.query(queries.loyal_program.all, [
-      tenant_id,
-    ]);
+    const programs = await this.db.query(loyaltyProgram.all, [tenant_id]);
     return programs.rows;
   }
 
   async getLoyalProgramById(program_id: string): Promise<LoyalProgram> {
-    const program = await this.db.query(queries.loyal_program.byId, [
-      program_id,
-    ]);
+    const program = await this.db.query(loyaltyProgram.byId, [program_id]);
 
     if (program.rows.length === 0)
       throw new NotFoundException(
@@ -38,7 +36,7 @@ export class LoyalProgramService {
       minimum_purchase_for_points,
     } = data;
 
-    await this.db.query(queries.loyal_program.create, [
+    await this.db.query(loyaltyProgram.create, [
       tenant_id,
       points_earned_per_currency_unit,
       points_redeemed_per_currency_unit,
@@ -49,9 +47,7 @@ export class LoyalProgramService {
   }
 
   async deleteLoyalProgram(program_id: string) {
-    const program = await this.db.query(queries.loyal_program.delete, [
-      program_id,
-    ]);
+    const program = await this.db.query(loyaltyProgram.delete, [program_id]);
 
     if (program.rowCount === 0)
       throw new NotFoundException(
@@ -64,7 +60,7 @@ export class LoyalProgramService {
   async updateLoyalProgram(data: UpdateLoyalProgramDto, program_id: string) {
     const { minimum_purchase_for_points } = data;
 
-    const programUpdated = await this.db.query(queries.loyal_program.update, [
+    const programUpdated = await this.db.query(loyaltyProgram.update, [
       program_id,
       minimum_purchase_for_points,
     ]);

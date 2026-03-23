@@ -3,14 +3,16 @@ import Database from '@crane-technologies/database';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
 import { Warehouse } from './interfaces/warehouse.interface';
 import { CreateWarehouseDto } from './dto/create_warehouse.dto';
-import { queries } from '@/queries';
+import { generalQueries } from '@general/general.queries';
 import { ProductService } from '@/contexts/general/modules/product/product.service';
 import { ProductCount } from './interfaces/product_count.interface';
-import { InvalidTenantError } from '@/common/errors/invalid_tenant.error';
+// import { InvalidTenantError } from '@/common/errors/invalid_tenant.error';
 import { InventoryTransferProduct } from './interfaces/inventory_transfer_product.interface';
 import { InventoryTransfer } from './interfaces/inventory_transfer.interface';
 import { inventoryQueries } from '../../inventory.queries';
 import { StateService } from '@/contexts/general/modules/state/state.service';
+
+const { branch } = generalQueries;
 
 @Injectable()
 export class WarehouseService {
@@ -28,11 +30,11 @@ export class WarehouseService {
     if (!tenant)
       throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
 
-    const branch = await this.db.query(queries.branch.byIdAndTenant, [
+    const result = await this.db.query(branch.byIdAndTenant, [
       createWarehouseDto.branch_id,
       tenant_id,
     ]);
-    if (branch.rowCount === 0)
+    if (result.rowCount === 0)
       throw new NotFoundException(
         `Branch with ID ${createWarehouseDto.branch_id} not found for Tenant with ID ${tenant_id}`,
       );
@@ -182,11 +184,11 @@ export class WarehouseService {
     if (!tenant)
       throw new NotFoundException(`Tenant with ID ${tenant_id} not found`);
 
-    const branch = await this.db.query(queries.branch.byIdAndTenant, [
+    const result = await this.db.query(branch.byIdAndTenant, [
       branch_id,
       tenant_id,
     ]);
-    if (branch.rowCount === 0)
+    if (result.rowCount === 0)
       throw new NotFoundException(
         `Branch with ID ${branch_id} not found for Tenant with ID ${tenant_id}`,
       );

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { queries } from '@/queries';
+import { posQueries } from '@pos/pos.queries';
 import Database from '@crane-technologies/database';
 import { IUserSession } from '@/common/interfaces/user_session.interface';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
@@ -16,6 +16,8 @@ import { InvalidCashRegisterSessionError } from '@/common/errors/invalid_cash_re
 import { RegisterTransactionDto } from './dto/register_transaction.dto';
 import { BranchService } from '@/contexts/general/modules/branch/branch.service';
 
+const { cashRegister } = posQueries;
+
 @Injectable()
 export class CashRegisterService {
   constructor(
@@ -24,22 +26,18 @@ export class CashRegisterService {
   ) {}
 
   async findAll(): Promise<{ results: CashRegister[] }> {
-    const { rows } = await this.db.query(queries.cash_register.all, []);
+    const { rows } = await this.db.query(cashRegister.all, []);
     return { results: rows };
   }
 
   async findById(cash_register_id: string): Promise<{ result: CashRegister }> {
-    const { rows } = await this.db.query(queries.cash_register.byId, [
-      cash_register_id,
-    ]);
+    const { rows } = await this.db.query(cashRegister.byId, [cash_register_id]);
     return { result: rows[0] };
   }
 
   async findByBranch(branch_id: string): Promise<{ results: CashRegister[] }> {
     // await this.checkBranchId(branch_id);
-    const { rows } = await this.db.query(queries.cash_register.byBranch, [
-      branch_id,
-    ]);
+    const { rows } = await this.db.query(cashRegister.byBranch, [branch_id]);
     return { results: rows };
   }
 
@@ -48,7 +46,7 @@ export class CashRegisterService {
 
     await this.branchService.validateBranch(branch_id, tenant_id);
 
-    const { rows } = await this.db.query(queries.cash_register.create, [
+    const { rows } = await this.db.query(cashRegister.create, [
       branch_id,
       register_name,
       is_active,
@@ -64,7 +62,7 @@ export class CashRegisterService {
 
     await this.checkId(cash_register_id);
 
-    const { rows } = await this.db.query(queries.cash_register.startSession, [
+    const { rows } = await this.db.query(cashRegister.startSession, [
       cash_register_id,
       opened_at,
       opening_amount,
@@ -81,7 +79,7 @@ export class CashRegisterService {
     const cash_session = await this.getSession(cash_register_session_id);
     if (!cash_session.is_active) throw new InvalidCashRegisterSessionError();
 
-    const { rows } = await this.db.query(queries.cash_register.closeSession, [
+    const { rows } = await this.db.query(cashRegister.closeSession, [
       closed_at,
       closing_amount,
       cash_register_session_id,
@@ -91,7 +89,7 @@ export class CashRegisterService {
 
   async update(updateDto: UpdateCashRegisterDto) {
     const { branch_id, cash_register_id, is_active } = updateDto;
-    const { rows } = await this.db.query(queries.cash_register.update, [
+    const { rows } = await this.db.query(cashRegister.update, [
       cash_register_id,
       branch_id,
       is_active,
@@ -100,7 +98,7 @@ export class CashRegisterService {
   }
 
   async remove(cash_register_id: string) {
-    const { rows } = await this.db.query(queries.cash_register.delete, [
+    const { rows } = await this.db.query(cashRegister.delete, [
       cash_register_id,
     ]);
     return { deleted: rows[0] };
@@ -117,16 +115,18 @@ export class CashRegisterService {
     const cash_session = await this.getSession(cash_register_session_id);
     if (!cash_session.is_active) throw new InvalidCashRegisterSessionError();
 
-    const { rows } = await this.db.query(
-      queries.cash_register.registerTransaction,
-      [cash_register_session_id, amount, transaction_time, user_id],
-    );
+    const { rows } = await this.db.query(cashRegister.registerTransaction, [
+      cash_register_session_id,
+      amount,
+      transaction_time,
+      user_id,
+    ]);
 
     return { transaction: rows[0] };
   }
 
   private async checkId(cash_register_id: string): Promise<void> {
-    const { rowCount } = await this.db.query(queries.cash_register.byId, [
+    const { rowCount } = await this.db.query(cashRegister.byId, [
       cash_register_id,
     ]);
     if (rowCount === 0)
@@ -135,7 +135,7 @@ export class CashRegisterService {
 
   private async getSession(session_id: string): Promise<CashRegisterSession> {
     const { rows, rowCount } = await this.db.query(
-      queries.cash_register.getSessionById,
+      cashRegister.getSessionById,
       [session_id],
     );
     if (rowCount === 0)

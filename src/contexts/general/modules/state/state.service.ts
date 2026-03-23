@@ -4,10 +4,12 @@ import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { config as dotenvConfig } from 'dotenv';
 import { DATABASE } from '../db/db.provider';
 import Database from '@crane-technologies/database';
-import { queries } from '@/queries';
+import { generalQueries } from '@general/general.queries';
 import { InvalidRoleError } from '@/common/errors/invalid_role.error';
 import { ITenant } from '@/common/interfaces/tenant.interface';
 import { InvalidTenantError } from '@/common/errors/invalid_tenant.error';
+
+const { role, tenant } = generalQueries;
 
 dotenvConfig();
 
@@ -47,7 +49,7 @@ export class StateService implements OnModuleInit {
   }
 
   private async loadRoles() {
-    const fetchedData = await this.db.query(queries.role.all);
+    const fetchedData = await this.db.query(role.all);
     const roles = fetchedData.rows as IRole[];
     roles.forEach((role) => this.roles.set(role.role_id, role));
   }
@@ -63,7 +65,7 @@ export class StateService implements OnModuleInit {
   }
 
   private async loadTenants() {
-    const fetchedData = await this.db.query(queries.tenant.all);
+    const fetchedData = await this.db.query(tenant.all);
     const tenants = fetchedData.rows;
     tenants.forEach((tenant) => this.tenants.set(tenant.tenant_id, tenant));
   }

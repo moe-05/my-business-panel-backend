@@ -2,10 +2,12 @@ import Database from '@crane-technologies/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
 import { NewMarginDto } from './dto/newMargin.dto';
-import { queries } from '@/queries';
+import { generalQueries } from '@general/general.queries';
 import { UpdateMarginDto } from './dto/updateMargin.dto';
 import { CustomerSegmentMargin } from './interface/customer_segment_margin.interface';
 import { UpdateMarginError } from '@/common/errors/update_margin.error';
+
+const { customerSegmentMargin } = generalQueries;
 
 @Injectable()
 export class CustomerSegmentMarginService {
@@ -20,7 +22,7 @@ export class CustomerSegmentMarginService {
       seniority_months,
       frequency_per_month,
     } = marginData;
-    await this.db.query(queries.customer_segment_margin.create, [
+    await this.db.query(customerSegmentMargin.create, [
       tenant_id,
       customer_segment_id,
       customer_segment_margin_type,
@@ -42,8 +44,8 @@ export class CustomerSegmentMarginService {
       throw new Error('No valid fields to update');
     }
 
-    let setClause: string[] = [];
-    let paramsArray: any[] = [];
+    const setClause: string[] = [];
+    const paramsArray: any[] = [];
     let index = 1;
 
     for (const key of updatedMarginKeys) {
@@ -74,21 +76,19 @@ export class CustomerSegmentMarginService {
    * @returns: CustomerSegmentMargin[]
    */
   async getMarginInfo(): Promise<CustomerSegmentMargin[]> {
-    const marginInfo = await this.db.query(queries.customer_segment_margin.all);
+    const marginInfo = await this.db.query(customerSegmentMargin.all);
     return marginInfo.rows;
   }
 
   async getTenantMarginsInfo(
     tenantId: string,
   ): Promise<CustomerSegmentMargin[]> {
-    const info = await this.db.query(queries.customer_segment_margin.getInfo, [
-      tenantId,
-    ]);
+    const info = await this.db.query(customerSegmentMargin.getInfo, [tenantId]);
     return info.rows;
   }
 
   async deleteMargin(id: string) {
-    await this.db.query(queries.customer_segment_margin.delete, [id]);
+    await this.db.query(customerSegmentMargin.delete, [id]);
     return { message: `Margin with id: ${id} deleted.` };
   }
 }

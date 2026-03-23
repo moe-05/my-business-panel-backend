@@ -10,8 +10,10 @@ import {
   ReturnProduct,
   ReturnTransactionDto,
 } from './dto/return_transaction.dto';
-import { bulkReturns, queries } from '@/queries';
+import { bulkReturns, posQueries } from '@pos/pos.queries';
 import { FindReturnsDto } from './dto/find_returns.dto';
+
+const { returns, dInvoice } = posQueries;
 
 @Injectable()
 export class ReturnsService {
@@ -30,7 +32,7 @@ export class ReturnsService {
     await this.db.query('BEGIN');
     try {
       //Primero se crea la transacción de devolución
-      const res = await this.db.query(queries.returns.newTransaction, [
+      const res = await this.db.query(returns.newTransaction, [
         invoice_id,
         tenant_customer_id,
         total_refund_amount,
@@ -54,7 +56,7 @@ export class ReturnsService {
       await this.db.query(updateProducts.query, updateProducts.values);
 
       //Actualizar total de la factura
-      await this.db.query(queries.dInvoice.updateAmount, [
+      await this.db.query(dInvoice.updateAmount, [
         total_refund_amount,
         invoice_id,
       ]);
@@ -68,7 +70,7 @@ export class ReturnsService {
   }
 
   async findReturns(findReturnsDto: FindReturnsDto) {
-    const { rows } = await this.db.query(queries.returns.find, [
+    const { rows } = await this.db.query(returns.find, [
       findReturnsDto.invoice_id,
       findReturnsDto.tenant_customer_id,
       findReturnsDto.return_status_id,

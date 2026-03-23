@@ -3,7 +3,8 @@ import { CreateUserDto } from './dto/create_user.dto';
 import Database from '@crane-technologies/database';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
 import { IUserResult } from '@/contexts/general/modules/user/interfaces/user_result.interface';
-import { queries } from '@/queries';
+import { generalQueries } from '@general/general.queries';
+import { hrQueries } from '@hr/hr.queries';
 import { hash, hashSync } from 'bcrypt';
 import { StateService } from '../state/state.service';
 import { UserCreationError } from '@/common/errors/user_create.error';
@@ -14,6 +15,9 @@ import { InvalidTenantError } from '@/common/errors/invalid_tenant.error';
 import { EmployeeService } from '@/contexts/hr/modules/employee/employee.service';
 import { CreateFullEmployeeError } from '@/common/errors/create_full_employee.error';
 
+const { users } = generalQueries;
+const { employee } = hrQueries;
+
 @Injectable()
 export class UserService {
   constructor(
@@ -23,9 +27,7 @@ export class UserService {
   ) {}
 
   async getUserByEmail(email: string): Promise<IUserResult | null> {
-    const fetchedData = await this.db.query(queries.user.byEmailWithPassword, [
-      email,
-    ]);
+    const fetchedData = await this.db.query(users.byEmailWithPassword, [email]);
     if (fetchedData.rows.length === 0) return null;
     return fetchedData.rows[0];
   }
@@ -33,7 +35,7 @@ export class UserService {
   async getUsersByTenant(tenant_id: string): Promise<IUserResult[]> {
     if (isUUID(tenant_id) === false) throw new InvalidTenantError(tenant_id);
 
-    const fetchedData = await this.db.query(queries.user.byTenant, [tenant_id]);
+    const fetchedData = await this.db.query(users.byTenant, [tenant_id]);
     return fetchedData.rows;
   }
 
@@ -57,7 +59,7 @@ export class UserService {
       txn = await this.db.transaction();
 
     try {
-      const newUser = await txn.query(queries.user.create, [
+      const newUser = await txn.query(users.create, [
         tenant_id,
         email,
         password_hash,
@@ -79,7 +81,7 @@ export class UserService {
         turn_id,
       } = employeeInfo.contractData;
 
-      const newEmployee = await txn.query(queries.employee.full, [
+      const newEmployee = await txn.query(employee.full, [
         start_date,
         end_date,
         hours,
@@ -249,7 +251,7 @@ export class UserService {
   }
 
   async assignRole(assignRoleDto: AssignRoleDto) {
-    await this.db.query(queries.user.assignRole, [
+    await this.db.query(users.assignRole, [
       assignRoleDto.role_id,
       assignRoleDto.user_id,
     ]);

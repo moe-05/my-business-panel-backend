@@ -5,9 +5,11 @@ import {
   RegisterIncapacityDto,
   UpdateIncapacityDto,
 } from './dto/register_incapacity.dto';
-import { queries } from '@/queries';
+import { hrQueries } from '@hr/hr.queries';
 import { RegisterIncapacityError } from '@/common/errors/register_incapacity.error';
 import { Incapacity } from './interface/incapacity.interface';
+
+const { incapacities } = hrQueries;
 
 @Injectable()
 export class IncapacityService {
@@ -25,7 +27,7 @@ export class IncapacityService {
         percentage_to_pay,
       } = data;
 
-      const res = await this.db.query(queries.incapacities.create, [
+      const res = await this.db.query(incapacities.create, [
         employee_id,
         branch_id,
         type,
@@ -50,9 +52,7 @@ export class IncapacityService {
 
   async getIncapacitiesByBranch(branchId: string): Promise<Incapacity[]> {
     try {
-      const res = await this.db.query(queries.incapacities.byBranch, [
-        branchId,
-      ]);
+      const res = await this.db.query(incapacities.byBranch, [branchId]);
       return res.rows;
     } catch (error) {
       throw new Error(`Error fetching incapacities by branch: ${error}`);
@@ -61,9 +61,7 @@ export class IncapacityService {
 
   async getIncapacitiesByEmployee(employeeId: string): Promise<Incapacity[]> {
     try {
-      const res = await this.db.query(queries.incapacities.byEmployee, [
-        employeeId,
-      ]);
+      const res = await this.db.query(incapacities.byEmployee, [employeeId]);
       return res.rows;
     } catch (error) {
       throw new Error(`Error fetching incapacities by employee: ${error}`);
@@ -78,7 +76,7 @@ export class IncapacityService {
       const { type, period_start, period_end, days_paying, percentage_to_pay } =
         data;
 
-      const res = await this.db.query(queries.incapacities.update, [
+      const res = await this.db.query(incapacities.update, [
         type,
         period_start,
         period_end,
@@ -95,9 +93,7 @@ export class IncapacityService {
 
   async closeIncapacity(incapacityId: string) {
     try {
-      const res = await this.db.query(queries.incapacities.deactivate, [
-        incapacityId,
-      ]);
+      const res = await this.db.query(incapacities.deactivate, [incapacityId]);
       return {
         message: 'Incapacity closed successfully',
         id: res.rows[0].incapacity_id,

@@ -10,8 +10,10 @@ import {
   InvoiceDB,
   FullInvoice,
 } from './interface/d-invoice.interface';
-import { queries } from '@/queries';
+import { posQueries } from '@pos/pos.queries';
 import { InvalidInvoice } from '@/common/errors/invalid_bill.error';
+
+const { dInvoice } = posQueries;
 
 @Injectable()
 export class DInvoiceService {
@@ -28,7 +30,7 @@ export class DInvoiceService {
       updated_at,
       sale_id,
     } = data;
-    const res = await (dbClient || this.db).query(queries.dInvoice.create, [
+    const res = await (dbClient || this.db).query(dInvoice.create, [
       tenant_customer_id,
       currency_id,
       subtotal_amount,
@@ -43,7 +45,7 @@ export class DInvoiceService {
   }
 
   async getTenantDInvoices(tenantId: string): Promise<InvoiceDB[]> {
-    const result = await this.db.query(queries.dInvoice.getBills, [tenantId]);
+    const result = await this.db.query(dInvoice.getBills, [tenantId]);
     return result.rows;
   }
 
@@ -51,7 +53,7 @@ export class DInvoiceService {
     tenantId: string,
     doc: string,
   ): Promise<InvoiceDB[]> {
-    const result = await this.db.query(queries.dInvoice.getCustomerDInvoices, [
+    const result = await this.db.query(dInvoice.getCustomerDInvoices, [
       tenantId,
       doc,
     ]);
@@ -59,17 +61,13 @@ export class DInvoiceService {
   }
 
   async getDInvoiceById(invoiceId: string): Promise<FullInvoice> {
-    const result = await this.db.query(queries.dInvoice.getDInvoiceById, [
-      invoiceId,
-    ]);
+    const result = await this.db.query(dInvoice.getDInvoiceById, [invoiceId]);
     if (result.rows.length == 0) throw new InvalidInvoice();
     return result.rows[0];
   }
 
   async deleteDInvoice(invoiceId: string) {
-    const result = await this.db.query(queries.dInvoice.deleteDInvoice, [
-      invoiceId,
-    ]);
+    const result = await this.db.query(dInvoice.deleteDInvoice, [invoiceId]);
     if (result.rows.length == 0)
       throw new InternalServerErrorException('Error deleting invoice from db.');
     return { message: `DInvoice with id: ${invoiceId} deleted` };

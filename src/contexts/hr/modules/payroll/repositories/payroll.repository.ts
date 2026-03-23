@@ -4,13 +4,15 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   EmployeePayrollData,
   HistoricalEarnings,
-  Holidays,
+  // Holidays,
   HoursWorked,
   Incapacities,
   PayrollConceptRow,
   YearlySalary,
 } from '../interface/payroll-db.interface';
-import { queries } from '@/queries';
+import { hrQueries } from '@hr/hr.queries';
+
+const { payroll } = hrQueries;
 
 @Injectable()
 export class PayrollRepository {
@@ -21,7 +23,7 @@ export class PayrollRepository {
     branchId: string,
   ): Promise<EmployeePayrollData[]> {
     const employee = await this.db.query(
-      queries.payroll.getEmployeeContractForPayroll,
+      payroll.getEmployeeContractForPayroll,
       [tenantId, branchId],
     );
 
@@ -29,9 +31,7 @@ export class PayrollRepository {
   }
 
   async getConceptsPerTenant(tenantId: string): Promise<PayrollConceptRow[]> {
-    const concepts = await this.db.query(queries.payroll.getConcepts, [
-      tenantId,
-    ]);
+    const concepts = await this.db.query(payroll.getConcepts, [tenantId]);
     return concepts.rows;
   }
 
@@ -40,7 +40,7 @@ export class PayrollRepository {
     periodStart: string,
     periodEnd: string,
   ): Promise<HoursWorked[]> {
-    const res = await this.db.query(queries.payroll.getHoursWorked, [
+    const res = await this.db.query(payroll.getHoursWorked, [
       branchId,
       periodStart,
       periodEnd,
@@ -49,20 +49,18 @@ export class PayrollRepository {
   }
 
   async getHistoricalEarnings(branchId: string): Promise<HistoricalEarnings[]> {
-    const res = await this.db.query(queries.payroll.getHistorycalPayrolls, [
-      branchId,
-    ]);
+    const res = await this.db.query(payroll.getHistorycalPayrolls, [branchId]);
 
     return res.rows;
   }
 
   async getYearlySalary(branchId: string): Promise<YearlySalary[]> {
-    const res = await this.db.query(queries.payroll.getAguinaldos, [branchId]);
+    const res = await this.db.query(payroll.getAguinaldos, [branchId]);
     return res.rows;
   }
 
   async getHolidays() {
-    const res = await this.db.query(queries.payroll.getHolidays);
+    const res = await this.db.query(payroll.getHolidays);
 
     if (res.rows.length === 0) return [];
 
@@ -80,7 +78,7 @@ export class PayrollRepository {
     periodStart: string,
     periodEnd: string,
   ): Promise<Incapacities[]> {
-    const res = await this.db.query(queries.payroll.getIncapacities, [
+    const res = await this.db.query(payroll.getIncapacities, [
       branchId,
       periodStart,
       periodEnd,
@@ -102,7 +100,7 @@ export class PayrollRepository {
   }
 
   async getSuspentionInPeriod(periodStart: string, periodEnd: string) {
-    const res = await this.db.query(queries.payroll.getSuspentionPeriod, [
+    const res = await this.db.query(payroll.getSuspentionPeriod, [
       periodStart,
       periodEnd,
     ]);

@@ -1,22 +1,24 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
 import Database from '@crane-technologies/database';
-import { queries } from '@/queries';
+import { generalQueries } from '@general/general.queries';
 import { NewTenantDto } from './dto/newTenant.dto';
 import { UpdateTenantDto } from './dto/updateTenant.dto';
 import { Tenant } from './interface/tenant.interface';
+
+const { tenant } = generalQueries;
 
 @Injectable()
 export class TenantService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
   async getAllTenants(): Promise<Tenant[]> {
-    const { rows } = await this.db.query(queries.tenant.all);
+    const { rows } = await this.db.query(tenant.all);
     return rows;
   }
 
   async getTenantById(tenantId: string): Promise<Tenant> {
-    const { rows } = await this.db.query(queries.tenant.byId, [tenantId]);
+    const { rows } = await this.db.query(tenant.byId, [tenantId]);
     return rows[0];
   }
 
@@ -31,7 +33,7 @@ export class TenantService {
       identification,
     } = tenantInfo;
 
-    const { rows } = await this.db.query(queries.tenant.create, [
+    const { rows } = await this.db.query(tenant.create, [
       tenant_name,
       contact_email,
       identification,
@@ -87,9 +89,7 @@ export class TenantService {
       throw new Error('Tenant not found');
     }
 
-    const deletedTenant = await this.db.query(queries.tenant.delete, [
-      tenantId,
-    ]);
+    const deletedTenant = await this.db.query(tenant.delete, [tenantId]);
     return {
       message: 'Tenant deleted successfully',
       tenant: deletedTenant.rows[0],

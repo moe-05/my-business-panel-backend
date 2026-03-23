@@ -4,11 +4,13 @@ import { DATABASE } from '@/contexts/general/modules/db/db.provider';
 import { Branch } from '@/contexts/general/modules/branch/interfaces/branch.interface';
 import { CreateBranchDto } from '@/contexts/general/modules/branch/dto/create_branch.dto';
 import { UpdateBranchDto } from '@/contexts/general/modules/branch/dto/update_branch.dto';
-import { queries } from '@/queries';
+import { generalQueries } from '@general/general.queries';
 import { InvalidBranchError } from '@/common/errors/invalid_branch.error';
 import { InvalidSessionError } from '@/common/errors/invalid_session.error';
 import { StateService } from '@/contexts/general/modules/state/state.service';
 import { InvalidTenantError } from '@/common/errors/invalid_tenant.error';
+
+const { branch } = generalQueries;
 
 @Injectable()
 export class BranchService {
@@ -18,17 +20,17 @@ export class BranchService {
   ) {}
 
   async findById(branchId: string): Promise<Branch> {
-    const { rows } = await this.db.query(queries.branch.byId, [branchId]);
+    const { rows } = await this.db.query(branch.byId, [branchId]);
     return rows[0];
   }
 
   async findByTenant(tenantId: string): Promise<Branch[]> {
-    const { rows } = await this.db.query(queries.branch.byTenant, [tenantId]);
+    const { rows } = await this.db.query(branch.byTenant, [tenantId]);
     return rows;
   }
 
   async findBranchByName(branchName: string): Promise<Branch> {
-    const { rows } = await this.db.query(queries.branch.byName, [branchName]);
+    const { rows } = await this.db.query(branch.byName, [branchName]);
     return rows[0];
   }
 
@@ -48,7 +50,7 @@ export class BranchService {
     if (user_tenant_id !== tenant_id)
       throw new InvalidSessionError('UNAUTHORIZED');
 
-    const { rows } = await this.db.query(queries.branch.create, [
+    const { rows } = await this.db.query(branch.create, [
       tenant_id,
       branch_name,
       branch_number,
@@ -61,7 +63,7 @@ export class BranchService {
   }
 
   async deleteBranch(branchId: string): Promise<Branch> {
-    const { rows } = await this.db.query(queries.branch.delete, [branchId]);
+    const { rows } = await this.db.query(branch.delete, [branchId]);
     return rows[0];
   }
 
@@ -79,7 +81,7 @@ export class BranchService {
 
     await this.validateBranch(branch_id);
 
-    const { rows } = await this.db.query(queries.branch.update, [
+    const { rows } = await this.db.query(branch.update, [
       branch_id,
       branch_name,
       branch_number,

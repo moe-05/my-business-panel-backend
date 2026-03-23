@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CreatePaymentAlertDto } from './dto/create-payment_alert.dto';
 import { UpdatePaymentAlertDto } from './dto/update-payment_alert.dto';
+import { purchaseQueries } from '@purchase/purchase.queries';
 
 const { payments } = purchaseQueries;
 

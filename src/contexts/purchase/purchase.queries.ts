@@ -1,6 +1,6 @@
 import { createQueries } from '@crane-technologies/database';
 
-export const purchaseQueries = createQueries({
+export const purchaseQueryDefs = {
   purchase: {
     createPurchaseOrder: `
         SELECT purchase_schema.create_purchase_order(
@@ -302,4 +302,6 @@ export const purchaseQueries = createQueries({
     LIMIT 1
   `,
   },
-});
+};
+
+export const purchaseQueries = createQueries(purchaseQueryDefs);

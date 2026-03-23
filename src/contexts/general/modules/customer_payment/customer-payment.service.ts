@@ -2,23 +2,24 @@ import { Inject, Injectable } from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
 import Database from '@crane-technologies/database';
 import { NewCustomerPaymentDto } from './dto/NewCustomerPayment.dto';
-import { bulkPayments, queries } from '@/queries';
+import { bulkPayments, generalQueries } from '@general/general.queries';
 import { Payment } from './interface/payments.interface';
+
+const { customerPayment } = generalQueries;
 
 @Injectable()
 export class CustomerPaymentService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
   async getEveryPayment() {
-    const payments = await this.db.query(queries.customer_payment.getPayments);
+    const payments = await this.db.query(customerPayment.getPayments);
     return payments.rows;
   }
 
   async getCustomerPayments(customerId: string) {
-    const payments = await this.db.query(
-      queries.customer_payment.getCustomerPayments,
-      [customerId],
-    );
+    const payments = await this.db.query(customerPayment.getCustomerPayments, [
+      customerId,
+    ]);
     return payments.rows;
   }
 
@@ -71,24 +72,21 @@ export class CustomerPaymentService {
       verified,
     } = paymentData;
 
-    const newPayment = await this.db.query(
-      queries.customer_payment.createNewPayment,
-      [
-        tenant_customer_id,
-        sale_id,
-        payment_method_id,
-        payment_amount,
-        payment_date,
-        currency_id,
-        verified,
-      ],
-    );
+    const newPayment = await this.db.query(customerPayment.createNewPayment, [
+      tenant_customer_id,
+      sale_id,
+      payment_method_id,
+      payment_amount,
+      payment_date,
+      currency_id,
+      verified,
+    ]);
 
     return { message: 'Payment created', newPayment };
   }
 
   async deleteCustomerPayment(customerId: string) {
-    await this.db.query(queries.customer_payment.deletePayment, [customerId]);
+    await this.db.query(customerPayment.deletePayment, [customerId]);
     return { message: 'Payment deleted' };
   }
 }

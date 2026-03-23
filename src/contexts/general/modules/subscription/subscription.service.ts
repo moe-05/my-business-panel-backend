@@ -3,9 +3,11 @@ import { DATABASE } from '../db/db.provider';
 import Database from '@crane-technologies/database';
 import Stripe from 'stripe';
 import { NewSubscriptionDto } from './dto/newSubscription.dto';
-import { queries } from '@/queries';
+import { generalQueries } from '@general/general.queries';
 import { SignatureVerificationError } from '@/common/errors/signature_verification.error';
 import { VerifyPaymentException } from '@/common/errors/verify_payment.dto';
+
+const { subscriptions, tenant, tenantPayment } = generalQueries;
 
 @Injectable()
 export class SubscriptionService {
@@ -42,7 +44,7 @@ export class SubscriptionService {
     let tenantStripeId: string;
 
     // Verificacion de que el tenant exista y ya sea un customer en Stripe
-    const tenantResult = await this.db.query(queries.tenant.byId, [tenant_id]);
+    const tenantResult = await this.db.query(tenant.byId, [tenant_id]);
 
     if (tenantResult.rows.length === 0) {
       throw new NotFoundException('Tenant not found');
@@ -61,14 +63,11 @@ export class SubscriptionService {
 
       tenantStripeId = newCustomer.id;
 
-      await this.db.query(queries.tenant.updateStripeId, [
-        tenantStripeId,
-        tenant_id,
-      ]);
+      await this.db.query(tenant.updateStripeId, [tenantStripeId, tenant_id]);
     }
 
     // Creacion del tenant_payment en bd
-    const paymentResult = await this.db.query(queries.tenant_payment.create, [
+    const paymentResult = await this.db.query(tenantPayment.create, [
       tenant_id,
       payment_method_id,
       payment_amount,
@@ -91,10 +90,13 @@ export class SubscriptionService {
     };
     // const paymentIntent = invoice.payment_intent as Stripe.PaymentIntent;
 
-    const newSub = await this.db.query(
-      queries.subscription.createSubscription,
-      [tenant_id, subscription_type_id, tenantPaymentId, start_date, end_date],
-    );
+    const newSub = await this.db.query(subscriptions.createSubscription, [
+      tenant_id,
+      subscription_type_id,
+      tenantPaymentId,
+      start_date,
+      end_date,
+    ]);
     return {
       idOnDb: newSub.rows[0].subscription_id,
       subscriptionId: subscription.id,
@@ -171,9 +173,7 @@ export class SubscriptionService {
         console.log(
           `Subscription set to cancel at period end for tenant ID: ${tenantId}`,
         );
-        await this.db.query(queries.subscription.cancelSubscription, [
-          tenantId,
-        ]);
+        await this.db.query(subscriptions.cancelSubscription, [tenantId]);
         return { received: true };
       }
 
@@ -182,7 +182,7 @@ export class SubscriptionService {
         console.log(
           `Subscription price updated for tenant ID: ${tenantId} to price ID: ${priceId}`,
         );
-        // await this.db.query(queries.subscription.updateSubscriptionPlan, [priceId, tenantId])
+        // await this.db.query(subscription.updateSubscriptionPlan, [priceId, tenantId])
       }
 
       console.log(
@@ -201,7 +201,7 @@ export class SubscriptionService {
         );
       }
 
-      await this.db.query(queries.subscription.cancelSubscription, [tenantId]);
+      await this.db.query(subscriptions.cancelSubscription, [tenantId]);
     }
 
     return { received: true };

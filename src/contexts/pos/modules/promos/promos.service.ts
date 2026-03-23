@@ -7,27 +7,25 @@ import {
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
 import Database from '@crane-technologies/database';
 import { Promo } from './interface/promo.interface';
-import { queries } from '@/queries';
 import { NewPromoDto, PromoRules } from './dto/newPromo.dto';
 import { RuleCreationError } from '@/common/errors/create_rule.error';
 import { PromotionCreationError } from '@/common/errors/create_promo.error';
 import { UpdatePromotionDto } from './dto/updatePromo.dto';
+import { posQueries } from '@pos/pos.queries';
+
+const { promotions, promotionTypes } = posQueries;
 
 @Injectable()
 export class PromosService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
   async getPromos(tenantId: string): Promise<Promo[]> {
-    const promos = await this.db.query(queries.promotions.getPromos, [
-      tenantId,
-    ]);
+    const promos = await this.db.query(promotions.getPromos, [tenantId]);
     return promos.rows;
   }
 
   async getPromoInfo(promoID: string): Promise<Promo> {
-    const promo = await this.db.query(queries.promotions.getPromoInfo, [
-      promoID,
-    ]);
+    const promo = await this.db.query(promotions.getPromoInfo, [promoID]);
     return promo.rows[0];
   }
 
@@ -45,7 +43,7 @@ export class PromosService {
       rules,
     } = newPromoDto;
 
-    const promo = await this.db.query(queries.promotions.insertPromo, [
+    const promo = await this.db.query(promotions.insertPromo, [
       tenant_id,
       promotion_name,
       promotion_code,
@@ -78,9 +76,9 @@ export class PromosService {
       throw new RuleCreationError();
     }
 
-    let insertClause: string[] = [];
-    let paramsArray: any[] = [];
-    let placeholders: any[] = [];
+    const insertClause: string[] = [];
+    const paramsArray: any[] = [];
+    const placeholders: any[] = [];
     let i = 1;
 
     for (const key of insertKeys) {
@@ -102,14 +100,12 @@ export class PromosService {
   }
 
   async deletePromotion(promotionId: string) {
-    const promo = await this.db.query(queries.promotions.deletePromo, [
-      promotionId,
-    ]);
-    if (promo.rows.length === 0) {
+    const result = await this.db.query(promotions.deletePromo, [promotionId]);
+    if (result.rows.length === 0) {
       throw new InternalServerErrorException('Failed to delete promotion');
     }
     return {
-      message: `Promotion with id: ${promo.rows[0].promotion_id} deleted successfully`,
+      message: `Promotion with id: ${result.rows[0].promotion_id} deleted successfully`,
     };
   }
 
@@ -138,7 +134,7 @@ export class PromosService {
     try {
       await this.db.query('BEGIN');
 
-      const updatedPromo = await this.db.query(queries.promotions.updatePromo, [
+      const updatedPromo = await this.db.query(promotions.updatePromo, [
         promotionId,
         tenant_id,
         promotion_name,
@@ -181,8 +177,8 @@ export class PromosService {
       throw new BadRequestException('No valid fields to update');
     }
 
-    let setClause: string[] = [];
-    let paramsArray: any[] = [];
+    const setClause: string[] = [];
+    const paramsArray: any[] = [];
     let index = 1;
 
     for (const key of updateKeys) {
@@ -207,7 +203,7 @@ export class PromosService {
   }
 
   async getPromoTypes() {
-    const promoType = await this.db.query(queries.promo_types.getPromoTypes);
+    const promoType = await this.db.query(promotionTypes.getPromoTypes);
     return promoType.rows;
   }
 }

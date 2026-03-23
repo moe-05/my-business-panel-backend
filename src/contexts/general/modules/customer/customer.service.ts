@@ -11,9 +11,11 @@ import { NewClientDto } from './dto/newClient.dto';
 import { LevelAuthorizationGuard } from '@/common/guards/level_authorization.guard';
 import { DATABASE } from '../db/db.provider';
 import Database from '@crane-technologies/database/dist/components/Database';
-import { queries } from '@/queries';
+import { generalQueries } from '@general/general.queries';
 import { UpdateClientDto } from './dto/updateClient.dto';
 import { ClientCreateError } from '@/common/errors/client_create.error';
+
+const { customer } = generalQueries;
 
 // ? Activate when everything is ready
 // @UseGuards(AuthorizationGuard)
@@ -27,7 +29,7 @@ export class CustomerService {
    * @returns: Customer
    */
   async findCustomerByDocumentId(clientId: string): Promise<Customer> {
-    const { rows } = await this.db.query(queries.customer.getInfo, [clientId]);
+    const { rows } = await this.db.query(customer.getInfo, [clientId]);
 
     if (!rows || rows.length === 0) {
       throw new NotFoundException('Customer not found');
@@ -37,7 +39,7 @@ export class CustomerService {
   }
 
   async findCustomerById(customerId: string): Promise<Customer> {
-    const { rows } = await this.db.query(queries.customer.byId, [customerId]);
+    const { rows } = await this.db.query(customer.byId, [customerId]);
     if (!rows || rows.length === 0) {
       throw new NotFoundException('Customer not found');
     }
@@ -49,7 +51,7 @@ export class CustomerService {
    * @returns: Customer[]
    */
   async getAllCustomers(tenantId: string): Promise<Customer[]> {
-    const { rows } = await this.db.query(queries.customer.all, [tenantId]);
+    const { rows } = await this.db.query(customer.all, [tenantId]);
     return rows;
   }
 
@@ -73,7 +75,7 @@ export class CustomerService {
       is_tenant,
     } = customerData;
 
-    const { rows } = await this.db.query(queries.customer.create, [
+    const { rows } = await this.db.query(customer.create, [
       tenant_id,
       first_name,
       last_name,
@@ -108,8 +110,8 @@ export class CustomerService {
       throw new BadRequestException('No valid fields to update');
     }
 
-    let setClause: string[] = [];
-    let paramsArray: any[] = [];
+    const setClause: string[] = [];
+    const paramsArray: any[] = [];
     let index = 1;
 
     for (const key of updateKeys) {
@@ -145,14 +147,14 @@ export class CustomerService {
    * @returns: void
    */
   async deleteCustomer(customerId: string) {
-    const customer = await this.findCustomerById(customerId);
+    const result = await this.findCustomerById(customerId);
 
-    if (!customer) {
+    if (!result) {
       throw new Error('Customer not found');
     }
 
     try {
-      await this.db.query(queries.customer.delete, [customerId]);
+      await this.db.query(customer.delete, [customerId]);
       return { message: 'Customer deleted' };
     } catch (error) {
       throw new InternalServerErrorException(error);

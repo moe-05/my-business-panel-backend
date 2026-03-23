@@ -1,5 +1,5 @@
 import { Controller, Get, Param } from '@nestjs/common';
-import { PayrollMovementsService } from './payroll_movements.service';
+import { PayrollMovementsService } from './payroll-movements.service';
 
 @Controller('movements')
 export class PayrollMovementsController {

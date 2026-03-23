@@ -9,7 +9,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { CustomerPaymentService } from '@/contexts/general/modules/customer_payment/customer_payment.service';
+import { CustomerPaymentService } from '@/contexts/general/modules/customer_payment/customer-payment.service';
 import { NewCustomerPaymentDto, testdto } from './dto/NewCustomerPayment.dto';
 
 // ? @UseGuards(AuthorizationGuard)

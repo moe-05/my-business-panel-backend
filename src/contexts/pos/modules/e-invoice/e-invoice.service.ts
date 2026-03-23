@@ -7,10 +7,12 @@ import {
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
 import Database from '@crane-technologies/database';
-import { queries } from '@/queries';
+import { posQueries } from '@pos/pos.queries';
 import { XmlGeneratorEngine } from './engine/xml_generator.engine';
 import { HaciendaService } from './hacienda/hacienda.service';
 import { HaciendaPayload, HaciendaStatusResponse } from './interface';
+
+const { eInvoice } = posQueries;
 
 @Injectable()
 export class EInvoiceService {
@@ -23,26 +25,21 @@ export class EInvoiceService {
   ) {}
 
   async getEInvoiceByBranch(branchId: string) {
-    const { rows } = await this.db.query(
-      queries.eInvoice.getEInvoicesByBranch,
-      [branchId],
-    );
+    const { rows } = await this.db.query(eInvoice.getEInvoicesByBranch, [
+      branchId,
+    ]);
 
     return rows;
   }
 
   async getEInvoiceForSale(saleId: string) {
-    const { rows } = await this.db.query(queries.eInvoice.getEInvoiceForSale, [
-      saleId,
-    ]);
+    const { rows } = await this.db.query(eInvoice.getEInvoiceForSale, [saleId]);
 
     return rows;
   }
 
   async getEInvoiceById(invoiceId: string) {
-    const { rows } = await this.db.query(queries.eInvoice.getEInvoiceById, [
-      invoiceId,
-    ]);
+    const { rows } = await this.db.query(eInvoice.getEInvoiceById, [invoiceId]);
     return rows[0];
   }
 
@@ -50,7 +47,7 @@ export class EInvoiceService {
   // TODO:  al enviar la factura a Hacienda, no se recibe un resultado inmediato, sino que se procesa asincrónicamente. Implementar un mecanismo de polling o webhook para actualizar el estado de la factura una vez que Hacienda la procese. actualmente se hace un intento de quick-poll a los 3s, y luego se reintenta con backoff exponencial cada vez que el cron job la vuelva a consultar. sin embargo, el backoff exponencial reintenta cada un minuto. idealmente, el primer reintento debería ser a los 2 minutos, luego 4, luego 8, etc. hasta un máximo de n minutos. la idea es no tener al sistema preguntando cada minuto de forma indefinida. igualmente, no deberia preguntarse a haciend si no existen facturas pendientes de resolver.
   async createEInvoiceForSale(saleId: string, dbClient?: any) {
     const { rows: saleRows } = await (dbClient || this.db).query(
-      queries.eInvoice.getSaleForEInvoice,
+      eInvoice.getSaleForEInvoice,
       [saleId],
     );
 
@@ -64,7 +61,7 @@ export class EInvoiceService {
       throw new BadRequestException('Esta venta ya tiene factura electrónica');
 
     const { rows: digitalRows } = await (dbClient || this.db).query(
-      queries.eInvoice.getDInvoice,
+      eInvoice.getDInvoice,
       [saleId],
     );
     if (!digitalRows.length)
@@ -73,7 +70,7 @@ export class EInvoiceService {
       );
 
     const { rows: items } = await (dbClient || this.db).query(
-      queries.eInvoice.getSaleItemsForEInvoice,
+      eInvoice.getSaleItemsForEInvoice,
       [saleId],
     );
 
@@ -90,7 +87,7 @@ export class EInvoiceService {
     }
 
     const { rows: seqRows } = await (dbClient || this.db).query(
-      queries.eInvoice.getNextInvoiceSequence,
+      eInvoice.getNextInvoiceSequence,
       [sale.branch_id],
     );
     const invoiceSequence = Number(seqRows[0].next_seq);
@@ -107,7 +104,7 @@ export class EInvoiceService {
       consecutive,
     );
 
-    const eInvoice = this.xmlgen.mapSaleToEInvoice(
+    const invoice = this.xmlgen.mapSaleToEInvoice(
       sale,
       items,
       key,
@@ -120,21 +117,21 @@ export class EInvoiceService {
       throw new Error('Variables de entorno del certificado no configuradas');
 
     const p12Buffer = Buffer.from(p12Base64, 'base64');
-    const xmlSigned = this.xmlgen.generate(eInvoice, p12Buffer, p12Pass);
+    const xmlSigned = this.xmlgen.generate(invoice, p12Buffer, p12Pass);
     const xmlSignedB64 = Buffer.from(xmlSigned).toString('base64');
 
-    // Usa eInvoice.fechaEmision directamente → coincide exactamente con el XML.
+    // Usa invoice.fechaEmision directamente → coincide exactamente con el XML.
     const haciendaPayload: HaciendaPayload = {
       clave: key,
-      fecha: eInvoice.fechaEmision,
+      fecha: invoice.fechaEmision,
       emisor: {
-        tipoIdentificacion: eInvoice.emisor.identificacion.tipo,
-        numeroIdentificacion: eInvoice.emisor.identificacion.numero,
+        tipoIdentificacion: invoice.emisor.identificacion.tipo,
+        numeroIdentificacion: invoice.emisor.identificacion.numero,
       },
-      ...(eInvoice.receptor && {
+      ...(invoice.receptor && {
         receptor: {
-          tipoIdentificacion: eInvoice.receptor.identificacion.tipo,
-          numeroIdentificacion: eInvoice.receptor.identificacion.numero,
+          tipoIdentificacion: invoice.receptor.identificacion.tipo,
+          numeroIdentificacion: invoice.receptor.identificacion.numero,
         },
       }),
       comprobanteXml: xmlSignedB64,
@@ -145,7 +142,7 @@ export class EInvoiceService {
     // Insertar con status pendiente (1).
     // next_check_at = NOW()+30s: baseline para el cron si el quick-poll no resuelve.
     const { rows: invoiceRows } = await (dbClient || this.db).query(
-      queries.eInvoice.create,
+      eInvoice.create,
       [saleId, key, consecutive, xmlSignedB64],
     );
     const electronicInvoiceId = invoiceRows[0].electronic_sale_invoice_id;
@@ -166,13 +163,14 @@ export class EInvoiceService {
 
       if (statusId !== 1) {
         // Resuelto en el primer intento: persistir estado final directamente
-        await (dbClient || this.db).query(
-          queries.eInvoice.updateHaciendaResponse,
-          [electronicInvoiceId, haciendaStatus.respuestaXml ?? null, statusId],
-        );
+        await (dbClient || this.db).query(eInvoice.updateHaciendaResponse, [
+          electronicInvoiceId,
+          haciendaStatus.respuestaXml ?? null,
+          statusId,
+        ]);
       } else {
         // Aún procesando: registrar intento #1 y reprogramar con backoff
-        await (dbClient || this.db).query(queries.eInvoice.updateCheckAttempt, [
+        await (dbClient || this.db).query(eInvoice.updateCheckAttempt, [
           electronicInvoiceId,
           1,
           this.nextCheckAt(1),
@@ -191,7 +189,7 @@ export class EInvoiceService {
     }
 
     for (const item of items) {
-      await (dbClient || this.db).query(queries.eInvoice.insertItem, [
+      await (dbClient || this.db).query(eInvoice.insertItem, [
         electronicInvoiceId,
         item.tenant_id,
         item.product_variant_id,
@@ -201,9 +199,7 @@ export class EInvoiceService {
       ]);
     }
 
-    await (dbClient || this.db).query(queries.eInvoice.markSaleAsEInvoiced, [
-      saleId,
-    ]);
+    await (dbClient || this.db).query(eInvoice.markSaleAsEInvoiced, [saleId]);
 
     return {
       electronicInvoiceId,
@@ -230,7 +226,7 @@ export class EInvoiceService {
    */
   async reconcilePendingInvoices(dbClient?: any): Promise<void> {
     const { rows } = await (dbClient || this.db).query(
-      queries.eInvoice.getPendingInvoices,
+      eInvoice.getPendingInvoices,
     );
 
     for (const invoice of rows) {
@@ -241,24 +237,22 @@ export class EInvoiceService {
 
         if (statusId !== 1) {
           // Resuelto (aceptado o rechazado): persistir estado final
-          await (dbClient || this.db).query(
-            queries.eInvoice.updateHaciendaResponse,
-            [
-              invoice.electronic_sale_invoice_id,
-              haciendaStatus.respuestaXml ?? null,
-              statusId,
-            ],
-          );
+          await (dbClient || this.db).query(eInvoice.updateHaciendaResponse, [
+            invoice.electronic_sale_invoice_id,
+            haciendaStatus.respuestaXml ?? null,
+            statusId,
+          ]);
         } else {
           const attempts: number = Number(invoice.check_attempts) + 1;
           if (attempts >= 20) {
             // Sin respuesta tras 20 intentos (~7.5h): marcar como timeout (status 4)
-            await (dbClient || this.db).query(
-              queries.eInvoice.updateHaciendaResponse,
-              [invoice.electronic_sale_invoice_id, null, 4],
-            );
+            await (dbClient || this.db).query(eInvoice.updateHaciendaResponse, [
+              invoice.electronic_sale_invoice_id,
+              null,
+              4,
+            ]);
           } else {
-            await this.db.query(queries.eInvoice.updateCheckAttempt, [
+            await this.db.query(eInvoice.updateCheckAttempt, [
               invoice.electronic_sale_invoice_id,
               attempts,
               this.nextCheckAt(attempts),

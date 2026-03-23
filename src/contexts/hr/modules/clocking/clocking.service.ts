@@ -4,7 +4,9 @@ import Database from '@crane-technologies/database';
 import { ClockInDto } from './dto/clockIn.dto';
 import { EmployeeService } from '../employee/employee.service';
 import { EmployeeNotFoundError } from '@/common/errors/employee_not_found.error';
-import { queries } from '@/queries';
+import { hrQueries } from '@hr/hr.queries';
+
+const { turns, clocking, tardiness } = hrQueries;
 
 @Injectable()
 export class ClockingService {
@@ -22,11 +24,9 @@ export class ClockingService {
       throw new EmployeeNotFoundError(employeeId);
     }
 
-    const turn = await this.db.query(queries.turns.getEntry, [
-      employee.turn_id,
-    ]);
+    const turn = await this.db.query(turns.getEntry, [employee.turn_id]);
 
-    const clockInRecord = await this.db.query(queries.clocking.clock_in, [
+    const clockInRecord = await this.db.query(clocking.clock_in, [
       employeeId,
       branchId,
     ]);
@@ -50,7 +50,7 @@ export class ClockingService {
           (now.getTime() - scheduled.getTime()) / 60000,
         );
         alertMessage += `. Note: Clocking in ${diffInMinutes} minutes late.`;
-        await this.db.query(queries.tardiness.create, [
+        await this.db.query(tardiness.create, [
           employeeId,
           branchId,
           'late',
@@ -62,7 +62,7 @@ export class ClockingService {
           (scheduled.getTime() - now.getTime()) / 60000,
         );
         alertMessage += `. Note: Clocking in ${diffInMinutes} minutes early.`;
-        await this.db.query(queries.tardiness.create, [
+        await this.db.query(tardiness.create, [
           employeeId,
           branchId,
           'early',
@@ -85,9 +85,9 @@ export class ClockingService {
       throw new EmployeeNotFoundError(employeeId);
     }
 
-    const turn = await this.db.query(queries.turns.getOut, [emp.turn_id]);
+    const turn = await this.db.query(turns.getOut, [emp.turn_id]);
 
-    const clockOutRecord = await this.db.query(queries.clocking.clock_out, [
+    const clockOutRecord = await this.db.query(clocking.clock_out, [
       employeeId,
     ]);
 
@@ -109,7 +109,7 @@ export class ClockingService {
           (scheduled.getTime() - now.getTime()) / 60000,
         );
         alertMessage += `. Note: You are clocking out ${diffInMinutes} minutes early.`;
-        await this.db.query(queries.tardiness.create, [
+        await this.db.query(tardiness.create, [
           employeeId,
           emp.branch_id,
           'early',
@@ -122,7 +122,7 @@ export class ClockingService {
         );
         if (diffInMinutes > 0) {
           alertMessage += `. Note: You are clocking out ${diffInMinutes} minutes late.`;
-          await this.db.query(queries.tardiness.create, [
+          await this.db.query(tardiness.create, [
             employeeId,
             emp.branch_id,
             'late',

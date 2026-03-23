@@ -1,7 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
 import Database from '@crane-technologies/database';
-import { queries } from '@/queries';
+import { hrQueries } from '@hr/hr.queries';
+
+const { tardiness } = hrQueries;
 
 @Injectable()
 export class TardinessService {
@@ -9,11 +11,9 @@ export class TardinessService {
 
   async getTardinessByEmployee(employeeId: string) {
     try {
-      const res = await this.db.query(queries.tardiness.getByEmployee, [
-        employeeId,
-      ]);
+      const res = await this.db.query(tardiness.getByEmployee, [employeeId]);
 
-      const count = await this.db.query(queries.tardiness.getCountByEmployee, [
+      const count = await this.db.query(tardiness.getCountByEmployee, [
         employeeId,
       ]);
 
@@ -30,12 +30,8 @@ export class TardinessService {
 
   async getTardinessByBranch(branchId: string) {
     try {
-      const res = await this.db.query(queries.tardiness.getByBranch, [
-        branchId,
-      ]);
-      const count = await this.db.query(queries.tardiness.getCountByBranch, [
-        branchId,
-      ]);
+      const res = await this.db.query(tardiness.getByBranch, [branchId]);
+      const count = await this.db.query(tardiness.getCountByBranch, [branchId]);
       return {
         tardiness: res.rows,
         totalCount: count.rows[0].total,
@@ -53,13 +49,13 @@ export class TardinessService {
     branchId: string,
   ) {
     try {
-      const res = await this.db.query(queries.tardiness.getByPeriod, [
+      const res = await this.db.query(tardiness.getByPeriod, [
         startDate,
         endDate,
         branchId,
       ]);
 
-      const count = await this.db.query(queries.tardiness.getCountByPeriod, [
+      const count = await this.db.query(tardiness.getCountByPeriod, [
         startDate,
         endDate,
         branchId,

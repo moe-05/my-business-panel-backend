@@ -2,17 +2,17 @@ import { Inject, Injectable } from '@nestjs/common';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
 import Database from '@crane-technologies/database';
 import { ContractDto } from '../employee/dto/newEmployeeDto.dto';
-import { queries } from '@/queries';
+import { hrQueries } from '@hr/hr.queries';
 import { Contract } from '../employee/interface/employee.interface';
+
+const { contract } = hrQueries;
 
 @Injectable()
 export class ContractService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
   async updateContract(contract_id: string, data: ContractDto) {
-    const existingContract = await this.db.query(queries.contract.byId, [
-      contract_id,
-    ]);
+    const existingContract = await this.db.query(contract.byId, [contract_id]);
 
     if (existingContract.rows.length === 0) {
       throw new Error(`Contract with id ${contract_id} not found.`);
@@ -20,7 +20,7 @@ export class ContractService {
 
     const { start_date, end_date, hours, base_salary, duties } = data;
 
-    const updatedContract = await this.db.query(queries.contract.update, [
+    const updatedContract = await this.db.query(contract.update, [
       start_date,
       end_date,
       hours,
@@ -36,8 +36,8 @@ export class ContractService {
   }
 
   async getContractById(contract_id: string): Promise<Contract | null> {
-    const contract = await this.db.query(queries.contract.byId, [contract_id]);
-    if (contract.rows.length === 0) return null;
-    return contract.rows[0];
+    const result = await this.db.query(contract.byId, [contract_id]);
+    if (result.rows.length === 0) return null;
+    return result.rows[0];
   }
 }

@@ -4,7 +4,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PayrollRepository } from '../repositories/payroll.repository';
 import { CalculationEngine } from './calc-engine.service';
 import { AccountingJournalService } from '@/contexts/finances/modules/accounting/accounting-journal.service';
-import { queries } from '@/queries';
+import { hrQueries } from '@hr/hr.queries';
 import { CreatePaysheetDto } from '../dto/create-paysheet.dto';
 import {
   EmployeePayrollData,
@@ -13,6 +13,8 @@ import {
   PayrollConceptRow,
 } from '../interface/payroll-db.interface';
 import Decimal from 'decimal.js';
+
+const { payroll } = hrQueries;
 
 @Injectable()
 export class PayrollService {
@@ -208,7 +210,7 @@ export class PayrollService {
 
     const txn = await this.db.transaction();
     try {
-      const { rows } = await txn.query(queries.payroll.insertDetail, [
+      const { rows } = await txn.query(payroll.insertDetail, [
         paysheetId,
         emp.employee_id,
         emp.contract_id,
@@ -222,7 +224,7 @@ export class PayrollService {
       const detailId = rows[0].detail_id;
 
       for (const mov of allMovements) {
-        await txn.query(queries.payroll.insertMovement, [
+        await txn.query(payroll.insertMovement, [
           detailId,
           mov.concept_id,
           mov.calculated_amount.toString(),
@@ -242,7 +244,7 @@ export class PayrollService {
   }
 
   async createPaysheetHeader(data: CreatePaysheetDto) {
-    // const exist = await this.db.query(queries.payroll.checkExistingPeriod, [
+    // const exist = await this.db.query(payroll.checkExistingPeriod, [
     //   data.branchId,
     //   data.tenantId,
     //   data.periodStart,
@@ -255,7 +257,7 @@ export class PayrollService {
     //   );
     // }
 
-    const newPaysheet = await this.db.query(queries.payroll.insertPaysheet, [
+    const newPaysheet = await this.db.query(payroll.insertPaysheet, [
       data.tenantId,
       data.branchId,
       data.periodStart,
@@ -266,9 +268,7 @@ export class PayrollService {
   }
 
   async closePayroll(paysheetId: string, expectedEmployeeCount: number) {
-    const verify = await this.db.query(queries.payroll.verifyPaysheet, [
-      paysheetId,
-    ]);
+    const verify = await this.db.query(payroll.verifyPaysheet, [paysheetId]);
     const actualCount = parseInt(verify.rows[0].total);
 
     if (actualCount !== expectedEmployeeCount) {
@@ -277,9 +277,7 @@ export class PayrollService {
       );
     }
 
-    const result = await this.db.query(queries.payroll.closePaysheet, [
-      paysheetId,
-    ]);
+    const result = await this.db.query(payroll.closePaysheet, [paysheetId]);
 
     if (result.rows.length === 0) {
       throw Error(

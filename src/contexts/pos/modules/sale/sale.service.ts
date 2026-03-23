@@ -7,9 +7,9 @@ import {
 import { DATABASE } from '../../../general/modules/db/db.provider';
 import Database from '@crane-technologies/database';
 import { FullSaleDto, NewSingleSaleDto } from './dto/sales.dto';
-import { queries } from '@/queries';
+import { posQueries } from '@pos/pos.queries';
 
-import { CustomerPaymentService } from '../../../general/modules/customer_payment/customer_payment.service';
+import { CustomerPaymentService } from '../../../general/modules/customer_payment/customer-payment.service';
 import { Condition, SaleFromDb } from './interface/sale.interface';
 import { SaleCreationError } from '@/common/errors/sale_creation.error';
 import { EInvoiceService } from '../e-invoice/e-invoice.service';
@@ -17,6 +17,8 @@ import { DInvoiceService } from '../d-invoice/d-invoice.service';
 import { AccountingJournalService } from '../../../finances/modules/accounting/accounting-journal.service';
 import { SaleItemService } from '../sale-item/sale-item.service';
 import { WarehouseService } from '@/contexts/inventory/modules/warehouse/warehouse.service';
+
+const { sales } = posQueries;
 
 @Injectable()
 export class SaleService {
@@ -46,7 +48,7 @@ export class SaleService {
         data.has_electronic_invoice,
         null, // seller_user_id
       ],
-      { rows } = await this.db.query(queries.sales.createSale, params);
+      { rows } = await this.db.query(sales.createSale, params);
 
     return rows[0].sale_id;
   }
@@ -58,7 +60,7 @@ export class SaleService {
 
       let saleId: string;
       try {
-        const { rows } = await txn.query(queries.sales.createSale, [
+        const { rows } = await txn.query(sales.createSale, [
           data.branch_id,
           data.tenant_customer_id,
           data.sale_condition,
@@ -222,14 +224,12 @@ export class SaleService {
   }
 
   async getAllSalesByBranch(branch_id: string): Promise<SaleFromDb[]> {
-    const res = await this.db.query(queries.sales.getSalesByBranch, [
-      branch_id,
-    ]);
-    return res.rows;
+    const result = await this.db.query(sales.getSalesByBranch, [branch_id]);
+    return result.rows;
   }
 
   async getAllConditions(): Promise<Condition[]> {
-    const { rows } = await this.db.query(queries.sales.getConditions);
+    const { rows } = await this.db.query(sales.getConditions);
 
     return rows;
   }

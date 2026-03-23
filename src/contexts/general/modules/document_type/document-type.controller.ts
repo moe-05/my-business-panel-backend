@@ -1,12 +1,6 @@
 import { LevelAuthorizationGuard } from '@/common/guards/level_authorization.guard';
-import { DocumentTypeService } from './document_type.service';
-import {
-  Controller,
-  Delete,
-  Get,
-  Param,
-  UseGuards,
-} from '@nestjs/common';
+import { DocumentTypeService } from './document-type.service';
+import { Controller, Delete, Get, Param, UseGuards } from '@nestjs/common';
 
 // @UseGuards(AuthorizationGuard)
 @Controller('document')
