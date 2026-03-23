@@ -10,9 +10,11 @@ import { UpdatePurchaseDto } from './dto/update-purchase.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import Database from '@crane-technologies/database/dist/components/Database';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
-import { purchaseQueries } from './purchase.queries';
+import { purchaseQueries } from '@purchase/purchase.queries';
 import { WarehouseService } from '@/contexts/inventory/modules/warehouse/warehouse.service';
 import { AccountingJournalService } from '@/contexts/finances/modules/accounting/accounting-journal.service';
+
+const { purchase, payments, ap } = purchaseQueries;
 
 @Injectable()
 export class PurchaseService {
@@ -34,7 +36,7 @@ export class PurchaseService {
       payment_condition,
     } = param;
 
-    const result = await this.db.query(purchaseQueries.createPurchaseOrder, [
+    const result = await this.db.query(purchase.createPurchaseOrder, [
       supplier_id,
       warehouse_id,
       expected_delivery_date,
@@ -55,7 +57,7 @@ export class PurchaseService {
       );
     }
 
-    await this.db.query(purchaseQueries.threeWayMatching, [
+    await this.db.query(purchase.threeWayMatching, [
       purchase_order_id,
       goods_receipt_id,
     ]);
@@ -75,7 +77,7 @@ export class PurchaseService {
 
       let insertResult;
       try {
-        insertResult = await txn.query(purchaseQueries.insertPayment, [
+        insertResult = await txn.query(payments.insertPayment, [
           purchase_account_payable_id,
           amount_paid,
           payment_method_id,
@@ -92,15 +94,14 @@ export class PurchaseService {
       if (!paymentId)
         throw new Error('No se pudo obtener purchase_order_payment_id');
 
-      const payableResult = await txn.query(
-        purchaseQueries.getUpdatedPayableById,
-        [purchase_account_payable_id],
-      );
+      const payableResult = await txn.query(ap.getUpdatedPayableById, [
+        purchase_account_payable_id,
+      ]);
 
       // --- Accounting: generate payment-made journal entry ---
       try {
         const paymentInfo = await txn.query(
-          purchaseQueries.getPaymentAmountForJournal,
+          payments.getPaymentAmountForJournal,
           [paymentId],
         );
         if (paymentInfo.rows.length > 0) {
@@ -135,19 +136,17 @@ export class PurchaseService {
   }
 
   async getAllPurchaseOrders(tenantId: string) {
-    const result = await this.db.query(purchaseQueries.getAllByTenant, [
-      tenantId,
-    ]);
+    const result = await this.db.query(purchase.getAllByTenant, [tenantId]);
     return result.rows;
   }
 
   async getPurchaseOrderById(id: string) {
-    const result = await this.db.query(purchaseQueries.getById, [id]);
+    const result = await this.db.query(purchase.getById, [id]);
     return result.rows[0] ?? null;
   }
 
   async updatePurchaseOrder(id: string, updatePurchaseDto: UpdatePurchaseDto) {
-    const result = await this.db.query(purchaseQueries.updateStatus, [
+    const result = await this.db.query(purchase.updateStatus, [
       (updatePurchaseDto as any)?.purchase_order_status_id ?? null,
       id,
     ]);
@@ -156,7 +155,7 @@ export class PurchaseService {
 
   async updateOrderStatus(orderId: string, statusId: number, tenantId: string) {
     const currentResult = await this.db.query(
-      purchaseQueries.getCurrentStatusByIdAndTenant,
+      purchase.getCurrentStatusByIdAndTenant,
       [orderId, tenantId],
     );
 
@@ -195,15 +194,14 @@ export class PurchaseService {
       // Delivery: wrap status update + inventory + accounting in a transaction
       const txn = await this.db.transaction();
       try {
-        const updateResult = await txn.query(
-          purchaseQueries.updateOrderStatus,
-          [statusId, orderId],
-        );
+        const updateResult = await txn.query(purchase.updateOrderStatus, [
+          statusId,
+          orderId,
+        ]);
 
-        const itemsResult = await txn.query(
-          purchaseQueries.getItemsForInventory,
-          [orderId],
-        );
+        const itemsResult = await txn.query(purchase.getItemsForInventory, [
+          orderId,
+        ]);
         for (const item of itemsResult.rows) {
           await this.warehouseService.receiveStockFromPurchase(
             item.warehouse_id,
@@ -220,7 +218,7 @@ export class PurchaseService {
         // --- Accounting: generate purchase journal entry ---
         try {
           const amountsResult = await txn.query(
-            purchaseQueries.getOrderAmountsForJournal,
+            purchase.getOrderAmountsForJournal,
             [orderId],
           );
           if (amountsResult.rows.length > 0) {
@@ -252,16 +250,16 @@ export class PurchaseService {
     }
 
     // Non-delivery transitions: simple update
-    const updateResult = await this.db.query(
-      purchaseQueries.updateOrderStatus,
-      [statusId, orderId],
-    );
+    const updateResult = await this.db.query(purchase.updateOrderStatus, [
+      statusId,
+      orderId,
+    ]);
 
     return updateResult.rows[0];
   }
 
   async getThreeWayMatching(orderId: string) {
-    const result = await this.db.query(purchaseQueries.getMatchingByOrderId, [
+    const result = await this.db.query(purchase.getMatchingByOrderId, [
       orderId,
     ]);
 

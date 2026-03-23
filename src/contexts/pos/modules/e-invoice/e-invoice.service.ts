@@ -46,6 +46,8 @@ export class EInvoiceService {
     return rows[0];
   }
 
+  // TODO:  manejar transaccion con método db.transaction()
+  // TODO:  al enviar la factura a Hacienda, no se recibe un resultado inmediato, sino que se procesa asincrónicamente. Implementar un mecanismo de polling o webhook para actualizar el estado de la factura una vez que Hacienda la procese. actualmente se hace un intento de quick-poll a los 3s, y luego se reintenta con backoff exponencial cada vez que el cron job la vuelva a consultar. sin embargo, el backoff exponencial reintenta cada un minuto. idealmente, el primer reintento debería ser a los 2 minutos, luego 4, luego 8, etc. hasta un máximo de n minutos. la idea es no tener al sistema preguntando cada minuto de forma indefinida. igualmente, no deberia preguntarse a haciend si no existen facturas pendientes de resolver.
   async createEInvoiceForSale(saleId: string, dbClient?: any) {
     const { rows: saleRows } = await (dbClient || this.db).query(
       queries.eInvoice.getSaleForEInvoice,
@@ -121,7 +123,6 @@ export class EInvoiceService {
     const xmlSigned = this.xmlgen.generate(eInvoice, p12Buffer, p12Pass);
     const xmlSignedB64 = Buffer.from(xmlSigned).toString('base64');
 
-    // Enviar a Hacienda ANTES de persistir en BD.
     // Usa eInvoice.fechaEmision directamente → coincide exactamente con el XML.
     const haciendaPayload: HaciendaPayload = {
       clave: key,
@@ -189,7 +190,6 @@ export class EInvoiceService {
       );
     }
 
-    // Persistir ítems de la factura electrónica
     for (const item of items) {
       await (dbClient || this.db).query(queries.eInvoice.insertItem, [
         electronicInvoiceId,

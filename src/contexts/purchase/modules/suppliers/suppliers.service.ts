@@ -3,9 +3,11 @@ import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
 import Database from '@crane-technologies/database/dist/components/Database';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
-import { supplierQueries } from './suppliers.queries';
+import { purchaseQueries } from '@purchase/purchase.queries';
 import { IUserSession } from '@/common/interfaces/user_session.interface';
 import { InvalidSessionError } from '@/common/errors/invalid_session.error';
+
+const { suppliers } = purchaseQueries;
 
 @Injectable()
 export class SuppliersService {
@@ -27,7 +29,7 @@ export class SuppliersService {
         supplier_notes,
       } = createSupplierDto;
 
-      const newSupplier = await this.db.query(supplierQueries.create, [
+      const newSupplier = await this.db.query(suppliers.create, [
         supplier_name,
         supplier_contact_info,
         supplier_address,
@@ -105,8 +107,8 @@ export class SuppliersService {
 
   async getAllSuppliers() {
     try {
-      const suppliers = await this.db.query(supplierQueries.getAll);
-      return suppliers.rows;
+      const result = await this.db.query(suppliers.getAll);
+      return result.rows;
     } catch (error) {
       console.error('Error fetching suppliers:', error);
       throw new Error('Failed to fetch suppliers');
@@ -115,10 +117,8 @@ export class SuppliersService {
 
   async getAllSuppliersByTenant(tenantId: string) {
     try {
-      const suppliers = await this.db.query(supplierQueries.getAllByTenant, [
-        tenantId,
-      ]);
-      return suppliers.rows;
+      const result = await this.db.query(suppliers.getAllByTenant, [tenantId]);
+      return result.rows;
     } catch (error) {
       console.error('Error fetching suppliers:', error);
       throw new Error('Failed to fetch suppliers');
@@ -127,8 +127,8 @@ export class SuppliersService {
 
   async getSupplierById(id: string) {
     try {
-      const supplier = await this.db.query(supplierQueries.getById, [id]);
-      return supplier.rows[0];
+      const result = await this.db.query(suppliers.getById, [id]);
+      return result.rows[0];
     } catch (error) {
       console.error(`Error fetching supplier with id ${id}:`, error);
       throw new Error('Failed to fetch supplier');
@@ -162,14 +162,11 @@ export class SuppliersService {
 
     paramsArray.push(supplierId);
 
-    const supplierUpdates = await this.db.query(
-      supplierQueries.update,
-      paramsArray,
-    );
+    const result = await this.db.query(suppliers.update, paramsArray);
 
     return {
       message: 'Supplier updated successfully',
-      supplier: supplierUpdates.rows[0],
+      supplier: result.rows[0],
     };
   }
 
@@ -179,12 +176,10 @@ export class SuppliersService {
       throw new Error('Supplier not found');
     }
 
-    const deletedSupplier = await this.db.query(supplierQueries.delete, [
-      supplierId,
-    ]);
+    const result = await this.db.query(suppliers.delete, [supplierId]);
     return {
       message: 'Supplier deleted successfully',
-      supplier: deletedSupplier.rows[0],
+      supplier: result.rows[0],
     };
   }
 }
