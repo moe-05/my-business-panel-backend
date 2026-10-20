@@ -29,9 +29,10 @@ import {
   updateCashRegisterDoc,
   removeCashRegisterDoc,
 } from '@/docs/contexts/pos/cash_register';
+import { RateLimitGuard } from '@/common/rate-limit/rate-limit.guard';
 
 @ApiTags('Cash Register')
-@UseGuards(AuthenticationGuard, LevelAuthorizationGuard)
+@UseGuards(AuthenticationGuard, RateLimitGuard, LevelAuthorizationGuard)
 @Controller('cash-register')
 export class CashRegisterController {
   constructor(private readonly cashRegisterService: CashRegisterService) {}
@@ -57,15 +58,19 @@ export class CashRegisterController {
   @ApiResponse(findCashRegistersDoc.responses[401])
   @RequiredLevel(1)
   @Get()
-  find(@Query() query: { branch_id?: string }) {
+  find(
+    @Session() session: IUserSession,
+    @Query() query: { branch_id?: string },
+  ) {
     return query.branch_id
-      ? this.cashRegisterService.findByBranch(query.branch_id)
-      : this.cashRegisterService.findAll();
+      ? this.cashRegisterService.findByBranch(session, query.branch_id)
+      : this.cashRegisterService.findAll(session);
   }
 
   @RequiredLevel(1)
   @Get('all/paginated')
   findPaginated(
+    @Session() session: IUserSession,
     @Query('branch_id') branchId?: string,
     @Query('is_active') isActive?: string,
     @Query('page') page = '1',
@@ -76,6 +81,7 @@ export class CashRegisterController {
         ? undefined
         : isActive === 'true';
     return this.cashRegisterService.findAllPaginated(
+      session,
       branchId || undefined,
       isActiveParam,
       parseInt(page),
@@ -129,14 +135,23 @@ export class CashRegisterController {
 
   @RequiredLevel(1)
   @Get('sessions/:sessionId/report')
-  getSessionReport(@Param('sessionId') sessionId: string) {
-    return this.cashRegisterService.getSessionGroupSales(sessionId);
+  getSessionReport(
+    @Session() session: IUserSession,
+    @Param('sessionId') sessionId: string,
+  ) {
+    return this.cashRegisterService.getSessionReport(session, sessionId);
   }
 
   @RequiredLevel(1)
   @Get('sessions/:sessionId/payment-methods')
-  getPaymentMethods(@Param('sessionId') sessionId: string) {
-    return this.cashRegisterService.getSessionPaymentMethodSales(sessionId);
+  getPaymentMethods(
+    @Session() session: IUserSession,
+    @Param('sessionId') sessionId: string,
+  ) {
+    return this.cashRegisterService.getSessionPaymentMethods(
+      session,
+      sessionId,
+    );
   }
 
   @ApiOperation(findOneCashRegisterDoc.operation)
@@ -144,8 +159,8 @@ export class CashRegisterController {
   @ApiResponse(findOneCashRegisterDoc.responses[401])
   @RequiredLevel(1)
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.cashRegisterService.findById(id);
+  findOne(@Session() session: IUserSession, @Param('id') id: string) {
+    return this.cashRegisterService.findById(session, id);
   }
 
   @ApiOperation(updateCashRegisterDoc.operation)
@@ -153,8 +168,11 @@ export class CashRegisterController {
   @ApiResponse(updateCashRegisterDoc.responses[401])
   @RequiredLevel(3)
   @Put(':id')
-  update(@Body() updateCashRegisterDto: UpdateCashRegisterDto) {
-    return this.cashRegisterService.update(updateCashRegisterDto);
+  update(
+    @Session() session: IUserSession,
+    @Body() updateCashRegisterDto: UpdateCashRegisterDto,
+  ) {
+    return this.cashRegisterService.update(session, updateCashRegisterDto);
   }
 
   @ApiOperation(removeCashRegisterDoc.operation)
@@ -162,7 +180,7 @@ export class CashRegisterController {
   @ApiResponse(removeCashRegisterDoc.responses[401])
   @RequiredLevel(4)
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.cashRegisterService.remove(id);
+  remove(@Session() session: IUserSession, @Param('id') id: string) {
+    return this.cashRegisterService.remove(session, id);
   }
 }

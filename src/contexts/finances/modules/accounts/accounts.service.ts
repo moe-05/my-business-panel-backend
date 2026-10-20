@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import Database from '@crane-technologies/database/dist/components/Database';
+import Database from '@resonance-components/datahandler';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
 import { StateService } from '@/contexts/general/modules/state/state.service';
 import {
@@ -15,13 +15,10 @@ import {
 } from './accounts.queries';
 import { IUserSession } from '@/common/interfaces/user_session.interface';
 
-interface AccountListQuery {
-  status?: string;
-  sort_by?: string;
-  sort_dir?: string;
-}
+import { AccountListQueryDto } from './dto/accounts-query.dto';
 
-const SUPERUSER_HIERARCHY = 1;
+// role_hierarchy 1 es employee; el superusuario se identifica por nombre de rol
+const SUPERUSER_ROLE_NAME = 'superuser';
 
 export interface AlertConfig {
   warning_days_before_due: number;
@@ -40,6 +37,10 @@ const AR_SORT_COLS: Record<string, string> = {
   balance_due: 'balance_due',
 };
 
+// Todas las vistas de Cuentas filtran SIEMPRE por un tenant (el de la sesion,
+// o el que el superusuario pida explicitamente, ver el controller): mezclar
+// CxP/CxC de varias empresas en una tabla y aplicarles la configuracion de
+// alertas de otro tenant no tiene sentido de negocio.
 @Injectable()
 export class AccountsService {
   constructor(
@@ -47,31 +48,47 @@ export class AccountsService {
     private readonly stateService: StateService,
   ) {}
 
-  async getAccountsOverview(session: IUserSession) {
-    const isSuperuser =
-      this.stateService.getRole(session.role_id).role_hierarchy ===
-      SUPERUSER_HIERARCHY;
+  async getAccountsOverview(tenantId: string, branchId?: string) {
+    const { alertConfig } = accountsOverviewQueries;
+    const branch = branchId || null;
 
-    const { ap, ar, alertConfig } = accountsOverviewQueries;
+    // CxP: tenant + sucursal opcional (via warehouse->branch).
+    const apValues: unknown[] = [tenantId];
+    const apConditions: string[] = ['ap.is_paid = false', 'b.tenant_id = $1'];
+    if (branch) {
+      apValues.push(branch);
+      apConditions.push(`b.branch_id = $${apValues.length}`);
+    }
+    const apSql = `
+      ${apOverviewSelect}
+      WHERE ${apConditions.join(' AND ')}
+      ORDER BY ap.due_date DESC, pap.created_at DESC
+    `;
+
+    // CxC: tenant + sucursal opcional (via sale.branch_id).
+    const arValues: unknown[] = [tenantId];
+    const arConditions: string[] = ['ar.is_paid = false', 'ar.tenant_id = $1'];
+    if (branch) {
+      arValues.push(branch);
+      arConditions.push(`sale_b.branch_id = $${arValues.length}`);
+    }
+    const arSql = `
+      ${arOverviewSelect}
+      WHERE ${arConditions.join(' AND ')}
+      ${arGroupByClause}
+      ORDER BY ar.due_date DESC, sar.created_at DESC
+    `;
 
     const [payablesResult, receivablesResult, apConfigResult, arConfigResult] =
       await Promise.all([
-        isSuperuser
-          ? this.db.query(ap.getGlobal)
-          : this.db.query(ap.getByTenant, [session.tenant_id]),
-        isSuperuser
-          ? this.db.query(ar.getGlobal)
-          : this.db.query(ar.getByTenant, [session.tenant_id]),
-        session.tenant_id
-          ? this.db
-              .query(alertConfig.getPayableConfig, [session.tenant_id])
-              .catch(() => ({ rows: [] }))
-          : Promise.resolve({ rows: [] }),
-        session.tenant_id
-          ? this.db
-              .query(alertConfig.getReceivableConfig, [session.tenant_id])
-              .catch(() => ({ rows: [] }))
-          : Promise.resolve({ rows: [] }),
+        this.db.query(apSql, apValues),
+        this.db.query(arSql, arValues),
+        this.db
+          .query(alertConfig.getPayableConfig, [tenantId])
+          .catch(() => ({ rows: [] })),
+        this.db
+          .query(alertConfig.getReceivableConfig, [tenantId])
+          .catch(() => ({ rows: [] })),
       ]);
 
     const payablesAlertConfig: AlertConfig | null =
@@ -87,22 +104,18 @@ export class AccountsService {
     };
   }
 
-  async getPayablesList(query: AccountListQuery, session: IUserSession) {
-    const isSuperuser =
-      this.stateService.getRole(session.role_id).role_hierarchy ===
-      SUPERUSER_HIERARCHY;
+  async getPayablesList(query: AccountListQueryDto, tenantId: string) {
+    const values: unknown[] = [tenantId];
+    const conditions: string[] = ['ap.is_paid = false', 'b.tenant_id = $1'];
 
-    const values: unknown[] = [];
-    const conditions: string[] = ['ap.is_paid = false'];
-
-    if (!isSuperuser) {
-      values.push(session.tenant_id);
-      conditions.push(`b.tenant_id = $${values.length}`);
-    }
-
-    if (query.status && /^\d+$/.test(query.status)) {
+    if (query.status) {
       values.push(parseInt(query.status, 10));
       conditions.push(`pap.account_payable_status = $${values.length}`);
+    }
+
+    if (query.branchId) {
+      values.push(query.branchId);
+      conditions.push(`b.branch_id = $${values.length}`);
     }
 
     const sortCol =
@@ -119,22 +132,18 @@ export class AccountsService {
     return result.rows;
   }
 
-  async getReceivablesList(query: AccountListQuery, session: IUserSession) {
-    const isSuperuser =
-      this.stateService.getRole(session.role_id).role_hierarchy ===
-      SUPERUSER_HIERARCHY;
+  async getReceivablesList(query: AccountListQueryDto, tenantId: string) {
+    const values: unknown[] = [tenantId];
+    const conditions: string[] = ['ar.is_paid = false', 'ar.tenant_id = $1'];
 
-    const values: unknown[] = [];
-    const conditions: string[] = ['ar.is_paid = false'];
-
-    if (!isSuperuser) {
-      values.push(session.tenant_id);
-      conditions.push(`ar.tenant_id = $${values.length}`);
-    }
-
-    if (query.status && /^\d+$/.test(query.status)) {
+    if (query.status) {
       values.push(parseInt(query.status, 10));
       conditions.push(`sar.account_receivable_status = $${values.length}`);
+    }
+
+    if (query.branchId) {
+      values.push(query.branchId);
+      conditions.push(`sale_b.branch_id = $${values.length}`);
     }
 
     const sortCol =
@@ -154,8 +163,8 @@ export class AccountsService {
 
   async getPayablePayments(payableId: string, session: IUserSession) {
     const isSuperuser =
-      this.stateService.getRole(session.role_id).role_hierarchy ===
-      SUPERUSER_HIERARCHY;
+      this.stateService.getRole(session.role_id).role_name ===
+      SUPERUSER_ROLE_NAME;
 
     const { payableDetail } = accountsOverviewQueries;
 
@@ -177,8 +186,8 @@ export class AccountsService {
 
   async getReceivableCollections(receivableId: string, session: IUserSession) {
     const isSuperuser =
-      this.stateService.getRole(session.role_id).role_hierarchy ===
-      SUPERUSER_HIERARCHY;
+      this.stateService.getRole(session.role_id).role_name ===
+      SUPERUSER_ROLE_NAME;
 
     const { receivableDetail } = accountsOverviewQueries;
 

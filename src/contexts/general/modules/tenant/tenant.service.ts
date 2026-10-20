@@ -1,15 +1,14 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
-import Database from '@crane-technologies/database';
+import Database from '@resonance-components/datahandler';
 import Stripe from 'stripe';
 import { hash } from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { generalQueries } from '@general/general.queries';
 import { hrQueries } from '@hr/hr.queries';
-import { encrypt } from '@/common/crypto/aes-256-gcm';
 import { StateService } from '../state/state.service';
 import { SpecialCodeService } from '../special_code/special_code.service';
+import { AuthService } from '../auth/auth.service';
 import { NewTenantDto } from './dto/newTenant.dto';
 import { UpdateTenantDto } from './dto/updateTenant.dto';
 import { Tenant } from './interface/tenant.interface';
@@ -17,8 +16,7 @@ import { IUserSession } from '@/common/interfaces/user_session.interface';
 import { UserCreationError } from '@/common/errors/user_create.error';
 import { CreateFullEmployeeError } from '@/common/errors/create_full_employee.error';
 
-const { tenant, branch, users, subscriptions, tenantHaciendaConfig } =
-  generalQueries;
+const { tenant, branch, users, subscriptions } = generalQueries;
 const { employee } = hrQueries;
 
 type TransactionClient = Awaited<ReturnType<Database['transaction']>>;
@@ -30,7 +28,7 @@ export class TenantService {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     @Inject('STRIPE') private readonly stripe: Stripe,
-    private readonly jwtService: JwtService,
+    private readonly authService: AuthService,
     private readonly stateService: StateService,
     private readonly specialCodeService: SpecialCodeService,
   ) {
@@ -39,6 +37,59 @@ export class TenantService {
       test: process.env.TEST,
       premium: process.env.PREMIUM,
     };
+  }
+
+  /**
+   * Provisiona la configuracion de RRHH que un tenant necesita para
+   * operar desde el dia uno: conceptos de nomina y pisos legales de la
+   * LOTTT (Arts. 117, 118, 120, 131, 142, 154, 178, 190, 192).
+   *
+   * Sin esto, un tenant creado despues del bootstrap arranca con
+   * hr_schema.payroll_parameters vacio y el primer calculo que necesite
+   * un piso legal falla con 404 sin explicar que falta configurarlo.
+   *
+   * salario_minimo_nacional (Art. 129) y tasa_activa_bcv (Arts. 128,
+   * 142.f, 143) quedan fuera a proposito: dependen de un decreto del
+   * Ejecutivo y de un aviso del BCV, y se cargan por tenant.
+   */
+  private async provisionHrDefaults(
+    txn: TransactionClient,
+    tenantId: string,
+  ): Promise<void> {
+    await txn.rawQuery(
+      'SELECT hr_schema.provision_tenant_payroll_concepts($1)',
+      [tenantId],
+    );
+    await txn.rawQuery(
+      'SELECT hr_schema.provision_tenant_payroll_parameters($1)',
+      [tenantId],
+    );
+  }
+
+  /**
+   * Provisiona la contabilidad del tenant: plan de cuentas (plantilla NIIF
+   * PYMES) y categorias de gasto. Sin plan de cuentas ningun asiento contable
+   * se puede registrar (FNZ-X-04: ningun tenant lo tenia y todas las ventas
+   * quedaban sin asiento ni costo de venta). Ambas son idempotentes.
+   */
+  private async provisionAccountingDefaults(
+    txn: TransactionClient,
+    tenantId: string,
+  ): Promise<void> {
+    await txn.rawQuery(
+      'SELECT accounting_schema.provision_tenant_accounts($1)',
+      [tenantId],
+    );
+    await txn.rawQuery(
+      `INSERT INTO accounting_schema.expense_category (tenant_id, name, account_code, is_fixed)
+       SELECT $1, t.name, t.account_code, t.is_fixed
+       FROM accounting_schema.expense_category_template t
+       WHERE NOT EXISTS (
+         SELECT 1 FROM accounting_schema.expense_category ec
+         WHERE ec.tenant_id = $1 AND ec.name = t.name
+       )`,
+      [tenantId],
+    );
   }
 
   private async rollbackSafely(
@@ -92,7 +143,7 @@ export class TenantService {
   }
 
   async createTenant(tenantInfo: NewTenantDto) {
-    if (tenantInfo.user && tenantInfo.hacienda && tenantInfo.subscription) {
+    if (tenantInfo.user && tenantInfo.subscription) {
       return this.createTenantWithOnboarding(tenantInfo);
     }
 
@@ -124,6 +175,9 @@ export class TenantService {
         identification_type_id,
       ]);
 
+      await this.provisionHrDefaults(txn, rows[0].tenant_id);
+      await this.provisionAccountingDefaults(txn, rows[0].tenant_id);
+
       await txn.commit();
       committed = true;
       this.stateService.addTenant(rows[0]);
@@ -139,17 +193,16 @@ export class TenantService {
    * 1. Crear tenant
    * 2. Crear sucursal principal
    * 3. Crear usuario administrador + empleado
-   * 4. Guardar configuración de Hacienda (cifrada)
-   * 5. Crear customer y suscripción en Stripe
-   * 6. Registrar pago y suscripción en BD
-   * 7. Generar token JWT
+   * 4. Crear customer y suscripción en Stripe
+   * 5. Registrar pago y suscripción en BD
+   * 6. Generar token JWT
    *
    * Si cualquier paso falla, se revierte toda la transacción y se
    * compensa la suscripción en Stripe si ya se había creado.
    */
   private async createTenantWithOnboarding(tenantInfo: NewTenantDto) {
-    const { user, hacienda, subscription } = tenantInfo as Required<
-      Pick<NewTenantDto, 'user' | 'hacienda' | 'subscription'>
+    const { user, subscription } = tenantInfo as Required<
+      Pick<NewTenantDto, 'user' | 'subscription'>
     > &
       NewTenantDto;
     const branchInfo = tenantInfo.branch;
@@ -173,6 +226,9 @@ export class TenantService {
       ]);
       const newTenant = tenantRows[0];
       const tenantId: string = newTenant.tenant_id;
+
+      await this.provisionHrDefaults(txn, tenantId);
+      await this.provisionAccountingDefaults(txn, tenantId);
 
       // ── 2. Crear sucursal principal ───────────────────────────────────────
       const branchName =
@@ -227,7 +283,14 @@ export class TenantService {
         today, // start_date
         nextYear, // end_date
         40, // hours
-        0, // base_salary
+        // base_salary: create_new_employee() abre salary_history con este
+        // valor, y hr_schema.salary_history exige monthly_salary > 0
+        // (chk_salary_history_positive) -- 0 revienta el INSERT. No hay un
+        // salario legal que asumir aqui (salario_minimo_nacional depende de
+        // decreto y se carga por tenant, no esta disponible recien
+        // provisionado); placeholder minimo, a corregir desde RRHH una vez
+        // el tenant configure su salario_minimo_nacional.
+        0.01, // base_salary
         'Administrador', // duties
         1, // turn_type
         null, // turn_id — sin turno al crear el admin en onboarding
@@ -245,17 +308,7 @@ export class TenantService {
       ]);
       if (employeeRows.length === 0) throw new CreateFullEmployeeError();
 
-      // ── 4. Guardar configuración de Hacienda (cifrada) ────────────────────
-      await txn.query(tenantHaciendaConfig.create, [
-        tenantId,
-        encrypt(hacienda.hacienda_username),
-        encrypt(hacienda.hacienda_password),
-        hacienda.hacienda_client_id,
-        encrypt(hacienda.p12_base64),
-        encrypt(hacienda.p12_password),
-      ]);
-
-      // ── 5. Pago: Stripe o bypass por special_code ─────────────────────────
+      // ── 4. Pago: Stripe o bypass por special_code ─────────────────────────
       const usingSpecialCode = !!subscription.special_code;
       const tenantPaymentId = randomUUID();
 
@@ -350,7 +403,7 @@ export class TenantService {
         if (!clientSecret)
           throw new Error('Could not obtain payment client_secret from Stripe');
 
-        // ── 6. Registrar pago y suscripción en BD (misma transacción) ─────
+        // ── 5. Registrar pago y suscripción en BD (misma transacción) ─────
         await txn.query(tenant.updateStripeId, [tenantStripeId, tenantId]);
 
         await txn.rawQuery(
@@ -375,21 +428,22 @@ export class TenantService {
         ]);
       }
 
-      // ── 7. Commit ─────────────────────────────────────────────────────────
+      // ── 6. Commit ─────────────────────────────────────────────────────────
       await txn.commit();
       committed = true;
 
       // Registrar el nuevo tenant en el cache en memoria del StateService
       this.stateService.addTenant(newTenant);
 
-      // ── 8. Generar token JWT (post-commit, datos ya persisten) ────────────
+      // ── 7. Emitir tokens de sesion (post-commit, datos ya persisten) ──────
+      // Mismo flujo que el login: el refresh queda en BD para renovar 7 dias.
       const userSession: IUserSession = {
         user_id: userId,
         email: user.email,
         tenant_id: tenantId,
         role_id: 2,
       };
-      const token = await this.jwtService.signAsync(userSession);
+      const tokens = await this.authService.issueTokens(userSession);
 
       return {
         tenant: newTenant,
@@ -402,7 +456,7 @@ export class TenantService {
           status: stripeStatus,
           usingSpecialCode,
         },
-        token,
+        tokens,
       };
     } catch (error) {
       if (!committed)
@@ -428,8 +482,23 @@ export class TenantService {
   async updateTenant(tenantId: string, tenantData: UpdateTenantDto) {
     const { ...updates } = tenantData;
 
+    // solo columnas propias del tenant (excluye los datos anidados del
+    // onboarding); el DTO usa economic_activity y la columna es econ_activity
+    const UPDATABLE_COLUMNS: Record<string, string> = {
+      tenant_name: 'tenant_name',
+      contact_email: 'contact_email',
+      contact_phone: 'contact_phone',
+      is_subscribed: 'is_subscribed',
+      region_id: 'region_id',
+      identification_type_id: 'identification_type_id',
+      identification: 'identification',
+      economic_activity: 'econ_activity',
+      sign: 'sign',
+    };
     const updateKeys = Object.keys(updates).filter(
-      (key) => updates[key as keyof typeof updates] !== undefined,
+      (key) =>
+        key in UPDATABLE_COLUMNS &&
+        updates[key as keyof typeof updates] !== undefined,
     );
 
     if (updateKeys.length === 0) {
@@ -442,7 +511,7 @@ export class TenantService {
 
     for (const key of updateKeys) {
       const validKey = key as keyof typeof updates;
-      setClause.push(`${key} = $${index}`);
+      setClause.push(`${UPDATABLE_COLUMNS[key]} = $${index}`);
       paramsArray.push(updates[validKey]);
       index++;
     }

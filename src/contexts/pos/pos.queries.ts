@@ -1,11 +1,31 @@
-import { createQueries } from '@crane-technologies/database';
+import { rateAt, toUsd, toVes } from '@/contexts/finances/finances.fx';
+import { createQueries } from '@resonance-components/datahandler';
 
 export const posQueryDefs = {
   sales: {
     createSale: `
-      INSERT INTO pos_schema.sale ( branch_id, tenant_customer_id, sale_condition, sale_date, currency_id, subtotal_amount, tax_amount, total_amount, is_completed, has_electronic_invoice, seller_user_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      INSERT INTO pos_schema.sale ( branch_id, tenant_customer_id, sale_condition, sale_date, currency_id, subtotal_amount, tax_amount, total_amount, is_completed, seller_user_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING sale_id
+    `,
+    // Datos del cliente que exige la factura. El tenant se resuelve desde la
+    // sucursal de la venta para validar que el cliente pertenece al mismo tenant.
+    getCustomerForInvoice: `
+      SELECT
+        tc.tenant_customer_id,
+        tc.first_name,
+        tc.last_name,
+        tc.business_name,
+        tc.document_number,
+        tc.address,
+        it.ident_code AS identification_type_code
+      FROM general_schema.tenant_customer tc
+      LEFT JOIN general_schema.identification_type it
+        ON it.identification_type_id = tc.identification_type_id
+      WHERE tc.tenant_customer_id = $1
+        AND tc.tenant_id = (
+          SELECT b.tenant_id FROM general_schema.branch b WHERE b.branch_id = $2
+        )
     `,
     linkSaleToActiveSession: `
       INSERT INTO pos_schema.cash_register_sale (
@@ -29,7 +49,7 @@ export const posQueryDefs = {
       RETURNING cash_register_sale_id
     `,
     getSalesByBranch: `
-      SELECT s.sale_id, s.sale_date, s.total_amount, s.subtotal_amount, s.tax_amount, s.is_completed, s.has_electronic_invoice, b.branch_id, b.branch_name, c.currency_code, c.symbol FROM pos_schema.sale s
+      SELECT s.sale_id, s.sale_date, s.total_amount, s.subtotal_amount, s.tax_amount, s.is_completed, b.branch_id, b.branch_name, c.currency_code, c.symbol FROM pos_schema.sale s
       INNER JOIN general_schema.branch b USING(branch_id)
       INNER JOIN general_schema.currency c USING(currency_id)
       WHERE s.branch_id = $1
@@ -63,45 +83,107 @@ export const posQueryDefs = {
         ON pv.tenant_id = si.tenant_id AND pv.product_variant_id = si.product_variant_id
       LEFT JOIN pos_schema.promotion p ON p.promotion_id = si.promotion_id
       WHERE si.sale_id = $1
+        AND ($2::uuid IS NULL OR si.tenant_id = $2)
     `,
-    getItemById: 'SELECT * FROM pos_schema.sale_item WHERE sale_item_id = $1',
-    delete:
-      'DELETE FROM pos_schema.sale_item WHERE sale_item_id = $1 RETURNING sale_item_id',
+    // $2 = tenant de alcance (null = superusuario de plataforma).
+    getItemById: `
+      SELECT * FROM pos_schema.sale_item
+      WHERE sale_item_id = $1 AND ($2::uuid IS NULL OR tenant_id = $2)
+    `,
+    delete: `
+      DELETE FROM pos_schema.sale_item
+      WHERE sale_item_id = $1 AND ($2::uuid IS NULL OR tenant_id = $2)
+      RETURNING sale_item_id
+    `,
+    // Fija el costo unitario (USD, catalogo) de los items de una venta que aun
+    // no lo tienen. Independiente de la contabilidad: sin este costo la venta
+    // aparece en Rentabilidad con margen 100%. Solo toca filas en NULL, asi
+    // que es idempotente y no pisa el costo de una venta ya registrada.
+    // $1 = sale_id. Devuelve cantidad y costo para el asiento de costo de ventas.
+    fixCostAtSale: `
+      UPDATE pos_schema.sale_item si
+      SET cost_price_at_sale = COALESCE(pv.weighted_avg_cost, pv.cost_price, 0)
+      FROM general_schema.product_variant pv
+      WHERE si.sale_id = $1
+        AND si.cost_price_at_sale IS NULL
+        AND pv.tenant_id = si.tenant_id
+        AND pv.product_variant_id = si.product_variant_id
+      RETURNING si.quantity, si.cost_price_at_sale
+    `,
   },
 
-  dInvoice: {
+  invoice: {
     create: `
-      INSERT INTO pos_schema.digital_sale_invoice
+      INSERT INTO pos_schema.invoice
         (tenant_customer_id, currency_id, subtotal_amount, tax_amount, total_amount,
          due_date, cash_register_session_id, points_accumulated, ad_message,
          amount_paid, change_amount, invoiced_at, updated_at, sale_id)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *
     `,
+    // Crea las lineas de la factura desde los sale_item de la venta.
+    // Espejo del trigger create_invoice (functions/pos/pos_functions.sql):
+    // resuelve la tasa via product_variant.product_id -> product.tax_rate_id -> tax_rate.rate_percentage.
+    // $1 = invoice_id, $2 = sale_id
+    createItemsFromSale: `
+      INSERT INTO pos_schema.invoice_item (
+        invoice_id, sale_item_id, tenant_id, product_variant_id,
+        tax_rate_id, description, quantity, unit_price, subtotal,
+        tax_rate_percentage, tax_amount, total_price
+      )
+      SELECT
+        $1,
+        si.sale_item_id,
+        si.tenant_id,
+        si.product_variant_id,
+        p.tax_rate_id,
+        COALESCE(pv.variant_name, p.product_name, 'Product'),
+        si.quantity,
+        si.unit_price,
+        amt.item_subtotal,
+        COALESCE(tr.rate_percentage, 0),
+        amt.item_tax_amount,
+        amt.item_total
+      FROM pos_schema.sale_item si
+      JOIN general_schema.product_variant pv
+        ON si.tenant_id = pv.tenant_id AND si.product_variant_id = pv.product_variant_id
+      LEFT JOIN general_schema.product p ON pv.product_id = p.product_id
+      LEFT JOIN general_schema.tax_rate tr ON p.tax_rate_id = tr.tax_rate_id
+      -- Desglose segun product_variant.includes_iva (migracion 042): si el
+      -- precio ya incluye IVA se desglosa en vez de sumarlo encima.
+      CROSS JOIN LATERAL pos_schema.invoice_item_amounts(
+        si.total_price, COALESCE(tr.rate_percentage, 0), pv.includes_iva
+      ) amt
+      WHERE si.sale_id = $2
+    `,
     getBills: `
-      SELECT t.tenant_name, tc.first_name, tc.last_name, tc.document_number, tc.email, i.subtotal_amount, i.total_amount, i.invoiced_at FROM pos_schema.digital_sale_invoice i
+      SELECT t.tenant_name, tc.first_name, tc.last_name, tc.document_number, tc.email, i.subtotal_amount, i.total_amount, i.invoiced_at FROM pos_schema.invoice i
       INNER JOIN general_schema.tenant_customer tc USING(tenant_customer_id)
       INNER JOIN general_schema.currency c USING(currency_id)
       INNER JOIN general_schema.tenant t ON t.tenant_id = tc.tenant_id
       WHERE t.tenant_id = $1
     `,
-    getCustomerDInvoices: `
-      SELECT t.tenant_name, tc.first_name, tc.last_name, tc.document_number, tc.email, i.subtotal_amount, i.total_amount, i.invoiced_at FROM pos_schema.digital_sale_invoice i
+    getCustomerInvoices: `
+      SELECT t.tenant_name, tc.first_name, tc.last_name, tc.document_number, tc.email, i.subtotal_amount, i.total_amount, i.invoiced_at FROM pos_schema.invoice i
       INNER JOIN general_schema.tenant_customer tc USING(tenant_customer_id)
       INNER JOIN general_schema.currency c USING(currency_id)
       INNER JOIN general_schema.tenant t ON t.tenant_id = tc.tenant_id
       WHERE t.tenant_id = $1 AND tc.document_number = $2
     `,
-    getDInvoiceById: `
-      SELECT t.tenant_name, tc.first_name, tc.last_name, tc.document_number, tc.email, i.subtotal_amount, i.total_amount, i.invoiced_at FROM pos_schema.digital_sale_invoice i
+    getInvoiceById: `
+      SELECT t.tenant_name, tc.first_name, tc.last_name, tc.document_number, tc.email, i.subtotal_amount, i.total_amount, i.invoiced_at FROM pos_schema.invoice i
       INNER JOIN general_schema.tenant_customer tc USING(tenant_customer_id)
       INNER JOIN general_schema.currency c USING(currency_id)
       INNER JOIN general_schema.tenant t ON t.tenant_id = tc.tenant_id
       WHERE i.sale_id = $1
+        AND ($2::uuid IS NULL OR t.tenant_id = $2)
     `,
-    getDInvoiceBySaleId: `
+    getInvoiceBySaleId: `
       SELECT
-        i.digital_sale_invoice_id,
+        i.invoice_id,
+        -- Correlativo interno por tenant con 8 digitos (00055703). NULL en
+        -- facturas anteriores a la migracion 040: LPAD(NULL) sigue siendo NULL.
+        LPAD(i.invoice_number::text, 8, '0') AS invoice_number,
         i.subtotal_amount,
         i.tax_amount,
         i.total_amount,
@@ -118,6 +200,7 @@ export const posQueryDefs = {
         i.invoiced_at,
         tc.first_name,
         tc.last_name,
+        tc.business_name,
         tc.document_number,
         tc.email,
         tc.econ_activity AS customer_econ_activity,
@@ -139,9 +222,19 @@ export const posQueryDefs = {
         s.sale_condition,
         sc.condition_desc AS sale_condition_desc,
         s.sale_date,
-        s.has_electronic_invoice,
         s.seller_user_id,
         seller.email AS seller_email,
+        -- Caja registradora que efectuo la venta (sesion vinculada al cobrar).
+        (
+          SELECT cr.register_name
+          FROM pos_schema.cash_register_sale crsale
+          INNER JOIN pos_schema.cash_register_session crs
+            ON crs.cash_register_session_id = crsale.cash_register_session_id
+          INNER JOIN pos_schema.cash_register cr
+            ON cr.cash_register_id = crs.cash_register_id
+          WHERE crsale.sale_id = s.sale_id
+          LIMIT 1
+        ) AS cash_register_name,
         c.currency_code,
         c.symbol AS currency_symbol,
         COALESCE((
@@ -154,11 +247,10 @@ export const posQueryDefs = {
           FROM (
             SELECT
               json_build_object(
-                'digital_sale_invoice_item_id', dii.digital_sale_invoice_item_id,
+                'invoice_item_id', dii.invoice_item_id,
                 'description', dii.description,
                 'sku', pv.sku,
                 'variant_name', pv.variant_name,
-                'cabys_code', dii.cabys_code,
                 'quantity', dii.quantity,
                 'unit_price', dii.unit_price,
                 'subtotal', dii.subtotal,
@@ -167,11 +259,11 @@ export const posQueryDefs = {
                 'total_price', dii.total_price
               ) AS item,
               dii.created_at AS item_created_at
-            FROM pos_schema.digital_sale_invoice_item dii
+            FROM pos_schema.invoice_item dii
             LEFT JOIN general_schema.product_variant pv
               ON pv.tenant_id = dii.tenant_id
              AND pv.product_variant_id = dii.product_variant_id
-            WHERE dii.digital_sale_invoice_id = i.digital_sale_invoice_id
+            WHERE dii.invoice_id = i.invoice_id
           ) sub
         ), '[]'::json) AS items,
         COALESCE((
@@ -197,7 +289,7 @@ export const posQueryDefs = {
             WHERE cp.sale_id = s.sale_id
           ) sub
         ), '[]'::json) AS payments
-      FROM pos_schema.digital_sale_invoice i
+      FROM pos_schema.invoice i
       INNER JOIN pos_schema.sale s ON s.sale_id = i.sale_id
       LEFT JOIN pos_schema.sale_condition sc ON sc.condition_code = s.sale_condition
       LEFT JOIN general_schema.branch b ON b.branch_id = s.branch_id
@@ -208,26 +300,60 @@ export const posQueryDefs = {
       LEFT JOIN general_schema.currency c ON c.currency_id = i.currency_id
       LEFT JOIN general_schema.users seller ON seller.user_id = s.seller_user_id
       WHERE i.sale_id = $1
+        AND ($2::uuid IS NULL OR b.tenant_id = $2)
       LIMIT 1
     `,
-    deleteDInvoice:
-      'DELETE FROM pos_schema.digital_sale_invoice WHERE digital_sale_invoice_id = $1 RETURNING digital_sale_invoice_id',
+    // $2 = tenant de alcance (null = superusuario de plataforma).
+    deleteInvoice: `
+      DELETE FROM pos_schema.invoice i
+      USING pos_schema.sale s, general_schema.branch b
+      WHERE i.invoice_id = $1
+        AND s.sale_id = i.sale_id
+        AND b.branch_id = s.branch_id
+        AND ($2::uuid IS NULL OR b.tenant_id = $2)
+      RETURNING i.invoice_id
+    `,
     updateAmount: `
-    UPDATE pos_schema.digital_sale_invoice SET total_amount = total_amount - $1 WHERE digital_sale_invoice_id = $2
+    UPDATE pos_schema.invoice SET total_amount = total_amount - $1 WHERE invoice_id = $2
     `,
   },
 
   returns: {
+    // IVA de cada linea a devolver (tasa de su linea de factura y si el
+    // precio ya lo incluye), para el asiento de la devolucion. Se lee ANTES de
+    // insertar la devolucion: el trigger puede borrar la linea.
+    getLineTaxInfo: `
+      SELECT
+        si.sale_item_id,
+        COALESCE(ii.tax_rate_percentage, 0)::float8 AS tax_rate,
+        COALESCE(pv.includes_iva, FALSE) AS includes_iva
+      FROM pos_schema.sale_item si
+      LEFT JOIN pos_schema.invoice_item ii ON ii.sale_item_id = si.sale_item_id
+      LEFT JOIN general_schema.product_variant pv
+        ON pv.tenant_id = si.tenant_id
+       AND pv.product_variant_id = si.product_variant_id
+      WHERE si.sale_item_id = ANY($1::uuid[])
+    `,
+    // Lo que el cliente aun debe de la venta (sin fila = no hay CxC).
+    getReceivableBalance: `
+      SELECT GREATEST(
+        (ar.subtotal + COALESCE(sar.tax_amount, 0)) - ar.amount_paid, 0
+      )::float8 AS balance
+      FROM pos_schema.sale_account_receivable sar
+      JOIN general_schema.account_receivable ar
+        ON ar.account_receivable_id = sar.account_receivable_id
+      WHERE sar.sale_id = $1
+      LIMIT 1
+    `,
     newTransaction: `
-      INSERT INTO pos_schema.return_transaction (digital_sale_invoice_id, electronic_sale_invoice_id, tenant_customer_id, total_refund_amount, refund_method, return_status_id, description, return_date)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::timestamp, NOW()))
+      INSERT INTO pos_schema.return_transaction (invoice_id, tenant_customer_id, total_refund_amount, refund_method, return_status_id, description, return_date)
+      VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::timestamp, NOW()))
       RETURNING return_transaction_id, return_date
     `,
     find: `
       SELECT
           rt.return_transaction_id,
-          rt.digital_sale_invoice_id,
-          rt.electronic_sale_invoice_id,
+          rt.invoice_id,
           rt.tenant_customer_id,
           rt.total_refund_amount,
           rt.refund_method,
@@ -243,8 +369,12 @@ export const posQueryDefs = {
       LEFT JOIN pos_schema.return_status rs ON rs.return_status_id = rt.return_status_id
       LEFT JOIN general_schema.payment_method pm ON pm.payment_method_id = rt.refund_method
       LEFT JOIN general_schema.tenant_customer tc ON tc.tenant_customer_id = rt.tenant_customer_id
+      INNER JOIN pos_schema.invoice inv ON inv.invoice_id = rt.invoice_id
+      INNER JOIN pos_schema.sale s ON s.sale_id = inv.sale_id
+      INNER JOIN general_schema.branch b ON b.branch_id = s.branch_id
       WHERE
-          ($1::uuid IS NULL OR rt.digital_sale_invoice_id = $1 OR rt.electronic_sale_invoice_id = $1)
+          ($7::uuid IS NULL OR b.tenant_id = $7)
+          AND ($1::uuid IS NULL OR rt.invoice_id = $1)
           AND ($2::uuid IS NULL OR rt.tenant_customer_id = $2)
           AND ($3::int IS NULL OR rt.return_status_id = $3)
           AND ($4::int IS NULL OR rt.refund_method = $4)
@@ -256,8 +386,7 @@ export const posQueryDefs = {
     getById: `
       SELECT
           rt.return_transaction_id,
-          rt.digital_sale_invoice_id,
-          rt.electronic_sale_invoice_id,
+          rt.invoice_id,
           rt.tenant_customer_id,
           rt.total_refund_amount,
           rt.refund_method,
@@ -269,15 +398,16 @@ export const posQueryDefs = {
           pm.name AS payment_method_name,
           tc.first_name AS customer_first_name,
           tc.last_name  AS customer_last_name,
-          tc.document_number AS customer_document,
-          esi.consecutive_number AS electronic_consecutive
+          tc.document_number AS customer_document
       FROM pos_schema.return_transaction rt
       LEFT JOIN pos_schema.return_status rs ON rs.return_status_id = rt.return_status_id
       LEFT JOIN general_schema.payment_method pm ON pm.payment_method_id = rt.refund_method
       LEFT JOIN general_schema.tenant_customer tc ON tc.tenant_customer_id = rt.tenant_customer_id
-      LEFT JOIN pos_schema.digital_sale_invoice dsi ON dsi.digital_sale_invoice_id = rt.digital_sale_invoice_id
-      LEFT JOIN pos_schema.electronic_sale_invoice esi ON esi.electronic_sale_invoice_id = rt.electronic_sale_invoice_id
+      INNER JOIN pos_schema.invoice inv ON inv.invoice_id = rt.invoice_id
+      INNER JOIN pos_schema.sale s ON s.sale_id = inv.sale_id
+      INNER JOIN general_schema.branch b ON b.branch_id = s.branch_id
       WHERE rt.return_transaction_id = $1
+        AND ($2::uuid IS NULL OR b.tenant_id = $2)
       LIMIT 1
     `,
 
@@ -298,7 +428,7 @@ export const posQueryDefs = {
       ORDER BY rp.created_at
     `,
 
-    // Get full sale + invoices context for the refund page
+    // Get full sale + invoice context for the refund page
     getSaleContext: `
       SELECT
         s.sale_id,
@@ -307,7 +437,6 @@ export const posQueryDefs = {
         s.subtotal_amount,
         s.tax_amount,
         s.total_amount,
-        s.has_electronic_invoice,
         s.is_completed,
         b.branch_id,
         b.branch_name,
@@ -318,27 +447,22 @@ export const posQueryDefs = {
         tc.last_name,
         tc.document_number,
         tc.email AS customer_email,
-        dsi.digital_sale_invoice_id,
-        dsi.invoiced_at AS digital_invoiced_at,
-        dsi.subtotal_amount AS digital_subtotal,
-        dsi.tax_amount AS digital_tax,
-        dsi.total_amount AS digital_total,
-        esi.electronic_sale_invoice_id,
-        esi.key_number AS electronic_key_number,
-        esi.consecutive_number AS electronic_consecutive,
-        esi.status_id AS electronic_status_id,
-        esi.created_at AS electronic_created_at
+        inv.invoice_id,
+        inv.invoiced_at AS digital_invoiced_at,
+        inv.subtotal_amount AS digital_subtotal,
+        inv.tax_amount AS digital_tax,
+        inv.total_amount AS digital_total
       FROM pos_schema.sale s
       LEFT JOIN general_schema.branch b ON b.branch_id = s.branch_id
       LEFT JOIN general_schema.currency c ON c.currency_id = s.currency_id
       LEFT JOIN general_schema.tenant_customer tc ON tc.tenant_customer_id = s.tenant_customer_id
-      LEFT JOIN pos_schema.digital_sale_invoice dsi ON dsi.sale_id = s.sale_id
-      LEFT JOIN pos_schema.electronic_sale_invoice esi ON esi.sale_id = s.sale_id
+      LEFT JOIN pos_schema.invoice inv ON inv.sale_id = s.sale_id
       WHERE s.sale_id = $1
+        AND ($2::uuid IS NULL OR b.tenant_id = $2)
       LIMIT 1
     `,
 
-    // Get sale items joined with the digital invoice items (for partial refund UI)
+    // Get sale items joined with the invoice items (for partial refund UI)
     getSaleItemsForRefund: `
       SELECT
         si.sale_item_id,
@@ -348,21 +472,25 @@ export const posQueryDefs = {
         si.total_price,
         pv.sku,
         pv.variant_name,
-        dii.digital_sale_invoice_item_id,
+        dii.invoice_item_id,
         dii.tax_amount AS digital_tax_amount,
-        dii.total_price AS digital_line_total,
-        eii.electronic_sale_invoice_item_id,
-        eii.line_number AS electronic_line_number
+        dii.total_price AS digital_line_total
       FROM pos_schema.sale_item si
       INNER JOIN general_schema.product_variant pv
         ON pv.tenant_id = si.tenant_id
         AND pv.product_variant_id = si.product_variant_id
-      LEFT JOIN pos_schema.digital_sale_invoice_item dii
+      LEFT JOIN pos_schema.invoice_item dii
         ON dii.sale_item_id = si.sale_item_id
-      LEFT JOIN pos_schema.electronic_sale_invoice_items eii
-        ON eii.sale_item_id = si.sale_item_id
       WHERE si.sale_id = $1
       ORDER BY si.created_at
+    `,
+
+    // Cuantas de las lineas pedidas pertenecen realmente a la venta ($1 = sale_id,
+    // $2 = uuid[] de sale_item_id). Evita devolver lineas de otra venta/tenant.
+    countSaleItemsOfSale: `
+      SELECT COUNT(*)::int AS total
+      FROM pos_schema.sale_item
+      WHERE sale_id = $1 AND sale_item_id = ANY($2::uuid[])
     `,
 
     markSaleRefunded: `
@@ -372,46 +500,50 @@ export const posQueryDefs = {
       RETURNING sale_id, is_refunded
     `,
 
-    // Full refund: delete invoice records
-    deleteDigitalInvoiceBySaleId: `
-      DELETE FROM pos_schema.digital_sale_invoice
+    // Full refund: delete the invoice record
+    deleteInvoiceBySaleId: `
+      DELETE FROM pos_schema.invoice
       WHERE sale_id = $1
-      RETURNING digital_sale_invoice_id
-    `,
-    deleteElectronicInvoiceBySaleId: `
-      DELETE FROM pos_schema.electronic_sale_invoice
-      WHERE sale_id = $1
-      RETURNING electronic_sale_invoice_id
+      RETURNING invoice_id
     `,
   },
 
   cashRegister: {
+    // Todas las consultas de cajas se acotan al tenant a traves de la sucursal.
+    // El parametro de tenant es null solo para el superusuario de plataforma.
     all: `
     SELECT cr.*, b.branch_name FROM pos_schema.cash_register cr
     INNER JOIN general_schema.branch b ON b.branch_id = cr.branch_id
+    WHERE ($1::uuid IS NULL OR b.tenant_id = $1)
     `,
     allPaginated: `
     SELECT cr.*, b.branch_name FROM pos_schema.cash_register cr
     INNER JOIN general_schema.branch b ON b.branch_id = cr.branch_id
     WHERE ($1::uuid IS NULL OR cr.branch_id = $1)
       AND ($2::boolean IS NULL OR cr.is_active = $2)
+      AND ($5::uuid IS NULL OR b.tenant_id = $5)
     ORDER BY b.branch_name, cr.register_name
     LIMIT $3 OFFSET $4
     `,
     countPaginated: `
     SELECT COUNT(*)::int AS total FROM pos_schema.cash_register cr
+    INNER JOIN general_schema.branch b ON b.branch_id = cr.branch_id
     WHERE ($1::uuid IS NULL OR cr.branch_id = $1)
       AND ($2::boolean IS NULL OR cr.is_active = $2)
+      AND ($3::uuid IS NULL OR b.tenant_id = $3)
     `,
     byId: `
     SELECT cr.*, b.branch_name FROM pos_schema.cash_register cr
     INNER JOIN general_schema.branch b ON b.branch_id = cr.branch_id
-    WHERE cr.cash_register_id = $1 LIMIT 1
+    WHERE cr.cash_register_id = $1
+      AND ($2::uuid IS NULL OR b.tenant_id = $2)
+    LIMIT 1
     `,
     byBranch: `
     SELECT cr.*, b.branch_name FROM pos_schema.cash_register cr
     INNER JOIN general_schema.branch b ON b.branch_id = cr.branch_id
     WHERE cr.branch_id = $1
+      AND ($2::uuid IS NULL OR b.tenant_id = $2)
     `,
     /**
      * Returns the plain-text key for a cash register. Used by the service to
@@ -620,12 +752,17 @@ export const posQueryDefs = {
     deletePromoRules: `
       DELETE FROM pos_schema.promotion_rule WHERE promotion_id = $1
     `,
-    deletePromo:
-      'DELETE FROM pos_schema.promotion WHERE promotion_id = $1 RETURNING promotion_id',
+    // $2 = tenant de alcance (null = superusuario de plataforma).
+    deletePromo: `
+      DELETE FROM pos_schema.promotion
+      WHERE promotion_id = $1 AND ($2::uuid IS NULL OR tenant_id = $2)
+      RETURNING promotion_id
+    `,
+    // $2 = tenant de alcance. La promocion NUNCA cambia de tenant: el antiguo
+    // SET tenant_id = COALESCE($2, ...) permitia reasignarla desde el body.
     updatePromo: `
       UPDATE pos_schema.promotion
-      SET tenant_id = COALESCE($2, tenant_id),
-          promotion_name = COALESCE($3, promotion_name),
+      SET promotion_name = COALESCE($3, promotion_name),
           promotion_code = COALESCE($4, promotion_code),
           promotion_description = COALESCE($5, promotion_description),
           promotion_type_id = COALESCE($6, promotion_type_id),
@@ -636,8 +773,8 @@ export const posQueryDefs = {
           is_default = COALESCE($11, is_default),
           is_stackable = COALESCE($12, is_stackable),
           updated_at = NOW()
-      WHERE promotion_id = $1
-      RETURNING promotion_id, tenant_id
+      WHERE promotion_id = $1 AND ($2::uuid IS NULL OR tenant_id = $2)
+      RETURNING promotion_id, tenant_id, is_universal
     `,
     /**
      * Active default promotions for a tenant on the current date. Pre-loads rules
@@ -686,17 +823,21 @@ export const posQueryDefs = {
         AND CURRENT_DATE BETWEEN p.promotion_start_date AND p.promotion_end_date
       ORDER BY p.created_at DESC
     `,
+    // Montos en USD y VES con la tasa de la fecha de cada venta (FNZ-X-02).
     getAnalytics: `
       WITH filtered_items AS (
         SELECT
           si.promotion_id,
           si.sale_id,
-          si.discount_applied,
-          si.total_price,
-          s.currency_id
+          ${toUsd('COALESCE(si.discount_applied, 0)', 'COALESCE(s.currency_id, 1)', 'fx.rate')} AS discount_usd,
+          ${toVes('COALESCE(si.discount_applied, 0)', 'COALESCE(s.currency_id, 1)', 'fx.rate')} AS discount_ves,
+          ${toUsd('si.total_price', 'COALESCE(s.currency_id, 1)', 'fx.rate')} AS revenue_usd,
+          ${toVes('si.total_price', 'COALESCE(s.currency_id, 1)', 'fx.rate')} AS revenue_ves
         FROM pos_schema.sale_item si
         INNER JOIN pos_schema.sale s ON s.sale_id = si.sale_id
+        CROSS JOIN LATERAL (SELECT ${rateAt('$1', 's.sale_date')} AS rate) fx
         WHERE s.is_completed = TRUE
+          AND si.tenant_id = $1
           AND s.sale_date >= CURRENT_TIMESTAMP - $2::interval
           AND ($4::uuid IS NULL OR s.branch_id = $4::uuid)
           AND si.promotion_id IS NOT NULL
@@ -707,19 +848,37 @@ export const posQueryDefs = {
         p.promotion_code,
         p.is_active,
         pt.type_name AS promotion_type,
-        COALESCE(fi.currency_id, 1) AS currency_id,
         COUNT(DISTINCT fi.sale_id)::text AS sale_count,
-        COALESCE(SUM(fi.discount_applied), 0)::text AS total_discount,
-        COALESCE(SUM(fi.total_price), 0)::text AS total_revenue
+        COALESCE(SUM(fi.discount_usd), 0)::text AS total_discount_usd,
+        COALESCE(SUM(fi.discount_ves), 0)::text AS total_discount_ves,
+        COALESCE(SUM(fi.revenue_usd), 0)::text AS total_revenue_usd,
+        COALESCE(SUM(fi.revenue_ves), 0)::text AS total_revenue_ves
       FROM pos_schema.promotion p
       INNER JOIN pos_schema.promotion_type pt ON pt.promotion_type_id = p.promotion_type_id
       LEFT JOIN filtered_items fi ON fi.promotion_id = p.promotion_id
       WHERE p.tenant_id = $1
         AND ($3::boolean IS NULL OR p.is_active = $3)
+        AND ($5::text IS NULL OR pt.type_name = $5)
       GROUP BY
-        p.promotion_id, p.promotion_name, p.promotion_code, p.is_active, pt.type_name,
-        COALESCE(fi.currency_id, 1)
-      ORDER BY SUM(fi.discount_applied) DESC NULLS LAST
+        p.promotion_id, p.promotion_name, p.promotion_code, p.is_active, pt.type_name
+      ORDER BY SUM(fi.discount_usd) DESC NULLS LAST
+    `,
+    // Ventas distintas que aplicaron alguna promocion (FNZ-PR-01): una venta
+    // con dos promociones cuenta una sola vez, a diferencia de sumar el
+    // sale_count de cada fila de getAnalytics. Mismos filtros ($1..$5).
+    getAnalyticsSalesCount: `
+      SELECT COUNT(DISTINCT si.sale_id)::text AS sales_with_promotion
+      FROM pos_schema.sale_item si
+      INNER JOIN pos_schema.sale s ON s.sale_id = si.sale_id
+      INNER JOIN pos_schema.promotion p ON p.promotion_id = si.promotion_id
+      INNER JOIN pos_schema.promotion_type pt ON pt.promotion_type_id = p.promotion_type_id
+      WHERE s.is_completed = TRUE
+        AND si.tenant_id = $1
+        AND p.tenant_id = $1
+        AND s.sale_date >= CURRENT_TIMESTAMP - $2::interval
+        AND ($3::boolean IS NULL OR p.is_active = $3)
+        AND ($4::uuid IS NULL OR s.branch_id = $4::uuid)
+        AND ($5::text IS NULL OR pt.type_name = $5)
     `,
   },
 
@@ -807,6 +966,13 @@ export const posQueryDefs = {
       WHERE tenant_id = $1 AND is_active = true
       LIMIT 1
     `,
+    // Ledger de puntos otorgados por un cobro de CxC (FNZ-FI-03, mig 046).
+    // transaction_type_id 1 = 'earn'.
+    insertCollectionEarned: `
+      INSERT INTO pos_schema.score_transaction
+        (tenant_id, tenant_customer_id, transaction_type_id, points, sale_id, sale_collection_id)
+      VALUES ($1, $2, 1, $3, $4, $5)
+    `,
     upsertEarned: `
       INSERT INTO pos_schema.tenant_customer_score (tenant_id, tenant_customer_id, score, lifetime_score, score_redeemed, last_earned_at)
       VALUES ($1, $2, $3, $3, 0, NOW())
@@ -840,11 +1006,16 @@ export const posQueryDefs = {
     all: `
       SELECT * FROM pos_schema.loyalty_program WHERE tenant_id = $1
     `,
+    // $2 / $6 = tenant de alcance (null = superusuario de plataforma).
     delete: `
-      DELETE FROM pos_schema.loyalty_program WHERE loyalty_program_id = $1 RETURNING loyalty_program_id
+      DELETE FROM pos_schema.loyalty_program
+      WHERE loyalty_program_id = $1 AND ($2::uuid IS NULL OR tenant_id = $2)
+      RETURNING loyalty_program_id
     `,
     byId: `
-      SELECT * FROM pos_schema.loyalty_program WHERE loyalty_program_id = $1 LIMIT 1
+      SELECT * FROM pos_schema.loyalty_program
+      WHERE loyalty_program_id = $1 AND ($2::uuid IS NULL OR tenant_id = $2)
+      LIMIT 1
     `,
     update: `
       UPDATE pos_schema.loyalty_program
@@ -854,229 +1025,107 @@ export const posQueryDefs = {
         minimum_purchase_for_points = COALESCE($4, minimum_purchase_for_points),
         is_active = COALESCE($5, is_active),
         updated_at = NOW()
-      WHERE loyalty_program_id = $1
+      WHERE loyalty_program_id = $1 AND ($6::uuid IS NULL OR tenant_id = $6)
       RETURNING loyalty_program_id
     `,
   },
 
-  eInvoice: {
-    // Atomic upsert: increments the per-branch counter and returns the claimed value.
-    // The row-level lock from INSERT ... ON CONFLICT DO UPDATE prevents race conditions.
-    // $1 = branch_id (UUID)
-    getNextInvoiceSequence: `
-      INSERT INTO pos_schema.branch_einvoice_seq (branch_id, next_seq)
-      VALUES ($1, 1)
-      ON CONFLICT (branch_id) DO UPDATE
-        SET next_seq = branch_einvoice_seq.next_seq + 1
-      RETURNING next_seq
-    `,
-    // $5 = short delay in minutes before the first cron check
-    create: `
-      INSERT INTO pos_schema.electronic_sale_invoice
-      (sale_id, key_number, consecutive_number, xml_signed, status_id, created_at,
-       check_attempts, next_check_at)
-      VALUES ($1, $2, $3, $4, 1, NOW(), 0, NOW() + ($5 || ' minutes')::interval)
-      RETURNING electronic_sale_invoice_id
-    `,
-    // Cron query: pending invoices whose next_check_at has elapsed.
-    // No parameters: filtering by status_id=1 + next_check_at <= NOW() is enough.
-    getDueInvoices: `
-      SELECT e.electronic_sale_invoice_id, e.key_number, e.created_at,
-             e.check_attempts, b.tenant_id
-      FROM pos_schema.electronic_sale_invoice e
-      INNER JOIN pos_schema.sale s USING(sale_id)
-      INNER JOIN general_schema.branch b USING(branch_id)
-      INNER JOIN general_schema.tenant t ON t.tenant_id = b.tenant_id
-      WHERE e.status_id = 1
-        AND t.tax_regime = 'traditional'
-        AND e.next_check_at IS NOT NULL
-        AND e.next_check_at <= NOW()
-      ORDER BY e.next_check_at
-    `,
-    // Records a failed Hacienda probe: increments attempts and schedules the
-    // next check. $1 = electronic_sale_invoice_id, $2 = next delay interval
-    // string (e.g. '2 hours').
-    markAttempt: `
-      UPDATE pos_schema.electronic_sale_invoice
-         SET check_attempts = check_attempts + 1,
-             next_check_at  = NOW() + $2::interval,
-             updated_at     = NOW()
-       WHERE electronic_sale_invoice_id = $1
-    `,
-    // Marks an invoice as timed-out after exhausting attempts. status_id = 4.
-    // $1 = electronic_sale_invoice_id
-    markFailed: `
-      UPDATE pos_schema.electronic_sale_invoice
-         SET status_id      = 4,
-             check_attempts = check_attempts + 1,
-             next_check_at  = NULL,
-             updated_at     = NOW()
-       WHERE electronic_sale_invoice_id = $1
-    `,
-    // #5: persiste los ítems en electronic_sale_invoice_items
-    insertItem: `
-      INSERT INTO pos_schema.electronic_sale_invoice_items
-      (electronic_sale_invoice_id, tenant_id, product_variant_id, sale_item_id, line_number, discount_amount)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING electronic_sale_invoice_item_id
-    `,
-    // #6: verifica que exista una digital_sale_invoice antes de generar la electrónica
-    getDInvoice: `
-      SELECT digital_sale_invoice_id
-      FROM pos_schema.digital_sale_invoice
-      WHERE sale_id = $1
+  creditDebitNote: {
+    // Contexto de la factura + saldo pendiente (si tiene AR) para validar
+    // que un credito no exceda lo que aun se debe.
+    // Contexto para el asiento de una nota: proporcion de IVA de la factura,
+    // moneda y lo que el cliente aun debe de la venta. Se lee ANTES de insertar
+    // la nota (el trigger apply_credit_debit_note_to_ar ajusta la CxC).
+    getJournalContext: `
+      SELECT
+        i.subtotal_amount::float8 AS subtotal_amount,
+        i.total_amount::float8 AS total_amount,
+        COALESCE(i.currency_id, s.currency_id, 1) AS currency_id,
+        (
+          SELECT GREATEST(
+            (ar.subtotal + COALESCE(sar.tax_amount, 0)) - ar.amount_paid, 0
+          )::float8
+          FROM pos_schema.sale_account_receivable sar
+          JOIN general_schema.account_receivable ar
+            ON ar.account_receivable_id = sar.account_receivable_id
+          WHERE sar.sale_id = s.sale_id
+          LIMIT 1
+        ) AS receivable_balance
+      FROM pos_schema.invoice i
+      JOIN pos_schema.sale s ON s.sale_id = i.sale_id
+      WHERE i.invoice_id = $1
       LIMIT 1
     `,
-    markSaleAsEInvoiced: `
-      UPDATE pos_schema.sale SET has_electronic_invoice = true WHERE sale_id = $1
-    `,
-    // $1 = electronic_sale_invoice_id, $2 = hacienda_response_xml (TEXT), $3 = status_id
-    // status_id: 1=pendiente, 2=aceptada, 3=rechazada
-    // Sets terminal status (2=aceptada, 3=rechazada) and clears next_check_at
-    // so the cron will not pick the invoice again.
-    updateHaciendaResponse: `
-      UPDATE pos_schema.electronic_sale_invoice
-      SET hacienda_response_xml  = $2,
-          hacienda_response_date = NOW(),
-          status_id              = $3,
-          next_check_at          = NULL,
-          updated_at             = NOW()
-      WHERE electronic_sale_invoice_id = $1
-    `,
-    getEInvoicesByBranch: `
-      SELECT * FROM pos_schema.electronic_sale_invoice e
-      INNER JOIN pos_schema.sale s USING(sale_id)
-      INNER JOIN general_schema.branch b USING(branch_id)
-      WHERE b.branch_id = $1 AND b.tenant_id = $2;
-    `,
-    getEInvoiceForSale: `
-      SELECT * FROM pos_schema.electronic_sale_invoice e
-      INNER JOIN pos_schema.sale s USING(sale_id)
-      INNER JOIN general_schema.branch b USING(branch_id)
-      WHERE s.sale_id = $1 AND b.tenant_id = $2;
-    `,
-    getEInvoiceById: `
-      SELECT * FROM pos_schema.electronic_sale_invoice e
-      INNER JOIN pos_schema.sale s USING(sale_id)
-      INNER JOIN general_schema.branch b USING(branch_id)
-      WHERE e.electronic_sale_invoice_id = $1 AND b.tenant_id = $2; 
-    `,
-    getSaleForEInvoice: `
+    getInvoiceContext: `
       SELECT
+        i.invoice_id,
+        i.total_amount,
+        i.tenant_customer_id,
         s.sale_id,
         s.branch_id,
-        t.tenant_id,
-        s.sale_condition,
-        s.is_completed,
-        s.has_electronic_invoice,
-        EXISTS (
-          SELECT 1 FROM pos_schema.electronic_sale_invoice e WHERE e.sale_id = s.sale_id
-        ) AS already_invoiced,
-        -- #3: extraer solo los 10 dígitos numéricos (posición 11-20) y castear a bigint
-        COALESCE(
-          (SELECT MAX(SUBSTRING(seq.consecutive_number FROM 11 FOR 10)::bigint)
-          FROM pos_schema.electronic_sale_invoice seq
-          INNER JOIN pos_schema.sale s2 ON s2.sale_id = seq.sale_id
-          WHERE s2.branch_id = s.branch_id), 0
-        )::bigint AS invoice_sequence,
-        cur.currency_code,
-        1.00000::numeric AS exchange_rate,
-        s.subtotal_amount,
-        s.tax_amount,
-        s.total_amount,
-        pm.code AS payment_method_code,
-        t.econ_activity::VARCHAR(6) AS activity_code,
-        t.tenant_name     AS issuer_name,
-        t.identification  AS issuer_identification,
-        COALESCE(tenant_dt.ident_code, '04')::VARCHAR(2) AS issuer_identification_type,
-        t.contact_email   AS issuer_email,
-        COALESCE(loc.provincia,   '1')  AS provincia,
-        COALESCE(loc.canton,      '01') AS canton,
-        COALESCE(loc.distrito,    '01') AS distrito,
-        COALESCE(loc.otras_senas, 'San José')   AS otras_senas,
-        (tc.first_name || ' ' || tc.last_name) AS receiver_name,
-        tc.document_number::VARCHAR(20)        AS receiver_identification,
-        COALESCE(dt.ident_code, '01')::VARCHAR(2) AS receiver_identification_type,
-        tc.email                               AS receiver_email,
-        -- CABYS codes starting with '9' = services; '1'-'8' = merchandise
-        COALESCE((
-          SELECT SUM(si2.total_price)
-          FROM pos_schema.sale_item si2
-          JOIN general_schema.product_variant pv2
-            ON pv2.tenant_id = si2.tenant_id AND pv2.product_variant_id = si2.product_variant_id
-          WHERE si2.sale_id = s.sale_id AND LEFT(pv2.cabys_code, 1) = '9'
-        ), 0.00)::numeric    AS total_serv_gravados,
-        0.00::numeric        AS total_serv_exentos,
-        0.00::numeric        AS total_serv_exonerados,
-        COALESCE((
-          SELECT SUM(si2.total_price)
-          FROM pos_schema.sale_item si2
-          JOIN general_schema.product_variant pv2
-            ON pv2.tenant_id = si2.tenant_id AND pv2.product_variant_id = si2.product_variant_id
-          WHERE si2.sale_id = s.sale_id AND (pv2.cabys_code IS NULL OR LEFT(pv2.cabys_code, 1) != '9')
-        ), 0.00)::numeric    AS total_mercancias_gravadas,
-        0.00::numeric        AS total_mercancias_exentas,
-        0.00::numeric        AS total_mercancias_exoneradas,
-        GREATEST(
-          (SELECT COUNT(*)::integer FROM pos_schema.cash_register cr2
-           WHERE cr2.branch_id = b.branch_id AND cr2.created_at <= cr.created_at),
-          1
-        ) AS terminal_number,
-        1 AS pos_number
-      FROM pos_schema.sale s
-      JOIN general_schema.branch b            ON b.branch_id = s.branch_id
-      JOIN general_schema.tenant t            ON t.tenant_id = b.tenant_id
-      LEFT JOIN general_schema.branch_location loc ON loc.branch_id = b.branch_id
-      LEFT JOIN general_schema.tenant_customer tc  ON tc.tenant_customer_id = s.tenant_customer_id
-      LEFT JOIN general_schema.identification_type dt ON dt.identification_type_id = tc.identification_type_id
-      LEFT JOIN general_schema.identification_type tenant_dt ON tenant_dt.identification_type_id = t.identification_type_id
-      JOIN general_schema.currency cur        ON cur.currency_id = s.currency_id
-      LEFT JOIN LATERAL (
-        SELECT
-          CASE pm2.name
-            WHEN 'cash'        THEN '01'
-            WHEN 'debit_card'  THEN '02'
-            WHEN 'credit_card' THEN '02'
-            WHEN 'credit'      THEN '04'
-            ELSE '99'
-          END AS code
-        FROM pos_schema.customer_payment cp2
-        JOIN general_schema.payment_method pm2 ON pm2.payment_method_id = cp2.payment_method_id
-        WHERE cp2.sale_id = s.sale_id
-        LIMIT 1
-      ) pm ON true
-      LEFT JOIN pos_schema.cash_register_sale crs ON crs.sale_id = s.sale_id
-      LEFT JOIN pos_schema.cash_register_session crss ON crss.cash_register_session_id = crs.cash_register_session_id
-      LEFT JOIN pos_schema.cash_register cr ON cr.cash_register_id = crss.cash_register_id
-      WHERE s.sale_id = $1
+        b.tenant_id,
+        sar.sale_account_receivable_id,
+        ar.account_receivable_id,
+        ar.subtotal,
+        COALESCE(sar.tax_amount, 0) AS ar_tax_amount,
+        ar.amount_paid
+      FROM pos_schema.invoice i
+      JOIN pos_schema.sale s ON s.sale_id = i.sale_id
+      JOIN general_schema.branch b ON b.branch_id = s.branch_id
+      LEFT JOIN pos_schema.sale_account_receivable sar ON sar.sale_id = s.sale_id
+      LEFT JOIN general_schema.account_receivable ar ON ar.account_receivable_id = sar.account_receivable_id
+      WHERE i.invoice_id = $1
+      LIMIT 1
     `,
-
-    getSaleItemsForEInvoice: `
+    // Notas activas (no anuladas) de una factura, para calcular el saldo
+    // neto ya ajustado antes de aceptar una nueva.
+    sumActiveByInvoice: `
       SELECT
-      ROW_NUMBER() OVER (ORDER BY si.created_at)::integer AS line_number,
-      si.sale_item_id,
-      si.product_variant_id,
-      pv.tenant_id,
-      pv.cabys_code,
-      pv.variant_name::varchar(200) AS description,
-      si.quantity::numeric(16,3),
-      'Unid'::varchar(20) AS unit_of_measure,
-      si.unit_price::numeric(18,5),
-      si.total_price::numeric(18,5) AS total_amount,
-      0.00::numeric(18,5) AS discount_amount,
-      si.total_price::numeric(18,5) AS subtotal,
-      '01'::varchar(2) AS tax_code,
-      '08'::varchar(2) AS tax_rate_code,
-      13.00::numeric(5,2) AS tax_rate,
-      (si.total_price * 0.13)::numeric(18,5) AS tax_amount,
-      (si.total_price * 1.13)::numeric(18,5) AS total_line_amount
-      FROM pos_schema.sale_item si
-      JOIN general_schema.product_variant pv
-        ON pv.tenant_id = si.tenant_id AND pv.product_variant_id = si.product_variant_id
-      LEFT JOIN general_schema.product p     ON p.cabys_code = pv.cabys_code
-      LEFT JOIN general_schema.tax_rate tr   ON tr.tax_rate_id = p.tax_rate_id
-      WHERE si.sale_id = $1
-      ORDER BY si.created_at;
+        COALESCE(SUM(amount) FILTER (WHERE note_type = 'credit'), 0) AS total_credit,
+        COALESCE(SUM(amount) FILTER (WHERE note_type = 'debit'), 0) AS total_debit
+      FROM pos_schema.credit_debit_note
+      WHERE invoice_id = $1 AND is_voided = FALSE
+    `,
+    create: `
+      INSERT INTO pos_schema.credit_debit_note
+        (tenant_id, invoice_id, note_type, reason_kind, description, amount, currency_id, created_by)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING note_id, note_number, tenant_id, invoice_id, note_type, reason_kind,
+        description, amount, currency_id, is_voided, created_at
+    `,
+    listByInvoice: `
+      SELECT note_id, note_number, invoice_id, note_type, reason_kind, description,
+        amount, currency_id, is_voided, voided_at, created_by, created_at
+      FROM pos_schema.credit_debit_note
+      WHERE invoice_id = $1
+      ORDER BY created_at DESC
+    `,
+    listByTenant: `
+      SELECT
+        cdn.note_id, cdn.note_number, cdn.invoice_id, cdn.note_type, cdn.reason_kind,
+        cdn.description, cdn.amount, cdn.currency_id, cdn.is_voided, cdn.voided_at,
+        cdn.created_at,
+        s.sale_id,
+        (tc.first_name || ' ' || tc.last_name) AS customer_name
+      FROM pos_schema.credit_debit_note cdn
+      JOIN pos_schema.invoice i ON i.invoice_id = cdn.invoice_id
+      JOIN pos_schema.sale s ON s.sale_id = i.sale_id
+      LEFT JOIN general_schema.tenant_customer tc ON tc.tenant_customer_id = i.tenant_customer_id
+      WHERE cdn.tenant_id = $1
+      ORDER BY cdn.created_at DESC
+    `,
+    getById: `
+      SELECT note_id, tenant_id, invoice_id, note_type, amount, is_voided
+      FROM pos_schema.credit_debit_note
+      WHERE note_id = $1
+      LIMIT 1
+    `,
+    void: `
+      UPDATE pos_schema.credit_debit_note
+      SET is_voided = TRUE, voided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE note_id = $1 AND is_voided = FALSE
+      RETURNING note_id, note_number, tenant_id, invoice_id, note_type, reason_kind,
+        description, amount, currency_id, is_voided, voided_at, created_by, created_at
     `,
   },
 };

@@ -6,19 +6,20 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import Database from '@crane-technologies/database/dist/components/Database';
+import Database from '@resonance-components/datahandler';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
-import { StateService } from '@/contexts/general/modules/state/state.service';
+import { TenantScopeService } from '@/common/tenant/tenant-scope.service';
 import { WarehouseService } from '@/contexts/inventory/modules/warehouse/warehouse.service';
 import { IUserSession } from '@/common/interfaces/user_session.interface';
 import { accountsReceivableQueries } from './accounts-receivable.queries';
 import { CreateCollectionDto } from './dto/create-collection.dto';
 import { UpdateCollectionDto } from './dto/update-collection.dto';
 import { posQueries } from '@pos/pos.queries';
+import { calculateEarnedPoints } from '../loyal-program/loyalty-currency';
+import { AccountingJournalService } from '@/contexts/finances/modules/accounting/accounting-journal.service';
 
 const { ar, collections, catalog, apartado } = accountsReceivableQueries;
-const { loyaltyScore } = posQueries;
-const SUPERUSER_HIERARCHY = 1;
+const { loyaltyScore, saleItems } = posQueries;
 
 @Injectable()
 export class AccountsReceivableService {
@@ -26,16 +27,34 @@ export class AccountsReceivableService {
 
   constructor(
     @Inject(DATABASE) private readonly db: Database,
-    private readonly stateService: StateService,
+    private readonly tenantScope: TenantScopeService,
     private readonly warehouseService: WarehouseService,
+    private readonly journalService: AccountingJournalService,
   ) {}
 
-  async getAccountsReceivable(session: IUserSession) {
-    const result = this.isSuperuser(session.role_id)
-      ? await this.db.query(ar.getAllGlobal)
-      : await this.db.query(ar.getAllByTenant, [session.tenant_id]);
+  async getAccountsReceivable(session: IUserSession, page = 1, limit = 50) {
+    const safePage = Number.isFinite(page) && page > 0 ? page : 1;
+    const safeLimit = Number.isFinite(limit) && limit > 0 ? limit : 50;
+    const offset = (safePage - 1) * safeLimit;
 
-    return result.rows;
+    const result = this.tenantScope.isSuperuser(session)
+      ? await this.db.query(ar.getAllGlobal, [safeLimit, offset])
+      : await this.db.query(ar.getAllByTenant, [
+          session.tenant_id,
+          safeLimit,
+          offset,
+        ]);
+
+    const total = result.rows[0]?.total_count
+      ? parseInt(result.rows[0].total_count, 10)
+      : 0;
+
+    return {
+      receivables: result.rows.map(({ total_count, ...row }) => row),
+      total,
+      page: safePage,
+      limit: safeLimit,
+    };
   }
 
   async getCatalogs() {
@@ -57,7 +76,11 @@ export class AccountsReceivableService {
       dto.sale_account_receivable_id,
     ]);
     const access = accessResult.rows[0] as
-      | { sale_account_receivable_id: string; sale_id: string; tenant_id: string }
+      | {
+          sale_account_receivable_id: string;
+          sale_id: string;
+          tenant_id: string;
+        }
       | undefined;
 
     if (!access) {
@@ -102,16 +125,57 @@ export class AccountsReceivableService {
         );
       }
 
+      // Asiento del cobro (FNZ-X-04): Caja/Bancos contra Cuentas por Cobrar.
+      // Secundario (no tumba el cobro) y en savepoint dentro de la txn.
+      const cobroId = collectionId;
+      await this.journalService.trySecondary(
+        txn,
+        `cobro ${cobroId}`,
+        async () => {
+          const { rows: curRows } = await txn.query(
+            collections.getReceivableCurrency,
+            [dto.sale_account_receivable_id],
+          );
+          const currencyId = Number(curRows[0]?.currency_id ?? 1);
+          const entryDate = new Date();
+          const settlement = await this.journalService.buildSettlement(
+            access.tenant_id,
+            currencyId,
+            entryDate,
+            [
+              {
+                payment_method_id: Number(dto.payment_method_id),
+                payment_amount: Number(dto.amount_paid),
+                currency_id: currencyId,
+              },
+            ],
+            0,
+            txn,
+          );
+          await this.journalService.generatePaymentReceivedJournal(
+            {
+              tenantId: access.tenant_id,
+              sourceId: cobroId,
+              amount: Number(dto.amount_paid),
+              settlement,
+              currencyId,
+              entryDate,
+              description: `Cobro de cuenta por cobrar - venta ${access.sale_id}`,
+            },
+            txn,
+          );
+        },
+      );
+
       // Recalc AR totals + status defensively. The DB has a trigger that does
       // the same, but bootstrap.sql in some environments lacks it.
       await txn.query(collections.recalcReceivableTotals, [
         dto.sale_account_receivable_id,
       ]);
 
-      const receivableResult = await txn.query(
-        ar.getUpdatedReceivableById,
-        [dto.sale_account_receivable_id],
-      );
+      const receivableResult = await txn.query(ar.getUpdatedReceivableById, [
+        dto.sale_account_receivable_id,
+      ]);
       receivableRow = receivableResult.rows[0] ?? null;
 
       await txn.commit();
@@ -120,10 +184,9 @@ export class AccountsReceivableService {
       throw error;
     }
 
-    const arInfo = await this.db.query(
-      apartado.getARTypeAndSaleInfo,
-      [dto.sale_account_receivable_id],
-    );
+    const arInfo = await this.db.query(apartado.getARTypeAndSaleInfo, [
+      dto.sale_account_receivable_id,
+    ]);
     const arRow = arInfo.rows[0] as
       | {
           type_name: string;
@@ -132,6 +195,7 @@ export class AccountsReceivableService {
           tenant_id: string;
           tenant_customer_id: string | null;
           branch_id: string;
+          currency_id: number | null;
           total_amount: string | number;
         }
       | undefined;
@@ -141,8 +205,11 @@ export class AccountsReceivableService {
         await this.grantProportionalLoyaltyPoints(
           arRow.tenant_id,
           arRow.tenant_customer_id,
+          arRow.currency_id,
           Number(arRow.total_amount),
           Number(dto.amount_paid),
+          arRow.sale_id,
+          collectionId,
         );
       } catch (loyaltyError) {
         this.logger.error(
@@ -152,7 +219,11 @@ export class AccountsReceivableService {
 
       if (arRow.is_paid) {
         if (arRow.type_name === 'venta_apartado') {
-          await this.completeApartado(arRow.sale_id, arRow.branch_id, arRow.tenant_id);
+          await this.completeApartado(
+            arRow.sale_id,
+            arRow.branch_id,
+            arRow.tenant_id,
+          );
         } else if (arRow.type_name === 'venta_credito') {
           try {
             await this.db.query(apartado.completeCreditSale, [arRow.sale_id]);
@@ -174,8 +245,11 @@ export class AccountsReceivableService {
   private async grantProportionalLoyaltyPoints(
     tenantId: string,
     tenantCustomerId: string | null,
+    saleCurrencyId: number | null,
     saleTotal: number,
     paidAmount: number,
+    saleId: string,
+    collectionId: string,
   ): Promise<void> {
     if (!tenantCustomerId || paidAmount <= 0) return;
 
@@ -185,10 +259,17 @@ export class AccountsReceivableService {
     );
     const program = programRows[0];
     if (!program) return;
-    if (saleTotal < Number(program.minimum_purchase_for_points)) return;
 
-    const points = Math.floor(
-      paidAmount * Number(program.points_earned_per_currency_unit),
+    // FNZ-FI-01: el programa se define en USD; el total de la venta y el
+    // cobro (ambos en la moneda de la venta) se convierten antes de aplicar
+    // la compra minima y la tasa de acumulacion.
+    const points = await calculateEarnedPoints(
+      this.db,
+      program,
+      tenantId,
+      saleCurrencyId,
+      saleTotal,
+      paidAmount,
     );
     if (points <= 0) return;
 
@@ -196,6 +277,14 @@ export class AccountsReceivableService {
       tenantId,
       tenantCustomerId,
       points,
+    ]);
+    // FNZ-FI-03: queda en el ledger para el grafico de crecimiento de Finanzas.
+    await this.db.query(loyaltyScore.insertCollectionEarned, [
+      tenantId,
+      tenantCustomerId,
+      points,
+      saleId,
+      collectionId,
     ]);
   }
 
@@ -233,6 +322,45 @@ export class AccountsReceivableService {
           txn,
         );
         await txn.query(apartado.completeSale, [saleId]);
+        // Apartados creados antes de FNZ-RT-02 quedaron sin costo de venta.
+        await txn.query(saleItems.fixCostAtSale, [saleId]);
+
+        // Asiento de la venta al entregarse el apartado (FNZ-X-04): todo el
+        // total contra Cuentas por Cobrar, que los abonos ya fueron
+        // acreditando; mas el costo de venta.
+        await this.journalService.trySecondary(
+          txn,
+          `apartado ${saleId}`,
+          async () => {
+            const { rows } = await txn.query(apartado.getSaleForJournal, [
+              saleId,
+            ]);
+            const sale = rows[0];
+            if (!sale) return;
+            const entryDate = new Date();
+            await this.journalService.generateSaleJournal(
+              {
+                tenantId,
+                saleId,
+                saleCondition: '04',
+                subtotalAmount: Number(sale.subtotal_amount),
+                taxAmount: Number(sale.tax_amount),
+                totalAmount: Number(sale.total_amount),
+                settlement: { cash: 0, bank: 0, points: 0 },
+                currencyId: Number(sale.currency_id ?? 1),
+                entryDate,
+              },
+              txn,
+            );
+            const totalCost = Number(sale.total_cost);
+            if (totalCost > 0) {
+              await this.journalService.generateSaleCogsJournal(
+                { tenantId, saleId, totalCost, entryDate },
+                txn,
+              );
+            }
+          },
+        );
         await txn.commit();
       } catch (err) {
         await txn.rollback();
@@ -254,7 +382,11 @@ export class AccountsReceivableService {
       collectionId,
     ]);
     const access = accessResult.rows[0] as
-      | { sale_collection_id: string; tenant_id: string; sale_account_receivable_id: string }
+      | {
+          sale_collection_id: string;
+          tenant_id: string;
+          sale_account_receivable_id: string;
+        }
       | undefined;
 
     if (!access) {
@@ -279,10 +411,9 @@ export class AccountsReceivableService {
         access.sale_account_receivable_id,
       ]);
 
-      const receivableResult = await txn.query(
-        ar.getUpdatedReceivableById,
-        [access.sale_account_receivable_id],
-      );
+      const receivableResult = await txn.query(ar.getUpdatedReceivableById, [
+        access.sale_account_receivable_id,
+      ]);
 
       await txn.commit();
 
@@ -297,7 +428,7 @@ export class AccountsReceivableService {
   }
 
   private assertTenantAccess(resourceTenantId: string, session: IUserSession) {
-    if (this.isSuperuser(session.role_id)) {
+    if (this.tenantScope.isSuperuser(session)) {
       return;
     }
     if (resourceTenantId !== session.tenant_id) {
@@ -305,11 +436,5 @@ export class AccountsReceivableService {
         'No tienes permisos para acceder a este recurso',
       );
     }
-  }
-
-  private isSuperuser(roleId: number) {
-    return (
-      this.stateService.getRole(roleId).role_hierarchy === SUPERUSER_HIERARCHY
-    );
   }
 }

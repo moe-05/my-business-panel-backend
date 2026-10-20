@@ -9,6 +9,8 @@ const nodeEnv = process.env.NODE_ENV || 'development';
 // General Modules
 import { AuthModule } from '@/contexts/general/modules/auth/auth.module';
 import { DbModule } from '@/contexts/general/modules/db/db.module';
+import { TenantScopeModule } from '@/common/tenant/tenant-scope.module';
+import { RateLimitModule } from '@/common/rate-limit/rate-limit.module';
 import { SubscriptionModule } from '@/contexts/general/modules/subscription/subscription.module';
 import { CustomerModule } from '@/contexts/general/modules/customer/customer.module';
 import { IdentificationTypeModule } from '@/contexts/general/modules/identification-type/identification-type.module';
@@ -16,7 +18,6 @@ import { TenantModule } from '@/contexts/general/modules/tenant/tenant.module';
 import { ProductCategoryModule } from '@/contexts/general/modules/product_category/product-category.module';
 import { CustomerSegmentMarginModule } from '@/contexts/general/modules/customer_segment_margin/customer_segment_margin.module';
 import { StripeModule } from '@/contexts/general/modules/stripe/stripe.module';
-import { QueueModule } from '@/contexts/general/modules/queue/queue.module';
 import { ProductModule } from '@/contexts/general/modules/product/product.module';
 import { GlobalAttributeModule } from '@/contexts/general/modules/global_attribute/global-attribute.module';
 import { TenantAttributeModule } from '@/contexts/general/modules/tenant_attribute/tenant-attribute.module';
@@ -28,7 +29,6 @@ import { ProductVariantGroupAssignmentModule } from '@/contexts/general/modules/
 import { CustomerPaymentModule } from '@/contexts/general/modules/customer_payment/customer-payment.module';
 import { SegmentModule } from '@/contexts/general/modules/segment/segment.module';
 import { BranchModule } from '@/contexts/general/modules/branch/branch.module';
-import { TenantHaciendaConfigModule } from '@/contexts/general/modules/tenant_hacienda_config/tenant-hacienda-config.module';
 import { RegionModule } from '@/contexts/general/modules/region/region.module';
 import { SpecialCodeModule } from '@/contexts/general/modules/special_code/special_code.module';
 import { CurrencyModule } from '@/contexts/general/modules/currency/currency.module';
@@ -37,10 +37,10 @@ import { ExchangeRateModule } from '@/contexts/general/modules/exchange_rate/exc
 // POS Modules
 import { SaleModule } from '@/contexts/pos/modules/sale/sale.module';
 import { SaleItemModule } from '@/contexts/pos/modules/sale-item/sale-item.module';
-import { DInvoiceModule } from '@/contexts/pos/modules/d-invoice/d-invoice.module';
-import { EInvoiceModule } from '@/contexts/pos/modules/e-invoice/e-invoice.module';
+import { InvoiceModule } from '@/contexts/pos/modules/invoice/invoice.module';
 import { PromosModule } from '@/contexts/pos/modules/promos/promos.module';
 import { ReturnsModule } from '@/contexts/pos/modules/returns/returns.module';
+import { CreditDebitNoteModule } from '@/contexts/pos/modules/credit-debit-note/credit-debit-note.module';
 import { CashRegisterModule } from '@/contexts/pos/modules/cash_register/cash_register.module';
 import { LoyalProgramModule } from '@/contexts/pos/modules/loyal-program/loyalty-program.module';
 import { PosExpenseModule } from '@/contexts/pos/modules/pos-expense/pos-expense.module';
@@ -52,6 +52,7 @@ import { CollectionAlertsModule } from '@/contexts/pos/modules/collection_alerts
 import { PurchaseModule } from '@/contexts/purchase/modules/purchase/purchase.module';
 import { SuppliersModule } from '@/contexts/purchase/modules/suppliers/suppliers.module';
 import { PaymentAlertsModule } from '@/contexts/purchase/modules/payment_alerts/payment-alerts.module';
+import { DisputesModule } from '@/contexts/purchase/modules/disputes/disputes.module';
 
 // INVENTORY Modules
 import { WarehouseModule } from '@/contexts/inventory/modules/warehouse/warehouse.module';
@@ -68,6 +69,17 @@ import { ReportingModule } from '@/contexts/hr/modules/reporting/reporting.modul
 import { PaysheetModule } from '@/contexts/hr/modules/paysheet/paysheet.module';
 import { PayrollMovementsModule } from '@/contexts/hr/modules/payroll_movements/payroll-movements.module';
 import { IncapacityModule } from '@/contexts/hr/modules/incapacity/incapacity.module';
+import { ParametersModule } from '@/contexts/hr/modules/parameters/parameters.module';
+import { SalaryModule } from '@/contexts/hr/modules/salary/salary.module';
+import { HolidaysModule } from '@/contexts/hr/modules/holidays/holidays.module';
+import { JourneyModule } from '@/contexts/hr/modules/journey/journey.module';
+import { MoraModule } from '@/contexts/hr/modules/mora/mora.module';
+import { SeveranceModule } from '@/contexts/hr/modules/severance/severance.module';
+import { VacationsModule } from '@/contexts/hr/modules/vacations/vacations.module';
+import { ProfitSharingModule } from '@/contexts/hr/modules/profit-sharing/profit-sharing.module';
+import { DeductionsModule } from '@/contexts/hr/modules/deductions/deductions.module';
+import { BeneficiariesModule } from '@/contexts/hr/modules/beneficiaries/beneficiaries.module';
+import { SettlementModule } from '@/contexts/hr/modules/settlement/settlement.module';
 import { SuspentionModule } from '@/contexts/hr/modules/suspention/suspention.module';
 import { TurnsModule } from '@/contexts/hr/modules/turns/turns.module';
 import { TardinessModule } from '@/contexts/hr/modules/tardiness/tardiness.module';
@@ -76,6 +88,7 @@ import { AccountingModule } from '@/contexts/finances/modules/accounting/account
 import { ExpenseModule } from '@/contexts/finances/modules/expense/expense.module';
 import { AccountsModule } from '@/contexts/finances/modules/accounts/accounts.module';
 import { ProfitabilityModule } from '@/contexts/finances/modules/profitability/profitability.module';
+import { LoyaltyModule } from '@/contexts/finances/modules/loyalty/loyalty.module';
 import { CashFlowModule } from '@/contexts/finances/modules/cash-flow/cash-flow.module';
 import { IvaModule } from '@/contexts/finances/modules/iva/iva.module';
 
@@ -90,7 +103,8 @@ import { IvaModule } from '@/contexts/finances/modules/iva/iva.module';
     CustomerModule,
     IdentificationTypeModule,
     DbModule,
-    QueueModule,
+    TenantScopeModule,
+    RateLimitModule,
     TenantModule,
     ProductCategoryModule,
     CustomerSegmentMarginModule,
@@ -106,10 +120,11 @@ import { IvaModule } from '@/contexts/finances/modules/iva/iva.module';
     StripeModule,
     SaleModule,
     SaleItemModule,
-    DInvoiceModule,
+    InvoiceModule,
     PromosModule,
     SegmentModule,
     ReturnsModule,
+    CreditDebitNoteModule,
     BranchModule,
     CashRegisterModule,
     LoyalProgramModule,
@@ -123,6 +138,17 @@ import { IvaModule } from '@/contexts/finances/modules/iva/iva.module';
     ContractModule,
     ConceptModule,
     DutiesTypeModule,
+    ParametersModule,
+    SalaryModule,
+    HolidaysModule,
+    JourneyModule,
+    MoraModule,
+    SeveranceModule,
+    VacationsModule,
+    ProfitSharingModule,
+    DeductionsModule,
+    BeneficiariesModule,
+    SettlementModule,
     PayrollMovementsModule,
     PayrollModule,
     PaysheetModule,
@@ -130,13 +156,12 @@ import { IvaModule } from '@/contexts/finances/modules/iva/iva.module';
     SuppliersModule,
     PurchaseModule,
     PaymentAlertsModule,
+    DisputesModule,
     IncapacityModule,
     SuspentionModule,
     TurnsModule,
     FoulModule,
     TardinessModule,
-    EInvoiceModule,
-    TenantHaciendaConfigModule,
     RegionModule,
     SpecialCodeModule,
     CurrencyModule,
@@ -145,6 +170,7 @@ import { IvaModule } from '@/contexts/finances/modules/iva/iva.module';
     ExpenseModule,
     AccountsModule,
     ProfitabilityModule,
+    LoyaltyModule,
     CashFlowModule,
     IvaModule,
     ReportingModule,

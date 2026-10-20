@@ -5,15 +5,12 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  IsUUID,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
+// El tenant del cliente NO viaja en el body: se toma de la sesion. Un
+// tenant_id enviado por el cliente lo descarta el ValidationPipe (whitelist).
 export class NewClientDto {
-  @IsNotEmpty()
-  @IsUUID()
-  tenant_id!: string;
-
   @IsNotEmpty()
   @IsString()
   first_name!: string;
@@ -47,9 +44,16 @@ export class NewClientDto {
   @IsOptional()
   birthdate?: Date;
 
+  // Obligatoria: la factura imprime el domicilio del comprador.
+  @IsNotEmpty({ message: 'La direccion del cliente es obligatoria' })
+  @IsString()
+  address!: string;
+
+  // Razon social: obligatoria cuando el tipo de documento es J/G/C (se valida
+  // en CustomerService porque depende del codigo del tipo de documento).
   @IsOptional()
   @IsString()
-  address?: string;
+  business_name?: string;
 
   @IsOptional()
   @IsNumber()

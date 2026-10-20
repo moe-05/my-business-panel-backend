@@ -4,45 +4,39 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Workspace context (sibling repos, cross-repo feature order, branching) lives in `../CLAUDE.md`. This file covers backend-only conventions.
 
+**Migracion en curso (Costa Rica -> Venezuela):** el proyecto migra su normativa objetivo de Costa Rica a Venezuela (SENIAT/RIF/LOTTT/IVSS en vez de Hacienda/cedula/Codigo de Trabajo/CCSS). Ver tabla de mapeo en `../CLAUDE.md`. El codigo de este repo (e-invoicing, CABYS, HR) sigue implementando reglas de Costa Rica hasta que se readapte modulo por modulo — no asumir que ya sigue la normativa de Venezuela.
+
 ## Stack
 
-NestJS 11 + TypeScript 5.7 + Express + PostgreSQL + Redis (BullMQ queues) + JWT cookie auth + class-validator DTOs + Swagger. Stripe for subscriptions. Hacienda Costa Rica e-invoicing (xml-crypto, node-forge, xmlbuilder2). Decimal.js for money — never use native `number` for amounts.
+NestJS 11 + TypeScript 5.7 + Express + PostgreSQL + JWT cookie auth + class-validator DTOs + Swagger. Stripe for subscriptions. E-invoicing (xml-crypto, node-forge, xmlbuilder2) — implementado hoy para Hacienda Costa Rica; el mecanismo de facturacion electronica de Venezuela (SENIAT) puede diferir (revisar antes de reusar este stack tal cual). Decimal.js for money — never use native `number` for amounts.
 
 ## Commands
 
 ```bash
-npm run start:dev          # watch mode
-npm run start:debug        # --inspect
-npm run start:prod         # node dist/main (run npm run build first)
-npm run start:staging      # NODE_ENV=staging
-npm run build              # nest build
-npm run lint               # eslint --fix on {src,apps,libs,test}/**/*.ts
-npm run test               # jest (unit, *.spec.ts under src/)
-npm run test:watch
-npm run test:cov
-npm run test:debug         # node --inspect-brk + ts-node
-npm run test:e2e           # jest --config ./test/jest-e2e.json
-npm run test -- path/to/file.spec.ts        # single file
-npm run test -- -t "describe or it name"    # single named test
+pnpm start:dev          # watch mode
+pnpm start:debug        # --inspect
+pnpm start:prod         # node dist/main (run pnpm build first)
+pnpm start:staging      # NODE_ENV=staging
+pnpm build              # nest build
+pnpm lint               # eslint --fix on {src,apps,libs,test}/**/*.ts
+pnpm test               # jest (unit, *.spec.ts under src/)
+pnpm test:watch
+pnpm test:cov
+pnpm test:debug         # node --inspect-brk + ts-node
+pnpm test:e2e           # jest --config ./test/jest-e2e.json
+pnpm test path/to/file.spec.ts        # single file
+pnpm test -t "describe or it name"    # single named test
 
-# CABYS catalog loaders (Costa Rica product tax codes)
-npm run cabys:load                 # uses .env
-npm run cabys:load:staging         # uses .env.staging
-npm run cabys:load:dev             # uses .env.development
-npm run cabys:load:native          # ts-node native loader
+# CABYS catalog loaders (Costa Rica product tax codes — legado, pendiente de reemplazo por catalogo fiscal Venezuela)
+pnpm cabys:load                 # uses .env
+pnpm cabys:load:staging         # uses .env.staging
+pnpm cabys:load:dev             # uses .env.development
+pnpm cabys:load:native          # ts-node native loader
 
-npm run deploy:local               # build + cabys:load + start:prod
+pnpm deploy:local               # build + cabys:load + start:prod
 ```
 
-Docker (Postgres + pgAdmin :8080 + Redis + RedisInsight :5540) lives here:
-
-```bash
-docker compose -f docker-compose.dev.yml up -d
-docker compose -f docker-compose.prod.yml up -d
-docker logs my-business-panel-postgres | grep -E "(ERROR|Bootstrap completado|ready to accept)"
-```
-
-DB schema auto-bootstraps from `../my-business-panel-database/bootstrap.sql` on first container start. To reset: `docker compose down`, delete `./postgres-data`, `up -d` again.
+Local DB: native PostgreSQL on `localhost:5432` (see `DATABASE_URL` in `.env.development`). No Docker. Staging runs on Render with Supabase; production on RDS. Schema source is `../my-business-panel-database/bootstrap.sql`.
 
 ## Boot / global setup (`src/main.ts`)
 
@@ -107,6 +101,15 @@ create(@Body() dto: CreateThingDto, @Session() user: IUserSession) {
 - Exact `role_name` strings live in `../my-business-panel-database/seeds/catalog/general/005-insert-roles.sql`. `role_id 4 = employee`. Verify the seed before using a new role name.
 - Never invent an alternative auth flow — match this stack.
 
+## Rate limiting
+
+`RateLimitGuard` (`src/common/rate-limit/`) counts every request in several buckets and rejects with 429 + `Retry-After` when ANY is exceeded: by **IP** (IPv6 grouped by /64), by **authenticated user** (so a user spread over many IPs is still capped) and, where the route defines one, by **identity** (login email, hash of the refresh token). Counters are in memory per process (swap `RateLimitStore` for Redis if the API scales to several instances).
+
+- Declare it right after the auth guard: `@UseGuards(AuthenticationGuard, RateLimitGuard, ...)`. On public routes declare it alone (IP + identity only).
+- The tier defaults to `read` for GET/HEAD and `write` for the rest. Override per route with `@RateLimit('bulk' | 'lookup' | 'sensitive' | 'public' | 'login' | 'refresh' | 'webhook')`; limits live in `rate-limit.config.ts`. `@SkipRateLimit()` needs a written justification.
+- `rate-limit-coverage.spec.ts` fails if a controller of a covered context lacks the guard or has it before `AuthenticationGuard`. Add each context to `COVERED_CONTEXTS` when it is done.
+- Env: `TRUST_PROXY_HOPS` (proxies in front of Express, default 1; must match the platform or every user shares one IP bucket, or `X-Forwarded-For` becomes spoofable), `RATE_LIMIT_MULTIPLIER` (scale all limits), `RATE_LIMIT_DISABLED=true` (off), `RATE_LIMIT_DEBUG=true` (logs resolved IP and `X-Forwarded-For`, used to measure the hop count).
+
 ## Multi-tenancy
 
 Every domain row is scoped by `tenant_id`. Pull it from `@Session() user` and pass into the service. **Never** accept a `tenant_id` from a client body or query string. Every query that touches tenant data must include `WHERE tenant_id = $X`.
@@ -117,7 +120,7 @@ Every domain row is scoped by `tenant_id`. Pull it from `@Session() user` and pa
 
 ## Data access
 
-The repo uses raw SQL via `@crane-technologies/database` (no ORM). Each context has a `<context>.queries.ts` file holding query strings. Services compose queries + run them through the shared DB client. When adding a query:
+The repo uses raw SQL via `@resonance-components/datahandler` (no ORM). Each context has a `<context>.queries.ts` file holding query strings. Services compose queries + run them through the shared DB client. When adding a query:
 
 - Place the SQL string in the matching `*.queries.ts` (not inline in the service).
 - Always parameterize (`$1`, `$2`, …) — never string-interpolate user input.
@@ -125,7 +128,6 @@ The repo uses raw SQL via `@crane-technologies/database` (no ORM). Each context 
 
 ## Async / scheduling
 
-- BullMQ via `@nestjs/bullmq` + `ioredis` for background queues.
 - `@nestjs/schedule` for cron jobs.
 - E-invoice cron probe script: `scripts/test-einvoice-cron.ts`.
 
@@ -141,11 +143,11 @@ Throw domain errors from `src/common/errors/` (or the context's `errors/`) — t
 
 ## Tests
 
-Jest. Unit specs live next to source as `*.spec.ts` (`testRegex: '.*\\.spec\\.ts$'`, `rootDir: src`). E2E specs under `test/` with `test/jest-e2e.json`. Run a single file with `npm run test -- path/to/file.spec.ts`; a single named test with `-t "name"`.
+Jest. Unit specs live next to source as `*.spec.ts` (`testRegex: '.*\\.spec\\.ts$'`, `rootDir: src`). E2E specs under `test/` with `test/jest-e2e.json`. Run a single file with `pnpm test path/to/file.spec.ts`; a single named test with `-t "name"`.
 
 ## Lint / style
 
-- `npm run lint` runs `eslint --fix`. Prettier integrated via `eslint-plugin-prettier`.
+- `pnpm lint` runs `eslint --fix`. Prettier integrated via `eslint-plugin-prettier`.
 - No emojis in code, comments, log strings, or commit messages.
 - Spanish copy in domain text / error messages is intentional — keep it.
 

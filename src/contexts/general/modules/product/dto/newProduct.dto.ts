@@ -1,4 +1,5 @@
 import {
+  ArrayMinSize,
   IsBoolean,
   IsNumber,
   IsOptional,
@@ -6,8 +7,6 @@ import {
   IsUUID,
   IsArray,
   ValidateNested,
-  Length,
-  Matches,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -29,10 +28,8 @@ export class NewProductDto {
   variant_name!: string;
 
   @IsOptional()
-  @IsString()
-  @Length(13, 13, { message: 'cabys_code must be exactly 13 characters' })
-  @Matches(/^\d{13}$/, { message: 'cabys_code must contain exactly 13 digits' })
-  cabys_code?: string;
+  @IsUUID()
+  product_id?: string;
 
   @IsNumber()
   unit_price!: number;
@@ -62,17 +59,24 @@ export class NewProductDto {
   @IsUUID('4', { each: true })
   attribute_value_ids?: string[];
 
-  @IsOptional()
+  /**
+   * Familia/dimensión obligatoria (spec Venezuela: no se puede guardar un
+   * producto sin clasificar). En UpdateProductDto (PartialType) el campo se
+   * vuelve opcional, pero si se envia debe seguir trayendo al menos 1 id --
+   * asi una edicion parcial que no toca clasificacion puede omitirlo, pero
+   * no puede mandarlo vacio para borrarla.
+   */
   @IsArray()
+  @ArrayMinSize(1, { message: 'Debe asignar al menos una familia o dimensión' })
   @IsUUID('4', { each: true })
-  group_ids?: string[];
+  group_ids!: string[];
 }
 
 export interface ProductInsert {
   tenant_id: string;
   sku: string;
   variant_name: string;
-  cabys_code?: string;
+  product_id?: string;
   unit_price: number;
   cost_price?: number;
   supplier_id?: string;

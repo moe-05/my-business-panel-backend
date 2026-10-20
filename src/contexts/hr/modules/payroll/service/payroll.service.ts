@@ -1,19 +1,33 @@
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
-import Database from '@crane-technologies/database';
-import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
+import Database from '@resonance-components/datahandler';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { PayrollRepository } from '../repositories/payroll.repository';
 import { CalculationEngine } from './calc-engine.service';
 import { AccountingJournalService } from '@/contexts/finances/modules/accounting/accounting-journal.service';
 import { hrQueries } from '@hr/hr.queries';
 import { CreatePaysheetDto } from '../dto/create-paysheet.dto';
 import {
+  ActiveDeductionRow,
+  DEDUCTION_KIND_CONCEPT_CODE,
   EmployeePayrollData,
   Incapacities,
   PayrollConceptRow,
 } from '../interface/payroll-db.interface';
+import { JOURNEY_LIMITS } from '../../journey/interfaces/journey-limits.interface';
 import Decimal from 'decimal.js';
 
-const { payroll } = hrQueries;
+interface OvertimeTotals {
+  nocturnaWeightedHours: number;
+  extraWeightedHours: number;
+  feriadoWeightedHours: number;
+}
+
+const { payroll, employeeDeduction } = hrQueries;
 
 @Injectable()
 export class PayrollService {
@@ -32,10 +46,23 @@ export class PayrollService {
     tenantId: string,
     periodStart: string,
     periodEnd: string,
+    paymentMethodId: number,
   ) {
     const concepts = await this.repo.getConceptsPerTenant(tenantId);
     const incomes = concepts.filter((c) => c.type === 'earning');
     const deductions = concepts.filter((c) => c.type === 'deduction');
+    // calculation_method 'manual' no tiene estrategia en StrategyContext
+    // a proposito (seed: "se ingresa al procesar") -- pasarlo por el
+    // motor generico revienta con "Strategy for method manual not found".
+    // Estos conceptos (Cuota sindical, Comisiones, y los nuevos DPAT/
+    // ALIM/OTRA) se resuelven fuera del motor: los de deduccion via
+    // empleado_deduction mas abajo, keyed por code en deductionConceptByCode.
+    const formulaIncomes = incomes.filter(
+      (c) => c.calculation_method !== 'manual',
+    );
+    const formulaDeductions = deductions.filter(
+      (c) => c.calculation_method !== 'manual',
+    );
 
     const incapacities = await this.repo.getIncapacities(
       branchId,
@@ -61,8 +88,6 @@ export class PayrollService {
       ]),
     );
 
-    const holidays = await this.repo.getHolidays();
-
     const employees = await this.repo.getEmployeeContractForPayroll(
       tenantId,
       branchId,
@@ -74,36 +99,50 @@ export class PayrollService {
       );
     }
 
-    const hoursWorked = await this.repo.getHoursWorked(
+    // Horas con recargo del periodo (Arts. 117, 118, 120), ya factorizadas
+    // por evento en hr_schema.overtime_record (1+recargo, o el doble sin
+    // autorizacion de Inspectoria en horas extra, Art. 182).
+    const overtimeSummary = await this.repo.getOvertimeSummary(
       branchId,
       periodStart,
       periodEnd,
     );
 
-    const yearly = await this.repo.getYearlySalary(branchId);
+    const overtimeMap = new Map<string, OvertimeTotals>();
 
-    const historicalEarnings = await this.repo.getHistoricalEarnings(branchId);
+    for (const row of overtimeSummary) {
+      const current = overtimeMap.get(row.employee_id) || {
+        nocturnaWeightedHours: 0,
+        extraWeightedHours: 0,
+        feriadoWeightedHours: 0,
+      };
+      const weighted = Number(row.weighted_hours);
+      if (row.kind === 'nocturna') current.nocturnaWeightedHours += weighted;
+      if (row.kind === 'extra') current.extraWeightedHours += weighted;
+      if (row.kind === 'feriado') current.feriadoWeightedHours += weighted;
+      overtimeMap.set(row.employee_id, current);
+    }
 
-    const hoursMap = new Map<string, { total: number; work_date: string }[]>();
-
-    hoursWorked.forEach((hw) => {
-      const current = hoursMap.get(hw.employee_id) || [];
-      current.push({ total: Number(hw.total_hours), work_date: hw.work_date });
-      hoursMap.set(hw.employee_id, current);
-    });
-
-    const yearlyMap = new Map<string, number>(
-      yearly.map((y) => [y.employee_id, y.total]),
-    );
-
-    const historicalEarningsMap = new Map<string, number>(
-      historicalEarnings.map((h) => [h.employee_id, h.gross]),
-    );
+    // Deducciones individuales activas (Arts. 152, 154, 412, 413) — se
+    // aplican por su installment_amount vigente, topado al saldo
+    // pendiente, y se descuentan de employee_deduction al cerrar la
+    // planilla (ver applyDeductionInstallments).
+    const activeDeductions =
+      await this.repo.getActiveDeductionsForBranch(branchId);
+    const deductionMap = new Map<string, ActiveDeductionRow[]>();
+    for (const row of activeDeductions) {
+      const list = deductionMap.get(row.employee_id) ?? [];
+      list.push(row);
+      deductionMap.set(row.employee_id, list);
+    }
+    const deductionConceptByCode = new Map(deductions.map((c) => [c.code, c]));
 
     for (const emp of employees) {
-      const empHours = hoursMap.get(emp.employee_id) || [];
-      const empEarn = historicalEarningsMap.get(emp.employee_id) || 0;
-      const empYearly = yearlyMap.get(emp.employee_id) || 0;
+      const empOvertime = overtimeMap.get(emp.employee_id) || {
+        nocturnaWeightedHours: 0,
+        extraWeightedHours: 0,
+        feriadoWeightedHours: 0,
+      };
       const empSuspentions = suspentionMap.get(emp.employee_id) || {
         suspention_start: '',
         suspention_end: '',
@@ -119,15 +158,15 @@ export class PayrollService {
 
       await this.calculateAndSavePayroll(
         emp,
-        incomes,
-        deductions,
+        formulaIncomes,
+        formulaDeductions,
         paysheetId,
-        empHours,
-        empEarn,
-        empYearly,
-        holidays,
+        empOvertime,
         incapacities,
         susDiscount,
+        paymentMethodId,
+        deductionMap.get(emp.employee_id) ?? [],
+        deductionConceptByCode,
       );
     }
 
@@ -157,17 +196,20 @@ export class PayrollService {
     incomeConcepts: PayrollConceptRow[],
     deductionConcepts: PayrollConceptRow[],
     paysheetId: string,
-    hours: { total: number; work_date: string }[],
-    earning50week: number,
-    yearlySalary: number,
-    dates: string[],
+    overtime: OvertimeTotals,
     incapacities: Incapacities[],
-    discount: number | 0,
+    discount: number,
+    paymentMethodId: number,
+    empDeductions: ActiveDeductionRow[],
+    deductionConceptByCode: Map<string | undefined, PayrollConceptRow>,
   ) {
     const incapacityInfo = incapacities.find(
       (i) => i.employee_id === emp.employee_id,
     );
-    const time = this.getOvertimeHolidays(hours, dates, emp.turn_type);
+
+    // Horas de jornada segun Art. 173 (fuente unica: JOURNEY_LIMITS), no
+    // el campo legado contract.turn_type.
+    const journeyHours = JOURNEY_LIMITS[emp.journey_type]?.maxDaily ?? 8;
 
     const salaryWithDiscount = new Decimal(emp.base_salary).minus(
       new Decimal(discount),
@@ -177,11 +219,10 @@ export class PayrollService {
       salaryWithDiscount.toString(),
       incomeConcepts,
       {
-        standardHours: time.ordinaryHours,
-        holidaysHours: time.holidaysHours,
-        totalEarnings: earning50week,
-        yearlySalary,
-        turnType: emp.turn_type,
+        journeyHours,
+        nocturnaWeightedHours: overtime.nocturnaWeightedHours,
+        extraWeightedHours: overtime.extraWeightedHours,
+        feriadoWeightedHours: overtime.feriadoWeightedHours,
         incapacityDays: incapacityInfo ? incapacityInfo.days_paying : 0,
         incapacityPercentage: incapacityInfo
           ? incapacityInfo.percentage_to_pay
@@ -200,18 +241,77 @@ export class PayrollService {
       },
     );
 
+    // Deducciones individuales del empleado (Arts. 152, 154, 412, 413):
+    // no pasan por el motor de formulas -- el monto ya viene resuelto
+    // por registro (installment_amount, topado al saldo pendiente). Si
+    // el tenant no tiene el concepto de catalogo para ese kind
+    // (backfill pendiente, ver hr_schema.provision_tenant_payroll_concepts),
+    // se omite esa deduccion en vez de romper la planilla completa.
+    const individualDeductions: {
+      deduction_id: string;
+      appliedAmount: Decimal;
+      movement: {
+        concept_id: number;
+        name: string;
+        type: 'deduction';
+        calculated_amount: string;
+        appliedValue: string;
+        is_taxable: boolean;
+      };
+    }[] = [];
+
+    for (const row of empDeductions) {
+      const code = DEDUCTION_KIND_CONCEPT_CODE[row.kind];
+      const concept = deductionConceptByCode.get(code);
+      if (!concept) {
+        this.logger.warn(
+          `No payroll_concept with code ${code} for tenant of employee ${row.employee_id} ` +
+            `(deduction ${row.deduction_id}, kind ${row.kind}) -- omitida de la planilla, ` +
+            `requiere re-ejecutar provision_tenant_payroll_concepts.`,
+        );
+        continue;
+      }
+      const appliedAmount = Decimal.min(
+        new Decimal(row.installment_amount),
+        new Decimal(row.outstanding_balance),
+      );
+      if (appliedAmount.lte(0)) continue;
+
+      individualDeductions.push({
+        deduction_id: row.deduction_id,
+        appliedAmount,
+        movement: {
+          concept_id: concept.concept_id,
+          name: concept.name,
+          type: 'deduction',
+          calculated_amount: appliedAmount.toFixed(4),
+          appliedValue: appliedAmount.toFixed(4),
+          is_taxable: concept.is_taxable,
+        },
+      });
+    }
+
+    const individualDeductionsTotal = individualDeductions.reduce(
+      (acc, d) => acc.add(d.appliedAmount),
+      new Decimal(0),
+    );
+
     const allMovements = [
       ...incomeResult.movements,
       ...deductionResult.movements,
+      ...individualDeductions.map((d) => d.movement),
     ];
+    const totalDeductions = new Decimal(deductionResult.totals.deductions).add(
+      individualDeductionsTotal,
+    );
     const netSalary = new Decimal(incomeResult.totals.earnings).minus(
-      new Decimal(deductionResult.totals.deductions),
+      totalDeductions,
     );
 
     const allTotals = {
       grossSalary: incomeResult.totals.grossSalary,
       earnings: incomeResult.totals.earnings,
-      deductions: deductionResult.totals.deductions,
+      deductions: totalDeductions.toFixed(4),
       netSalary: netSalary.plus(emp.base_salary),
     };
 
@@ -221,7 +321,7 @@ export class PayrollService {
         paysheetId,
         emp.employee_id,
         emp.contract_id,
-        1, // payment_method_id hardcoded for now
+        paymentMethodId,
         allTotals.grossSalary,
         allTotals.earnings,
         allTotals.deductions,
@@ -234,9 +334,20 @@ export class PayrollService {
         await txn.query(payroll.insertMovement, [
           detailId,
           mov.concept_id,
-          mov.appliedValue.toString(),       // base_amount: valor/factor de entrada
-          mov.calculated_amount.toString(),  // calculated_amount: resultado monetario
+          mov.appliedValue.toString(), // base_amount: valor/factor de entrada
+          mov.calculated_amount.toString(), // calculated_amount: resultado monetario
           mov.name,
+        ]);
+      }
+
+      // Descuenta lo aplicado del saldo pendiente de cada deduccion
+      // individual -- misma mecanica que deductions.service.ts#applyPayment,
+      // ejecutada aqui dentro de la misma transaccion para que un
+      // rollback de la planilla tambien revierta el saldo.
+      for (const d of individualDeductions) {
+        await txn.query(employeeDeduction.applyPayment, [
+          d.appliedAmount.toFixed(4),
+          d.deduction_id,
         ]);
       }
 
@@ -250,9 +361,9 @@ export class PayrollService {
     }
   }
 
-  async createPaysheetHeader(data: CreatePaysheetDto) {
+  async createPaysheetHeader(tenantId: string, data: CreatePaysheetDto) {
     const newPaysheet = await this.db.query(payroll.insertPaysheet, [
-      data.tenantId,
+      tenantId,
       data.branchId,
       data.periodStart,
       data.periodEnd,
@@ -308,48 +419,6 @@ export class PayrollService {
     }
 
     return totals;
-  }
-
-  getOvertimeHolidays(
-    clockingDates: { total: number; work_date: string }[],
-    holidays: string[],
-    turn: number,
-  ) {
-    let holidaysHours = new Decimal(0);
-    let ordinaryHours = new Decimal(0);
-
-    if (holidays.length === 0) {
-      return {
-        holidaysHours,
-        ordinaryHours: new Decimal(
-          clockingDates.reduce((acc, d) => acc + d.total, 0),
-        ),
-      };
-    }
-
-    clockingDates.forEach((date) => {
-      const formattedDate = new Date(date.work_date)
-        .toISOString()
-        .split('T')[0];
-
-      const isHoliday = holidays.some((h) => h === formattedDate);
-
-      const extraHours = Decimal.max(
-        0,
-        new Decimal(date.total).minus(new Decimal(turn)),
-      );
-
-      if (isHoliday) {
-        holidaysHours = holidaysHours.plus(extraHours);
-      } else {
-        ordinaryHours = ordinaryHours.plus(extraHours);
-      }
-    });
-
-    return {
-      holidaysHours,
-      ordinaryHours,
-    };
   }
 
   calculateSuspentionDiscount(

@@ -1,8 +1,11 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { DATABASE } from '../../../general/modules/db/db.provider';
-import Database from '@crane-technologies/database';
+import Database from '@resonance-components/datahandler';
 import { ivaQueries } from './iva.queries';
-import type { IvaSummaryFromDb, IvaSummaryResponse } from './interface/iva.interface';
+import type {
+  IvaSummaryResponse,
+  IvaSummaryRowFromDb,
+} from './interface/iva.interface';
 
 @Injectable()
 export class IvaService {
@@ -15,21 +18,17 @@ export class IvaService {
     start: string,
     end: string,
   ): Promise<IvaSummaryResponse> {
-    const { rows } = await this.db.query<IvaSummaryFromDb>(
+    const { rows } = await this.db.query<IvaSummaryRowFromDb>(
       ivaQueries.getSummary,
       [tenantId, start, end],
     );
 
-    const row = rows[0];
-
     return {
-      iva_debito: Number(row.iva_debito),
-      iva_credito: Number(row.iva_credito),
-      iva_cxp: Number(row.iva_cxp),
-      iva_recuperable: Number(row.iva_recuperable),
-      iva_notas_credito: Number(row.iva_notas_credito),
-      iva_debito_ajustado: Number(row.iva_debito_ajustado),
-      iva_neto: Number(row.iva_neto),
+      components: rows.map((row) => ({
+        component: row.component,
+        total_usd: Number(row.total_usd),
+        total_ves: Number(row.total_ves),
+      })),
     };
   }
 }

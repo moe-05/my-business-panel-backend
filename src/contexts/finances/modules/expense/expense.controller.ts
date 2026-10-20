@@ -6,9 +6,20 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ExpenseService } from './expense.service';
+import { AuthenticationGuard } from '@/common/guards/authentication.guard';
+import { RoleAuthorizationGuard } from '@/common/guards/role_authorization.guard';
+import { RequiredRole } from '@/common/decorators/role_metadata.decorator';
+import {
+  FINANCE_READ_ROLES,
+  EXPENSE_CAPTURE_ROLES,
+  FINANCE_ADMIN_ROLES,
+} from '@/contexts/finances/finances.roles';
+import { Session } from '@/common/decorators/session.decorator';
+import { IUserSession } from '@/common/interfaces/user_session.interface';
 import {
   CreateExpenseCategoryDto,
   CreateExpenseDto,
@@ -29,21 +40,20 @@ import {
   getFiscalPeriodsDoc,
   createFiscalPeriodDoc,
   closeFiscalPeriodDoc,
-  getFixedVsVariableDoc,
-  getFixedBreakdownDoc,
-  getVariableBreakdownDoc,
-  getSalesVsExpensesDoc,
 } from '@/docs/contexts/finances/expense';
-import {
-  ExpenseFixedVsVariableAnalytic,
-  ExpenseCategoryAnalytic,
-  SalesVsExpensesPoint,
-} from './interface/expense.interface';
+import { TenantScopeService } from '@/common/tenant/tenant-scope.service';
+import { RateLimitGuard } from '@/common/rate-limit/rate-limit.guard';
+import { RateLimit } from '@/common/rate-limit/rate-limit.decorator';
 
 @ApiTags('Expense')
+@UseGuards(AuthenticationGuard, RateLimitGuard, RoleAuthorizationGuard)
+@RequiredRole(...FINANCE_READ_ROLES)
 @Controller('expense')
 export class ExpenseController {
-  constructor(private readonly expenseService: ExpenseService) {}
+  constructor(
+    private readonly expenseService: ExpenseService,
+    private readonly tenantScope: TenantScopeService,
+  ) {}
 
   // -------------------------------------------------------
   // EXPENSE CATEGORIES
@@ -51,11 +61,14 @@ export class ExpenseController {
 
   @ApiOperation(getCategoriesByTenantDoc.operation)
   @ApiResponse(getCategoriesByTenantDoc.responses[200])
+  @RequiredRole(...EXPENSE_CAPTURE_ROLES)
   @Get('categories/:tenantId')
   getCategoriesByTenant(
+    @Session() session: IUserSession,
     @Param('tenantId') tenantId: string,
     @Query('search') search?: string,
   ) {
+    tenantId = this.tenantScope.resolveRequestedTenant(session, tenantId);
     if (search !== undefined && search.trim() !== '') {
       return this.expenseService.searchCategories(tenantId, search.trim());
     }
@@ -67,16 +80,25 @@ export class ExpenseController {
   @ApiResponse(getCategoryByIdDoc.responses[404])
   @Get('categories/:tenantId/:categoryId')
   getCategoryById(
+    @Session() session: IUserSession,
     @Param('categoryId') categoryId: string,
     @Param('tenantId') tenantId: string,
   ) {
+    tenantId = this.tenantScope.resolveRequestedTenant(session, tenantId);
     return this.expenseService.getCategoryById(categoryId, tenantId);
   }
 
   @ApiOperation(createCategoryDoc.operation)
   @ApiResponse(createCategoryDoc.responses[201])
   @Post('categories')
-  createCategory(@Body() data: CreateExpenseCategoryDto) {
+  createCategory(
+    @Session() session: IUserSession,
+    @Body() data: CreateExpenseCategoryDto,
+  ) {
+    data.tenant_id = this.tenantScope.resolveRequestedTenant(
+      session,
+      data.tenant_id,
+    );
     return this.expenseService.createCategory(data);
   }
 
@@ -85,17 +107,25 @@ export class ExpenseController {
   @ApiResponse(updateCategoryDoc.responses[404])
   @Patch('categories/:tenantId/:categoryId')
   updateCategory(
+    @Session() session: IUserSession,
     @Param('categoryId') categoryId: string,
     @Param('tenantId') tenantId: string,
     @Body() data: UpdateExpenseCategoryDto,
   ) {
+    tenantId = this.tenantScope.resolveRequestedTenant(session, tenantId);
     return this.expenseService.updateCategory(categoryId, tenantId, data);
   }
 
   @ApiOperation(provisionCategoriesDoc.operation)
   @ApiResponse(provisionCategoriesDoc.responses[201])
+  @RequiredRole(...FINANCE_ADMIN_ROLES)
   @Post('categories/provision/:tenantId')
-  provisionCategories(@Param('tenantId') tenantId: string) {
+  @RateLimit('bulk')
+  provisionCategories(
+    @Session() session: IUserSession,
+    @Param('tenantId') tenantId: string,
+  ) {
+    tenantId = this.tenantScope.resolveRequestedTenant(session, tenantId);
     return this.expenseService.provisionCategories(tenantId);
   }
 
@@ -104,48 +134,88 @@ export class ExpenseController {
   // -------------------------------------------------------
 
   @Get('analytics/fixed-vs-variable/:tenantId')
+  @RateLimit('report')
   getAnalyticsFixedVsVariable(
-    @Param('tenantId') tenantId: string,
-    @Query('start') start: string,
-    @Query('end') end: string,
-  ) {
-    return this.expenseService.getAnalyticsFixedVsVariable(
-      tenantId,
-      start,
-      end,
-    );
-  }
-
-  @Get('analytics/fixed-breakdown/:tenantId')
-  getAnalyticsFixedBreakdown(
-    @Param('tenantId') tenantId: string,
-    @Query('start') start: string,
-    @Query('end') end: string,
-  ) {
-    return this.expenseService.getAnalyticsFixedBreakdown(tenantId, start, end);
-  }
-
-  @Get('analytics/variable-breakdown/:tenantId')
-  getAnalyticsVariableBreakdown(
-    @Param('tenantId') tenantId: string,
-    @Query('start') start: string,
-    @Query('end') end: string,
-  ) {
-    return this.expenseService.getAnalyticsVariableBreakdown(
-      tenantId,
-      start,
-      end,
-    );
-  }
-
-  @Get('analytics/sales-vs-expenses/:tenantId')
-  getAnalyticsSalesVsExpenses(
+    @Session() session: IUserSession,
     @Param('tenantId') tenantId: string,
     @Query('start') start: string,
     @Query('end') end: string,
     @Query('branchId') branchId?: string,
   ) {
+    tenantId = this.tenantScope.resolveRequestedTenant(session, tenantId);
+    return this.expenseService.getAnalyticsFixedVsVariable(
+      tenantId,
+      start,
+      end,
+      branchId,
+    );
+  }
+
+  @Get('analytics/fixed-breakdown/:tenantId')
+  @RateLimit('report')
+  getAnalyticsFixedBreakdown(
+    @Session() session: IUserSession,
+    @Param('tenantId') tenantId: string,
+    @Query('start') start: string,
+    @Query('end') end: string,
+    @Query('branchId') branchId?: string,
+  ) {
+    tenantId = this.tenantScope.resolveRequestedTenant(session, tenantId);
+    return this.expenseService.getAnalyticsFixedBreakdown(
+      tenantId,
+      start,
+      end,
+      branchId,
+    );
+  }
+
+  @Get('analytics/variable-breakdown/:tenantId')
+  @RateLimit('report')
+  getAnalyticsVariableBreakdown(
+    @Session() session: IUserSession,
+    @Param('tenantId') tenantId: string,
+    @Query('start') start: string,
+    @Query('end') end: string,
+    @Query('branchId') branchId?: string,
+  ) {
+    tenantId = this.tenantScope.resolveRequestedTenant(session, tenantId);
+    return this.expenseService.getAnalyticsVariableBreakdown(
+      tenantId,
+      start,
+      end,
+      branchId,
+    );
+  }
+
+  @Get('analytics/sales-vs-expenses/:tenantId')
+  @RateLimit('report')
+  getAnalyticsSalesVsExpenses(
+    @Session() session: IUserSession,
+    @Param('tenantId') tenantId: string,
+    @Query('start') start: string,
+    @Query('end') end: string,
+    @Query('branchId') branchId?: string,
+  ) {
+    tenantId = this.tenantScope.resolveRequestedTenant(session, tenantId);
     return this.expenseService.getAnalyticsSalesVsExpenses(
+      tenantId,
+      start,
+      end,
+      branchId,
+    );
+  }
+
+  @Get('analytics/payroll/:tenantId')
+  @RateLimit('report')
+  getAnalyticsPayroll(
+    @Session() session: IUserSession,
+    @Param('tenantId') tenantId: string,
+    @Query('start') start: string,
+    @Query('end') end: string,
+    @Query('branchId') branchId?: string,
+  ) {
+    tenantId = this.tenantScope.resolveRequestedTenant(session, tenantId);
+    return this.expenseService.getAnalyticsPayroll(
       tenantId,
       start,
       end,
@@ -157,66 +227,41 @@ export class ExpenseController {
   // EXPENSES
   // -------------------------------------------------------
 
-  // ANALYTICS (deben estar ANTES de @Get(':tenantId') para evitar conflicto de rutas)
+  // Las rutas fijas (analytics/*, history) deben ir ANTES de @Get(':tenantId')
+  // para evitar conflicto de rutas.
 
-  @ApiOperation(getFixedVsVariableDoc.operation)
-  @ApiResponse(getFixedVsVariableDoc.responses[200])
-  @Get('analytics/fixed-vs-variable/:tenantId')
-  getFixedVsVariableSummary(
-    @Param('tenantId') tenantId: string,
-    @Query('start') start: string,
-    @Query('end') end: string,
-  ): Promise<ExpenseFixedVsVariableAnalytic[]> {
-    return this.expenseService.getFixedVsVariableSummary(tenantId, start, end);
-  }
-
-  @ApiOperation(getFixedBreakdownDoc.operation)
-  @ApiResponse(getFixedBreakdownDoc.responses[200])
-  @Get('analytics/fixed-breakdown/:tenantId')
-  getFixedCategoryBreakdown(
-    @Param('tenantId') tenantId: string,
-    @Query('start') start: string,
-    @Query('end') end: string,
-  ): Promise<ExpenseCategoryAnalytic[]> {
-    return this.expenseService.getFixedCategoryBreakdown(tenantId, start, end);
-  }
-
-  @ApiOperation(getVariableBreakdownDoc.operation)
-  @ApiResponse(getVariableBreakdownDoc.responses[200])
-  @Get('analytics/variable-breakdown/:tenantId')
-  getVariableCategoryBreakdown(
-    @Param('tenantId') tenantId: string,
-    @Query('start') start: string,
-    @Query('end') end: string,
-  ): Promise<ExpenseCategoryAnalytic[]> {
-    return this.expenseService.getVariableCategoryBreakdown(
-      tenantId,
-      start,
-      end,
-    );
-  }
-
-  @ApiOperation(getSalesVsExpensesDoc.operation)
-  @ApiResponse(getSalesVsExpensesDoc.responses[200])
-  @Get('analytics/sales-vs-expenses/:tenantId')
-  getSalesVsExpenses(
-    @Param('tenantId') tenantId: string,
-    @Query('start') start: string,
-    @Query('end') end: string,
+  @ApiOperation({
+    summary:
+      'Historial de gastos paginado, filtrable por sucursal y rango de fechas',
+  })
+  @ApiResponse({ status: 200, description: 'Historial de gastos obtenido' })
+  @ApiResponse({ status: 401, description: 'No autenticado' })
+  @Get('history')
+  getExpensesHistory(
+    @Session() user: IUserSession,
     @Query('branchId') branchId?: string,
-  ): Promise<SalesVsExpensesPoint[]> {
-    return this.expenseService.getSalesVsExpenses(
-      tenantId,
-      start,
-      end,
-      branchId ?? null,
-    );
+    @Query('start') start?: string,
+    @Query('end') end?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.expenseService.getExpensesPaginated(user.tenant_id, {
+      branchId: branchId ?? null,
+      start: start ?? null,
+      end: end ?? null,
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 20,
+    });
   }
 
   @ApiOperation(getExpensesByTenantDoc.operation)
   @ApiResponse(getExpensesByTenantDoc.responses[200])
   @Get(':tenantId')
-  getExpensesByTenant(@Param('tenantId') tenantId: string) {
+  getExpensesByTenant(
+    @Session() session: IUserSession,
+    @Param('tenantId') tenantId: string,
+  ) {
+    tenantId = this.tenantScope.resolveRequestedTenant(session, tenantId);
     return this.expenseService.getExpensesByTenant(tenantId);
   }
 
@@ -224,9 +269,11 @@ export class ExpenseController {
   @ApiResponse(getExpensesByBranchDoc.responses[200])
   @Get(':tenantId/branch/:branchId')
   getExpensesByBranch(
+    @Session() session: IUserSession,
     @Param('tenantId') tenantId: string,
     @Param('branchId') branchId: string,
   ) {
+    tenantId = this.tenantScope.resolveRequestedTenant(session, tenantId);
     return this.expenseService.getExpensesByBranch(tenantId, branchId);
   }
 
@@ -235,9 +282,11 @@ export class ExpenseController {
   @ApiResponse(getExpenseByIdDoc.responses[404])
   @Get(':tenantId/detail/:expenseId')
   getExpenseById(
+    @Session() session: IUserSession,
     @Param('expenseId') expenseId: string,
     @Param('tenantId') tenantId: string,
   ) {
+    tenantId = this.tenantScope.resolveRequestedTenant(session, tenantId);
     return this.expenseService.getExpenseById(expenseId, tenantId);
   }
 
@@ -245,10 +294,12 @@ export class ExpenseController {
   @ApiResponse(getExpensesByDateRangeDoc.responses[200])
   @Get(':tenantId/range')
   getExpensesByDateRange(
+    @Session() session: IUserSession,
     @Param('tenantId') tenantId: string,
     @Query('start') start: string,
     @Query('end') end: string,
   ) {
+    tenantId = this.tenantScope.resolveRequestedTenant(session, tenantId);
     return this.expenseService.getExpensesByDateRange(tenantId, start, end);
   }
 
@@ -256,8 +307,23 @@ export class ExpenseController {
   @ApiResponse(createExpenseDoc.responses[201])
   @ApiResponse(createExpenseDoc.responses[400])
   @ApiResponse(createExpenseDoc.responses[404])
+  @RequiredRole(...EXPENSE_CAPTURE_ROLES)
   @Post()
-  createExpense(@Body() data: CreateExpenseDto) {
+  async createExpense(
+    @Session() session: IUserSession,
+    @Body() data: CreateExpenseDto,
+  ) {
+    data.tenant_id = this.tenantScope.resolveRequestedTenant(
+      session,
+      data.tenant_id,
+    );
+    await this.tenantScope.assertOwnedByTenant(
+      'branch',
+      data.branch_id,
+      data.tenant_id,
+    );
+    // el autor del gasto es quien tiene la sesion, no lo que diga el cliente
+    data.created_by = session.user_id;
     return this.expenseService.createExpense(data);
   }
 
@@ -268,25 +334,41 @@ export class ExpenseController {
   @ApiOperation(getFiscalPeriodsDoc.operation)
   @ApiResponse(getFiscalPeriodsDoc.responses[200])
   @Get('fiscal-periods/:tenantId')
-  getFiscalPeriods(@Param('tenantId') tenantId: string) {
+  getFiscalPeriods(
+    @Session() session: IUserSession,
+    @Param('tenantId') tenantId: string,
+  ) {
+    tenantId = this.tenantScope.resolveRequestedTenant(session, tenantId);
     return this.expenseService.getFiscalPeriods(tenantId);
   }
 
   @ApiOperation(createFiscalPeriodDoc.operation)
   @ApiResponse(createFiscalPeriodDoc.responses[201])
+  @RequiredRole(...FINANCE_ADMIN_ROLES)
   @Post('fiscal-periods')
-  createFiscalPeriod(@Body() data: CreateFiscalPeriodDto) {
+  createFiscalPeriod(
+    @Session() session: IUserSession,
+    @Body() data: CreateFiscalPeriodDto,
+  ) {
+    data.tenant_id = this.tenantScope.resolveRequestedTenant(
+      session,
+      data.tenant_id,
+    );
     return this.expenseService.createFiscalPeriod(data);
   }
 
   @ApiOperation(closeFiscalPeriodDoc.operation)
   @ApiResponse(closeFiscalPeriodDoc.responses[200])
   @ApiResponse(closeFiscalPeriodDoc.responses[400])
+  @RequiredRole(...FINANCE_ADMIN_ROLES)
   @Patch('fiscal-periods/:tenantId/:periodId/close')
+  @RateLimit('sensitive')
   closeFiscalPeriod(
+    @Session() session: IUserSession,
     @Param('periodId') periodId: string,
     @Param('tenantId') tenantId: string,
   ) {
+    tenantId = this.tenantScope.resolveRequestedTenant(session, tenantId);
     return this.expenseService.closeFiscalPeriod(periodId, tenantId);
   }
 }

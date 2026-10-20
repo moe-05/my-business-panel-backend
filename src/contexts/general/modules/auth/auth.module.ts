@@ -14,9 +14,9 @@ import { StateModule } from '../state/state.module';
       useFactory: async (stateService: StateService) => {
         await stateService.waitForInitialization();
         return {
-          secret: stateService.getConstant<string>('JWT_SECRET'),
+          secret: stateService.getConstant<string>('JWT_ACCESS_SECRET'),
           signOptions: {
-            expiresIn: stateService.getConstant('JWT_EXPIRES_IN'),
+            expiresIn: stateService.getConstant('JWT_ACCESS_EXPIRATION'),
           },
         };
       },
@@ -25,6 +25,7 @@ import { StateModule } from '../state/state.module';
     StateModule,
   ],
   providers: [AuthService],
+  exports: [AuthService],
   controllers: [AuthController],
 })
 export class AuthModule {}

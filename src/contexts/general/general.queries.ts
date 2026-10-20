@@ -1,4 +1,4 @@
-import { createQueries } from '@crane-technologies/database';
+import { createQueries } from '@resonance-components/datahandler';
 
 export const generalQueryDefs = {
   users: {
@@ -23,6 +23,13 @@ export const generalQueryDefs = {
       'SELECT user_id, email, role_id, created_at FROM general_schema.users WHERE tenant_id = $1',
     byEmailWithPassword:
       'SELECT * FROM general_schema.users WHERE email = $1 LIMIT 1',
+    passwordHashById:
+      'SELECT password_hash FROM general_schema.users WHERE user_id = $1 LIMIT 1',
+    updatePassword: `
+      UPDATE general_schema.users
+      SET password_hash = $1, updated_at = NOW()
+      WHERE user_id = $2
+    `,
     create: `
       INSERT INTO general_schema.users 
       (tenant_id, email, password_hash, role_id, created_at, updated_at) 
@@ -40,6 +47,8 @@ export const generalQueryDefs = {
     `,
     assignRole:
       'UPDATE general_schema.users SET role_id = $1 WHERE user_id = $2',
+    byIdScoped:
+      'SELECT user_id, tenant_id, role_id FROM general_schema.users WHERE user_id = $1 LIMIT 1',
     delete:
       'DELETE FROM general_schema.users WHERE user_id = $1 RETURNING user_id, email',
     getByEmails: `
@@ -64,7 +73,7 @@ export const generalQueryDefs = {
     all: `
       SELECT
         tenant_customer_id AS customer_id, tenant_id,
-        first_name, last_name,
+        first_name, last_name, business_name,
         identification_type_id AS identification_type,
         document_number,
         econ_activity, email, phone, birthdate, address,
@@ -76,7 +85,7 @@ export const generalQueryDefs = {
     allPaginated: `
       SELECT
         tenant_customer_id AS customer_id, tenant_id,
-        first_name, last_name,
+        first_name, last_name, business_name,
         identification_type_id AS identification_type,
         document_number,
         econ_activity, email, phone, birthdate, address,
@@ -91,7 +100,7 @@ export const generalQueryDefs = {
     search: `
       SELECT
         tenant_customer_id AS customer_id, tenant_id,
-        first_name, last_name,
+        first_name, last_name, business_name,
         identification_type_id AS identification_type,
         document_number,
         econ_activity, email, phone, birthdate, address,
@@ -103,6 +112,7 @@ export const generalQueryDefs = {
         AND (
           first_name ILIKE '%' || $2 || '%' OR
           last_name ILIKE '%' || $2 || '%' OR
+          business_name ILIKE '%' || $2 || '%' OR
           document_number ILIKE '%' || $2 || '%' OR
           email ILIKE '%' || $2 || '%' OR
           phone ILIKE '%' || $2 || '%'
@@ -113,7 +123,7 @@ export const generalQueryDefs = {
     allGlobal: `
       SELECT
         tc.tenant_customer_id AS customer_id, tc.tenant_id,
-        tc.first_name, tc.last_name,
+        tc.first_name, tc.last_name, tc.business_name,
         tc.identification_type_id AS identification_type,
         tc.document_number,
         tc.econ_activity, tc.email, tc.phone, tc.birthdate, tc.address,
@@ -135,6 +145,7 @@ export const generalQueryDefs = {
         AND (
           first_name ILIKE '%' || $2 || '%' OR
           last_name ILIKE '%' || $2 || '%' OR
+          business_name ILIKE '%' || $2 || '%' OR
           document_number ILIKE '%' || $2 || '%' OR
           email ILIKE '%' || $2 || '%' OR
           phone ILIKE '%' || $2 || '%'
@@ -145,7 +156,7 @@ export const generalQueryDefs = {
     byId: `
       SELECT
         tenant_customer_id AS customer_id, tenant_id,
-        first_name, last_name,
+        first_name, last_name, business_name,
         identification_type_id AS identification_type,
         document_number,
         econ_activity, email, phone, birthdate, address,
@@ -153,13 +164,17 @@ export const generalQueryDefs = {
         is_tenant, created_at, updated_at
       FROM general_schema.tenant_customer
       WHERE tenant_customer_id = $1
+        AND ($2::uuid IS NULL OR tenant_id = $2)
     `,
+    // Busqueda por documento: SIEMPRE acotada al tenant de la sesion. El mismo
+    // documento puede existir en varias empresas; cada una ve solo el suyo.
     getInfo: `
       SELECT
         tc.tenant_customer_id AS customer_id,
         tc.tenant_id,
         tc.first_name,
         tc.last_name,
+        tc.business_name,
         tc.document_number,
         tc.email,
         tc.phone,
@@ -179,34 +194,41 @@ export const generalQueryDefs = {
       LEFT JOIN general_schema.customer_segment cs USING(customer_segment_id)
       LEFT JOIN general_schema.identification_type d ON d.identification_type_id = tc.identification_type_id
       WHERE tc.document_number = $1
+        AND tc.tenant_id = $2
     `,
     create: `
       INSERT INTO general_schema.tenant_customer
-        (tenant_id, first_name, last_name, identification_type_id, document_number, econ_activity, email, phone, birthdate, address, created_at, updated_at, is_tenant, customer_segment_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), $11, $12)
+        (tenant_id, first_name, last_name, identification_type_id, document_number, econ_activity, email, phone, birthdate, address, created_at, updated_at, is_tenant, customer_segment_id, business_name)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), $11, $12, $13)
       RETURNING
         tenant_customer_id AS customer_id, tenant_id,
-        first_name, last_name,
+        first_name, last_name, business_name,
         identification_type_id AS identification_type,
         document_number,
         econ_activity, email, phone, birthdate, address,
         customer_segment_id AS segment_id,
         is_tenant, created_at, updated_at
     `,
+    identificationCode:
+      'SELECT ident_code FROM general_schema.identification_type WHERE identification_type_id = $1',
     byEmail: `
       SELECT
         tenant_customer_id AS customer_id, tenant_id,
-        first_name, last_name,
+        first_name, last_name, business_name,
         identification_type_id AS identification_type,
         document_number,
         econ_activity, email, phone, birthdate, address,
         customer_segment_id AS segment_id,
         is_tenant, created_at, updated_at
       FROM general_schema.tenant_customer
-      WHERE email = $1
+      WHERE email = $1 AND tenant_id = $2
     `,
-    delete:
-      'DELETE FROM general_schema.tenant_customer WHERE tenant_customer_id = $1',
+    delete: `
+      DELETE FROM general_schema.tenant_customer
+      WHERE tenant_customer_id = $1
+        AND ($2::uuid IS NULL OR tenant_id = $2)
+      RETURNING tenant_customer_id
+    `,
 
     // Enriched detail: customer + segment name + loyalty score
     detail: `
@@ -215,6 +237,7 @@ export const generalQueryDefs = {
         tc.tenant_id,
         tc.first_name,
         tc.last_name,
+        tc.business_name,
         tc.identification_type_id AS identification_type,
         tc.document_number,
         tc.econ_activity,
@@ -246,6 +269,7 @@ export const generalQueryDefs = {
       LEFT JOIN pos_schema.loyalty_program lp
         ON lp.tenant_id = tc.tenant_id AND lp.is_active = true
       WHERE tc.tenant_customer_id = $1
+        AND ($2::uuid IS NULL OR tc.tenant_id = $2)
       LIMIT 1
     `,
 
@@ -258,25 +282,20 @@ export const generalQueryDefs = {
         s.tax_amount,
         s.total_amount,
         s.is_completed,
-        s.has_electronic_invoice,
         cur.currency_code,
         cur.symbol AS currency_symbol,
         b.branch_name,
-        dsi.digital_sale_invoice_id,
-        dsi.invoiced_at   AS digital_invoiced_at,
-        esi.electronic_sale_invoice_id,
-        esi.consecutive_number AS electronic_consecutive,
+        inv.invoice_id,
+        inv.invoiced_at   AS digital_invoiced_at,
         rt.return_transaction_id,
         rt.return_status_id,
         rt.total_refund_amount
       FROM pos_schema.sale s
       LEFT JOIN general_schema.branch b ON b.branch_id = s.branch_id
       LEFT JOIN general_schema.currency cur ON cur.currency_id = s.currency_id
-      LEFT JOIN pos_schema.digital_sale_invoice dsi ON dsi.sale_id = s.sale_id
-      LEFT JOIN pos_schema.electronic_sale_invoice esi ON esi.sale_id = s.sale_id
+      LEFT JOIN pos_schema.invoice inv ON inv.sale_id = s.sale_id
       LEFT JOIN pos_schema.return_transaction rt
-        ON (rt.digital_sale_invoice_id = dsi.digital_sale_invoice_id
-            OR rt.electronic_sale_invoice_id = esi.electronic_sale_invoice_id)
+        ON rt.invoice_id = inv.invoice_id
       WHERE s.tenant_customer_id = $1
       ORDER BY s.sale_date DESC
       LIMIT $2 OFFSET $3
@@ -307,66 +326,62 @@ export const generalQueryDefs = {
   },
 
   exchangeRate: {
-    all: `
-      SELECT er.exchange_rate_id, er.from_currency_id, er.to_currency_id,
-             er.rate, er.effective_date, er.source, er.created_at, er.updated_at,
-             fc.currency_code AS from_currency_code, fc.currency_name AS from_currency_name, fc.symbol AS from_currency_symbol,
-             tc.currency_code AS to_currency_code,   tc.currency_name AS to_currency_name,   tc.symbol AS to_currency_symbol
-      FROM general_schema.exchange_rate er
-      JOIN general_schema.currency fc ON fc.currency_id = er.from_currency_id
-      JOIN general_schema.currency tc ON tc.currency_id = er.to_currency_id
-      ORDER BY er.effective_date DESC, fc.currency_code, tc.currency_code
+    // Ledger global inmutable de la tasa base USD -> VES. Nunca se edita ni
+    // se borra: cada cambio es una fila nueva (migrations/general/034).
+    ledgerByTenant: `
+      SELECT tenant_id, effective_at, change_kind, source,
+             base_rate, delta, effective_rate, created_at
+      FROM general_schema.tenant_exchange_rate_ledger
+      WHERE tenant_id = $1
+      LIMIT 200
     `,
-    byId: `
-      SELECT exchange_rate_id, from_currency_id, to_currency_id, rate,
-             effective_date, source, created_at, updated_at
+    // Tasa vigente aplicable al tenant: base global + su diferencial.
+    // Fuente unica de verdad para toda la aplicacion.
+    effectiveForTenant: `
+      SELECT
+        r.base_rate, r.delta, r.effective_rate, r.base_at, r.delta_at,
+        r.auto_update, r.manual_rate, r.manual_at,
+        (SELECT currency_id FROM general_schema.currency WHERE currency_code = 'USD') AS from_currency_id,
+        (SELECT currency_id FROM general_schema.currency WHERE currency_code = 'VES') AS to_currency_id
+      FROM general_schema.get_effective_exchange_rate($1) r
+    `,
+    insertBaseRate: `
+      INSERT INTO general_schema.exchange_rate
+        (from_currency_id, to_currency_id, rate, effective_at, effective_date, source)
+      SELECT
+        (SELECT currency_id FROM general_schema.currency WHERE currency_code = 'USD'),
+        (SELECT currency_id FROM general_schema.currency WHERE currency_code = 'VES'),
+        $1, CURRENT_TIMESTAMP, CURRENT_DATE, COALESCE($2, 'MANUAL')
+      RETURNING exchange_rate_id, rate, effective_at, source, created_at
+    `,
+    insertDelta: `
+      INSERT INTO general_schema.tenant_exchange_delta
+        (tenant_id, delta, source, created_by)
+      VALUES ($1, $2, COALESCE($3, 'MANUAL'), $4)
+      RETURNING delta_id, tenant_id, delta, effective_at, source, created_at
+    `,
+    insertManualRate: `
+      INSERT INTO general_schema.tenant_manual_rate (tenant_id, rate, created_by)
+      VALUES ($1, $2, $3)
+      RETURNING manual_rate_id, tenant_id, rate, effective_at, created_at
+    `,
+    hasManualRate: `
+      SELECT 1 FROM general_schema.tenant_manual_rate WHERE tenant_id = $1 LIMIT 1
+    `,
+    upsertAutoUpdate: `
+      INSERT INTO general_schema.tenant_exchange_config (tenant_id, auto_update, updated_by)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (tenant_id) DO UPDATE
+        SET auto_update = EXCLUDED.auto_update,
+            updated_by = EXCLUDED.updated_by,
+            updated_at = CURRENT_TIMESTAMP
+      RETURNING tenant_id, auto_update, updated_at
+    `,
+    currentBase: `
+      SELECT exchange_rate_id, rate, effective_at, source, created_at
       FROM general_schema.exchange_rate
-      WHERE exchange_rate_id = $1 LIMIT 1
-    `,
-    latestForPair: `
-      SELECT er.exchange_rate_id, er.from_currency_id, er.to_currency_id,
-             er.rate, er.effective_date, er.source, er.created_at, er.updated_at,
-             fc.currency_code AS from_currency_code, fc.symbol AS from_currency_symbol,
-             tc.currency_code AS to_currency_code,   tc.symbol AS to_currency_symbol
-      FROM general_schema.exchange_rate er
-      JOIN general_schema.currency fc ON fc.currency_id = er.from_currency_id
-      JOIN general_schema.currency tc ON tc.currency_id = er.to_currency_id
-      WHERE er.from_currency_id = $1 AND er.to_currency_id = $2
-      ORDER BY er.effective_date DESC, er.created_at DESC
+      ORDER BY effective_at DESC, created_at DESC
       LIMIT 1
-    `,
-    create: `
-      INSERT INTO general_schema.exchange_rate
-        (from_currency_id, to_currency_id, rate, effective_date, source)
-      VALUES ($1, $2, $3, $4, COALESCE($5, 'MANUAL'))
-      RETURNING exchange_rate_id, from_currency_id, to_currency_id, rate,
-                effective_date, source, created_at, updated_at
-    `,
-    upsert: `
-      INSERT INTO general_schema.exchange_rate
-        (from_currency_id, to_currency_id, rate, effective_date, source)
-      VALUES ($1, $2, $3, $4, COALESCE($5, 'MANUAL'))
-      ON CONFLICT (from_currency_id, to_currency_id, effective_date)
-      DO UPDATE SET rate = EXCLUDED.rate,
-                    source = EXCLUDED.source,
-                    updated_at = NOW()
-      RETURNING exchange_rate_id, from_currency_id, to_currency_id, rate,
-                effective_date, source, created_at, updated_at
-    `,
-    update: `
-      UPDATE general_schema.exchange_rate
-      SET rate = COALESCE($2, rate),
-          effective_date = COALESCE($3, effective_date),
-          source = COALESCE($4, source),
-          updated_at = NOW()
-      WHERE exchange_rate_id = $1
-      RETURNING exchange_rate_id, from_currency_id, to_currency_id, rate,
-                effective_date, source, created_at, updated_at
-    `,
-    delete: `
-      DELETE FROM general_schema.exchange_rate
-      WHERE exchange_rate_id = $1
-      RETURNING exchange_rate_id
     `,
   },
 
@@ -395,17 +410,10 @@ export const generalQueryDefs = {
   productCategory: {
     all: 'SELECT product_category_id AS category_id, category_name FROM general_schema.product_category',
     allPaginated: `
-      SELECT cabys_code AS category_id, product_name AS category_name
-      FROM general_schema.product
-      WHERE ($1::text IS NULL OR product_name ILIKE '%' || $1 || '%')
-      ORDER BY product_name
-      LIMIT $2 OFFSET $3
-    `,
-    allPaginatedByCabysCode: `
-      SELECT cabys_code AS category_id, product_name AS category_name
-      FROM general_schema.product
-      WHERE ($1::text IS NULL OR cabys_code ILIKE $1 || '%')
-      ORDER BY cabys_code
+      SELECT product_category_id AS category_id, category_name
+      FROM general_schema.product_category
+      WHERE ($1::text IS NULL OR category_name ILIKE '%' || $1 || '%')
+      ORDER BY category_name
       LIMIT $2 OFFSET $3
     `,
     byId: 'SELECT product_category_id AS category_id, category_name, parent_category_id, hierarchy_level FROM general_schema.product_category WHERE product_category_id = $1',
@@ -437,7 +445,7 @@ export const generalQueryDefs = {
 
   products: {
     getAll: `
-    SELECT pv.product_variant_id, pv.sku, pv.variant_name, pv.cabys_code,
+    SELECT pv.product_variant_id, pv.sku, pv.variant_name, pv.product_id,
            CASE
              WHEN pv.is_composite THEN COALESCE(comp.computed_unit_price, pv.unit_price)
              ELSE pv.unit_price
@@ -460,7 +468,7 @@ export const generalQueryDefs = {
     WHERE pv.tenant_id = $1
     `,
     getAllPaginated: `
-      SELECT pv.product_variant_id, pv.sku, pv.variant_name, pv.cabys_code,
+      SELECT pv.product_variant_id, pv.sku, pv.variant_name, pv.product_id,
              CASE
                WHEN pv.is_composite THEN COALESCE(comp.computed_unit_price, pv.unit_price)
                ELSE pv.unit_price
@@ -485,7 +493,7 @@ export const generalQueryDefs = {
       LIMIT $2 OFFSET $3
     `,
     getAllGlobal: `
-      SELECT pv.product_variant_id, pv.sku, pv.variant_name, pv.cabys_code,
+      SELECT pv.product_variant_id, pv.sku, pv.variant_name, pv.product_id,
              CASE
                WHEN pv.is_composite THEN COALESCE(comp.computed_unit_price, pv.unit_price)
                ELSE pv.unit_price
@@ -510,7 +518,7 @@ export const generalQueryDefs = {
     countAll:
       'SELECT COUNT(*)::int AS total FROM general_schema.product_variant',
     getBySku: `
-      SELECT pv.product_variant_id, pv.sku, pv.variant_name, pv.cabys_code,
+      SELECT pv.product_variant_id, pv.sku, pv.variant_name, pv.product_id,
              CASE
                WHEN pv.is_composite THEN COALESCE(comp.computed_unit_price, pv.unit_price)
                ELSE pv.unit_price
@@ -526,10 +534,10 @@ export const generalQueryDefs = {
         WHERE pvc.tenant_id = pv.tenant_id
           AND pvc.parent_product_variant_id = pv.product_variant_id
       ) comp ON TRUE
-      WHERE pv.sku = $1
+      WHERE pv.sku = $1 AND ($2::uuid IS NULL OR pv.tenant_id = $2)
       `,
     searchByTenant: `
-      SELECT pv.product_variant_id, pv.sku, pv.variant_name, pv.cabys_code,
+      SELECT pv.product_variant_id, pv.sku, pv.variant_name, pv.product_id,
              CASE
                WHEN pv.is_composite THEN COALESCE(comp.computed_unit_price, pv.unit_price)
                ELSE pv.unit_price
@@ -609,7 +617,7 @@ export const generalQueryDefs = {
         JOIN group_tree gt ON gt.node = pg.parent_group_id
         WHERE pg.tenant_id = $1
       )
-      SELECT pv.product_variant_id, pv.sku, pv.variant_name, pv.cabys_code,
+      SELECT pv.product_variant_id, pv.sku, pv.variant_name, pv.product_id,
              CASE
                WHEN pv.is_composite THEN COALESCE(comp.computed_unit_price, pv.unit_price)
                ELSE pv.unit_price
@@ -671,7 +679,7 @@ export const generalQueryDefs = {
         JOIN group_tree gt ON gt.node = pg.parent_group_id
         WHERE pg.tenant_id = $1
       )
-      SELECT pv.product_variant_id, pv.sku, pv.variant_name, pv.cabys_code,
+      SELECT pv.product_variant_id, pv.sku, pv.variant_name, pv.product_id,
              CASE
                WHEN pv.is_composite THEN COALESCE(comp.computed_unit_price, pv.unit_price)
                ELSE pv.unit_price
@@ -745,7 +753,7 @@ export const generalQueryDefs = {
         AND ($5::boolean IS NULL OR NOT $5 OR pv.supplier_id IS NULL)
       `,
     create: `
-      INSERT INTO general_schema.product_variant (tenant_id, sku, variant_name, cabys_code, unit_price, cost_price)
+      INSERT INTO general_schema.product_variant (tenant_id, sku, variant_name, product_id, unit_price, cost_price)
       SELECT $1, $2, $3, $4, $5, COALESCE($6, 0)
       WHERE NOT EXISTS (
         SELECT 1 FROM general_schema.product_variant pv
@@ -1102,10 +1110,15 @@ export const generalQueryDefs = {
 
   customerPayment: {
     getPayments: `
-    SELECT cp.payment_amount, pm.name, cp.payment_date, cp.verified, tc.first_name, tc.last_name, c.symbol FROM pos_schema.customer_payment cp
-    INNER JOIN general_schema.tenant_customer tc USING(tenant_customer_id)
-    INNER JOIN general_schema.payment_method pm USING(payments_method_id)
-    INNER JOIN general_schema.currency c USING(currency_id)
+    SELECT cp.customer_payment_id, cp.payment_amount, pm.name, cp.payment_date, cp.verified, tc.first_name, tc.last_name, c.currency_code
+    FROM pos_schema.customer_payment cp
+    INNER JOIN pos_schema.sale s ON s.sale_id = cp.sale_id
+    INNER JOIN general_schema.branch b ON b.branch_id = s.branch_id
+    LEFT JOIN general_schema.tenant_customer tc ON tc.tenant_customer_id = cp.tenant_customer_id
+    LEFT JOIN general_schema.payment_method pm ON pm.payment_method_id = cp.payment_method_id
+    LEFT JOIN general_schema.currency c ON c.currency_id = cp.currency_id
+    WHERE ($1::uuid IS NULL OR b.tenant_id = $1)
+    ORDER BY cp.payment_date DESC
     `,
     getCustomerPayments: `
     SELECT cp.payment_amount, pm.name, cp.payment_date, cp.verified, tc.first_name, tc.last_name, c.currency_code FROM pos_schema.customer_payment cp
@@ -1134,9 +1147,7 @@ export const generalQueryDefs = {
     `,
     countAll: 'SELECT COUNT(*)::int AS total FROM general_schema.branch',
     byId: `
-    SELECT b.*, bl.provincia, bl.canton, bl.distrito, bl.otras_senas
-    FROM general_schema.branch b
-    LEFT JOIN general_schema.branch_location bl USING(branch_id)
+    SELECT * FROM general_schema.branch b
     WHERE b.branch_id = $1 LIMIT 1
     `,
     byTenant: `
@@ -1177,20 +1188,6 @@ export const generalQueryDefs = {
     `,
   },
 
-  branchLocation: {
-    upsert: `
-      INSERT INTO general_schema.branch_location (branch_id, provincia, canton, distrito, otras_senas)
-      VALUES ($1, $2, $3, $4, $5)
-      ON CONFLICT (branch_id) DO UPDATE SET
-        provincia   = EXCLUDED.provincia,
-        canton      = EXCLUDED.canton,
-        distrito    = EXCLUDED.distrito,
-        otras_senas = EXCLUDED.otras_senas,
-        updated_at  = NOW()
-      RETURNING branch_location_id
-    `,
-  },
-
   subscriptions: {
     cancelSubscription:
       'UPDATE general_schema.tenant SET is_subscribed = false WHERE tenant_id = $1',
@@ -1215,35 +1212,6 @@ export const generalQueryDefs = {
     deleteSegment: `
       DELETE FROM general_schema.customer_segment WHERE customer_segment_id = $1
       RETURNING customer_segment_id
-    `,
-  },
-
-  tenantHaciendaConfig: {
-    getByTenantId: `
-      SELECT * FROM general_schema.tenant_hacienda_config
-      WHERE tenant_id = $1 AND is_active = TRUE
-      LIMIT 1
-    `,
-    create: `
-      INSERT INTO general_schema.tenant_hacienda_config
-      (tenant_id, hacienda_username, hacienda_password, hacienda_client_id, p12_base64, p12_password)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING tenant_hacienda_config_id
-    `,
-    update: `
-      UPDATE general_schema.tenant_hacienda_config
-      SET hacienda_username = $2,
-          hacienda_password = $3,
-          hacienda_client_id = $4,
-          p12_base64 = $5,
-          p12_password = $6,
-          updated_at = NOW()
-      WHERE tenant_id = $1 AND is_active = TRUE
-    `,
-    deactivate: `
-      UPDATE general_schema.tenant_hacienda_config
-      SET is_active = FALSE, updated_at = NOW()
-      WHERE tenant_id = $1
     `,
   },
 
@@ -1319,6 +1287,29 @@ export const generalQueryDefs = {
       RETURNING special_code_id
     `,
   },
+
+  refreshToken: {
+    create: `
+      INSERT INTO general_schema.refresh_token (user_id, token_hash, expires_at)
+      VALUES ($1, $2, $3)
+      RETURNING refresh_token_id
+    `,
+    activeByUser: `
+      SELECT refresh_token_id, token_hash
+      FROM general_schema.refresh_token
+      WHERE user_id = $1 AND revoked = false AND expires_at > NOW()
+    `,
+    revokeById: `
+      UPDATE general_schema.refresh_token
+      SET revoked = true
+      WHERE refresh_token_id = $1
+    `,
+    revokeAllByUser: `
+      UPDATE general_schema.refresh_token
+      SET revoked = true
+      WHERE user_id = $1 AND revoked = false
+    `,
+  },
 };
 
 export const generalQueries = createQueries(generalQueryDefs);
@@ -1337,7 +1328,7 @@ export const bulkProducts = [
   'tenant_id',
   'sku',
   'variant_name',
-  'cabys_code',
+  'product_id',
   'unit_price',
   'cost_price',
   'supplier_id',

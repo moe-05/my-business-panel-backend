@@ -1,9 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import Database from '@crane-technologies/database/dist/components/Database';
+import Database from '@resonance-components/datahandler';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
 import { IUserSession } from '@/common/interfaces/user_session.interface';
 import {
+  expenseCategoryComponents,
   expenseComponents,
+  notesComponents,
+  payrollComponents,
   returnsComponents,
   salesComponents,
   tenantBranches,
@@ -11,7 +14,10 @@ import {
 import {
   BranchRow,
   BucketUnit,
+  ExpenseCategoryComponentRow,
   ExpenseComponentRow,
+  NotesComponentRow,
+  PayrollComponentRow,
   ProfitabilityInterval,
   ProfitabilityRawData,
   ReturnsComponentRow,
@@ -41,21 +47,40 @@ export class ProfitabilityService {
   async getProfitability(
     interval: ProfitabilityInterval | undefined,
     session: IUserSession,
+    branchId?: string,
   ): Promise<ProfitabilityRawData> {
     const resolvedInterval = interval ?? DEFAULT_INTERVAL;
     const { rangeMs, bucketUnit } = INTERVAL_CONFIG[resolvedInterval];
     const rangeStart = new Date(Date.now() - rangeMs);
+    const branchFilter = branchId ?? null;
 
-    const tenantParams = [session.tenant_id];
-    const bucketParams = [session.tenant_id, bucketUnit, rangeStart];
+    const tenantParams = [session.tenant_id, branchFilter];
+    const bucketParams = [
+      session.tenant_id,
+      bucketUnit,
+      // ISO en UTC: las columnas timestamp guardan hora UTC; un Date crudo se
+      // serializaria con el offset del proceso (que Postgres ignora).
+      rangeStart.toISOString(),
+      branchFilter,
+    ];
 
-    const [branchesResult, salesResult, returnsResult, expensesResult] =
-      await Promise.all([
-        this.db.query(tenantBranches, tenantParams),
-        this.db.query(salesComponents, bucketParams),
-        this.db.query(returnsComponents, bucketParams),
-        this.db.query(expenseComponents, bucketParams),
-      ]);
+    const [
+      branchesResult,
+      salesResult,
+      returnsResult,
+      expensesResult,
+      expenseCategoriesResult,
+      payrollResult,
+      notesResult,
+    ] = await Promise.all([
+      this.db.query(tenantBranches, tenantParams),
+      this.db.query(salesComponents, bucketParams),
+      this.db.query(returnsComponents, bucketParams),
+      this.db.query(expenseComponents, bucketParams),
+      this.db.query(expenseCategoryComponents, bucketParams),
+      this.db.query(payrollComponents, bucketParams),
+      this.db.query(notesComponents, bucketParams),
+    ]);
 
     return {
       interval: resolvedInterval,
@@ -65,6 +90,10 @@ export class ProfitabilityService {
       sales: salesResult.rows as SalesComponentRow[],
       returns: returnsResult.rows as ReturnsComponentRow[],
       expenses: expensesResult.rows as ExpenseComponentRow[],
+      expense_categories:
+        expenseCategoriesResult.rows as ExpenseCategoryComponentRow[],
+      payroll: payrollResult.rows as PayrollComponentRow[],
+      notes: notesResult.rows as NotesComponentRow[],
     };
   }
 }

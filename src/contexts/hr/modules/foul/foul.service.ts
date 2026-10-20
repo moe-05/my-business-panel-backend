@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
-import Database from '@crane-technologies/database';
+import Database from '@resonance-components/datahandler';
 import { RegisterFoulDto } from './dto/create_foul.dto';
 import { hrQueries } from '@hr/hr.queries';
 import { CreateFoulError } from '@/common/errors/foul_create.error';
@@ -86,9 +86,18 @@ export class FoulService {
     }
   }
 
-  async getFoulsByPeriod(startDate: string, endDate: string) {
+  /** scopeTenantId null = sin filtro (superusuario de plataforma). */
+  async getFoulsByPeriod(
+    startDate: string,
+    endDate: string,
+    scopeTenantId: string | null,
+  ) {
     try {
-      const fouls = await this.db.query(foul.getByPeriod, [startDate, endDate]);
+      const fouls = await this.db.query(foul.getByPeriod, [
+        startDate,
+        endDate,
+        scopeTenantId,
+      ]);
 
       return fouls.rows;
     } catch (error) {

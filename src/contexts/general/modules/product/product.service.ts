@@ -5,7 +5,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { DATABASE } from '../db/db.provider';
-import Database from '@crane-technologies/database';
+import Database from '@resonance-components/datahandler';
 import {
   bulkAttributeAssignations,
   bulkProducts,
@@ -82,8 +82,15 @@ export class ProductService {
     };
   }
 
-  async getProductBySku(sku: string): Promise<Product> {
-    const product = await this.db.query(products.getBySku, [sku]);
+  /** scopeTenantId null = sin filtro (superusuario de plataforma). */
+  async getProductBySku(
+    sku: string,
+    scopeTenantId: string | null,
+  ): Promise<Product> {
+    const product = await this.db.query(products.getBySku, [
+      sku,
+      scopeTenantId,
+    ]);
     return product.rows[0];
   }
 
@@ -236,10 +243,10 @@ export class ProductService {
       if (error instanceof BadRequestException) throw error;
       if (
         error?.code === '23503' &&
-        error?.constraint === 'product_variant_cabys_code_fkey'
+        error?.constraint === 'product_variant_product_id_fkey'
       ) {
         throw new BadRequestException(
-          `The cabys_code provided does not exist in the CABYS catalog`,
+          `The product_id provided does not exist in the product catalog`,
         );
       }
       throw new InternalServerErrorException(error);
@@ -295,7 +302,14 @@ export class ProductService {
   }
 
   async updateProduct(data: UpdateProductDto, productId: string) {
-    const { attribute_value_ids, group_ids, ...updates } = data;
+    // tenant_id nunca se reasigna por PATCH: un producto no cambia de empresa
+    const {
+      attribute_value_ids,
+      group_ids,
+      tenant_id: _ignoredTenantId,
+      ...updates
+    } = data;
+    void _ignoredTenantId;
 
     const updateKeys = Object.keys(updates).filter(
       (key) => updates[key as keyof typeof updates] !== undefined,

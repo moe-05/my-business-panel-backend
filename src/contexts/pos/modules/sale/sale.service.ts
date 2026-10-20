@@ -5,7 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { DATABASE } from '../../../general/modules/db/db.provider';
-import Database from '@crane-technologies/database';
+import Database from '@resonance-components/datahandler';
 import { FullSaleDto, NewSingleSaleDto } from './dto/sales.dto';
 import { posQueries } from '@pos/pos.queries';
 
@@ -13,13 +13,16 @@ import { CustomerPaymentService } from '../../../general/modules/customer_paymen
 import { Condition, SaleFromDb } from './interface/sale.interface';
 import { SaleCreationError } from '@/common/errors/sale_creation.error';
 import { paginate } from '@/common/utilities/paginator';
-import { EInvoiceService } from '../e-invoice/e-invoice.service';
-import { DInvoiceService } from '../d-invoice/d-invoice.service';
+import { InvoiceService } from '../invoice/invoice.service';
 import { AccountingJournalService } from '../../../finances/modules/accounting/accounting-journal.service';
 import { SaleItemService } from '../sale-item/sale-item.service';
 import { WarehouseService } from '@/contexts/inventory/modules/warehouse/warehouse.service';
+import { missingInvoiceFields } from '@/contexts/general/modules/customer/customer-invoice-requirements';
+import { TenantScopeService } from '@/common/tenant/tenant-scope.service';
+import { IUserSession } from '@/common/interfaces/user_session.interface';
+import { calculateEarnedPoints } from '../loyal-program/loyalty-currency';
 
-const { sales, loyaltyScore } = posQueries;
+const { sales, loyaltyScore, saleItems } = posQueries;
 
 @Injectable()
 export class SaleService {
@@ -30,12 +33,112 @@ export class SaleService {
     private readonly saleItemService: SaleItemService,
     private readonly customerPaymentService: CustomerPaymentService,
     private readonly warehouseService: WarehouseService,
-    private readonly eInvoiceService: EInvoiceService,
-    private readonly dInvoiceService: DInvoiceService,
+    private readonly invoiceService: InvoiceService,
     private readonly journalService: AccountingJournalService,
+    private readonly tenantScope: TenantScopeService,
   ) {}
 
+  /**
+   * Normaliza y valida la venta contra el tenant de la SESION. Nada de lo que
+   * llega en el body decide a que empresa pertenece la venta: el tenant de la
+   * venta, de cada linea y de cada pago es el de la sesion, y toda referencia
+   * (sucursal, caja, sesion de caja, vendedor, cliente, promociones, regalias)
+   * debe ser de ese tenant.
+   */
+  private async scopeSaleToSession(
+    raw: FullSaleDto,
+    session: IUserSession,
+  ): Promise<FullSaleDto & { tenant_id: string }> {
+    const tenantId = session.tenant_id;
+    const owned = (
+      resource: Parameters<TenantScopeService['assertOwnedByTenant']>[0],
+      id: string,
+    ) => this.tenantScope.assertOwnedByTenant(resource, id, tenantId);
+    const distinct = (ids: Array<string | null | undefined>) => [
+      ...new Set(ids.filter((id): id is string => !!id)),
+    ];
+
+    await owned('branch', raw.branch_id);
+    if (raw.cash_register_id) await owned('cashRegister', raw.cash_register_id);
+    if (raw.cash_register_session_id) {
+      await owned('cashRegisterSession', raw.cash_register_session_id);
+    }
+
+    const sellerUserId = raw.seller_user_id ?? session.user_id;
+    if (sellerUserId !== session.user_id) await owned('user', sellerUserId);
+
+    for (const id of distinct((raw.items ?? []).map((i) => i.promotion_id))) {
+      await owned('promotion', id);
+    }
+    for (const id of distinct(
+      (raw.items ?? []).map((i) => i.royalty_rule_id),
+    )) {
+      await owned('royaltyRule', id);
+    }
+    for (const id of distinct(
+      (raw.items ?? []).map((i) => i.royalty_option_id),
+    )) {
+      await owned('royaltyOption', id);
+    }
+
+    // El pago pertenece al cliente de la venta; uno distinto es un dato
+    // adulterado (o de otra empresa).
+    const payments = (raw.payments ?? []).map((p) => {
+      if (
+        p.tenant_customer_id &&
+        p.tenant_customer_id !== raw.tenant_customer_id
+      ) {
+        throw new BadRequestException(
+          'El cliente de un pago no coincide con el cliente de la venta.',
+        );
+      }
+      return { ...p, tenant_customer_id: raw.tenant_customer_id };
+    });
+
+    return {
+      ...raw,
+      tenant_id: tenantId,
+      seller_user_id: sellerUserId,
+      items: (raw.items ?? []).map((i) => ({ ...i, tenant_id: tenantId })),
+      payments,
+    };
+  }
+
+  /**
+   * La factura exige los datos del comprador: el cliente debe existir en el
+   * tenant de la sucursal y tener documento, nombre (o razon social si es
+   * J/G/C) y direccion. Se valida antes de abrir cualquier transaccion para
+   * devolver un mensaje accionable en lugar de un error de trigger.
+   */
+  private async assertCustomerCanBeInvoiced(
+    tenantCustomerId: string,
+    branchId: string,
+  ) {
+    const { rows } = await this.db.query(sales.getCustomerForInvoice, [
+      tenantCustomerId,
+      branchId,
+    ]);
+    const customer = rows[0];
+    if (!customer) {
+      throw new BadRequestException(
+        'El cliente no existe o no pertenece a este negocio.',
+      );
+    }
+
+    const missing = missingInvoiceFields(customer);
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `Complete los datos del cliente para facturar. Falta: ${missing.join(', ')}.`,
+      );
+    }
+  }
+
   async createSale(data: NewSingleSaleDto) {
+    await this.assertCustomerCanBeInvoiced(
+      data.tenant_customer_id,
+      data.branch_id,
+    );
+
     const params = [
         data.branch_id,
         data.tenant_customer_id,
@@ -46,7 +149,6 @@ export class SaleService {
         data.tax_amount,
         data.total_amount,
         data.is_completed,
-        data.has_electronic_invoice,
         null, // seller_user_id
       ],
       { rows } = await this.db.query(sales.createSale, params);
@@ -66,17 +168,14 @@ export class SaleService {
     return saleId;
   }
 
-  async createFullSale(data: FullSaleDto) {
+  async createFullSale(raw: FullSaleDto, session: IUserSession) {
+    const data = await this.scopeSaleToSession(raw, session);
     const { items, payments } = data;
 
-    const hasPointsPayment = (payments ?? []).some(
-      (p) => p.is_points_redemption,
+    await this.assertCustomerCanBeInvoiced(
+      data.tenant_customer_id,
+      data.branch_id,
     );
-    if (hasPointsPayment && !data.tenant_customer_id) {
-      throw new BadRequestException(
-        'Se requiere asociar un cliente para realizar pagos con puntos de fidelidad.',
-      );
-    }
 
     if (data.sale_condition === '02' && !data.due_date) {
       throw new BadRequestException(
@@ -95,13 +194,21 @@ export class SaleService {
     const arBalance = totalSale - upfront;
     const isCredit = data.sale_condition === '02';
     const isApartado = data.sale_condition === '04';
-    // Credit sale with outstanding balance is not "completed" until fully paid.
+    // Credit sale or apartado (layaway) with outstanding balance is not
+    // "completed" until fully paid -- apartado was missing here (bug found
+    // in the VE credit-sale audit): a layaway with balance > 0 could be
+    // flagged is_completed = true, contradicting its own semantics
+    // (merchandise reserved, not released until paid) and polluting any
+    // report/dashboard that filters on sale.is_completed as "realized sale".
     const effectiveIsCompleted =
-      data.is_completed && !(isCredit && arBalance > 0.01);
+      data.is_completed && !((isCredit || isApartado) && arBalance > 0.01);
 
     const txn = await this.db.transaction();
     try {
       let saleId: string;
+      // Puntos que la venta otorga al cliente (calculados una sola vez, en la
+      // moneda del programa, y reutilizados para el saldo tras confirmar).
+      let earnedPoints = 0;
       try {
         const { rows } = await txn.query(sales.createSale, [
           data.branch_id,
@@ -113,7 +220,6 @@ export class SaleService {
           data.tax_amount,
           data.total_amount,
           effectiveIsCompleted,
-          data.has_electronic_invoice,
           data.seller_user_id ?? null,
         ]);
         saleId = rows[0].sale_id;
@@ -226,17 +332,22 @@ export class SaleService {
             [data.tenant_id],
           );
           const lp = lpRows[0];
-          if (
-            lp &&
-            data.total_amount >= Number(lp.minimum_purchase_for_points)
-          ) {
-            pointsAccumulated = Math.floor(
-              loyaltyBaseAmount * Number(lp.points_earned_per_currency_unit),
+          if (lp) {
+            // FNZ-FI-01: el programa se define en USD; la venta se convierte
+            // antes de aplicar la tasa y la compra minima.
+            pointsAccumulated = await calculateEarnedPoints(
+              txn,
+              lp,
+              data.tenant_id,
+              data.currency_id,
+              data.total_amount,
+              loyaltyBaseAmount,
             );
           }
         }
+        earnedPoints = pointsAccumulated;
 
-        await this.dInvoiceService.createDInvoice(
+        await this.invoiceService.createInvoice(
           {
             tenant_customer_id: data.tenant_customer_id ?? null,
             currency_id: data.currency_id,
@@ -265,10 +376,12 @@ export class SaleService {
              WHERE type_name IN ('venta_credito', 'venta_apartado')`,
           );
           const arTypeMap = new Map<string, string>(
-            arTypesRes.rows.map((r: { type_name: string; account_receivable_type_id: string }) => [
-              r.type_name,
-              r.account_receivable_type_id,
-            ]),
+            arTypesRes.rows.map(
+              (r: {
+                type_name: string;
+                account_receivable_type_id: string;
+              }) => [r.type_name, r.account_receivable_type_id],
+            ),
           );
 
           const arTypeName =
@@ -295,7 +408,8 @@ export class SaleService {
               new Date(data.due_date!),
             ],
           );
-          const accountReceivableId: string = arRes.rows[0].account_receivable_id;
+          const accountReceivableId: string =
+            arRes.rows[0].account_receivable_id;
 
           const sarRes = await txn.query(
             `INSERT INTO pos_schema.sale_account_receivable(
@@ -341,8 +455,61 @@ export class SaleService {
           }
         }
 
-        if (!isApartado) {
-          try {
+        // El costo de venta se fija siempre (tambien en apartados) y fuera del
+        // try contable: antes solo se escribia si el asiento salia bien y la
+        // venta quedaba con costo NULL (margen 100% en Rentabilidad).
+        const { rows: costRows } = await txn.query(saleItems.fixCostAtSale, [
+          saleId,
+        ]);
+        const totalCost = (
+          costRows as Array<{ quantity: number; cost_price_at_sale: string }>
+        ).reduce(
+          (sum, r) => sum + Number(r.cost_price_at_sale) * Number(r.quantity),
+          0,
+        );
+
+        // Contabilidad: secundaria (no debe tumbar la venta) pero en un
+        // savepoint, para que un error SQL del asiento no aborte la
+        // transaccion de la venta (FNZ-X-04).
+        const saleDate = new Date(data.sale_date);
+        await this.journalService.trySecondary(
+          txn,
+          `venta ${saleId}`,
+          async () => {
+            // Lo cobrado al registrar la venta (contado completo o abono
+            // inicial), por medio de pago y neto de vuelto.
+            const settlement = await this.journalService.buildSettlement(
+              data.tenant_id,
+              data.currency_id,
+              saleDate,
+              payments ?? [],
+              data.change_amount ?? 0,
+              txn,
+            );
+
+            if (isApartado) {
+              // El apartado se contabiliza como venta al completarse
+              // (accounts-receivable completeApartado); aqui solo el abono,
+              // que queda como anticipo contra Cuentas por Cobrar.
+              const upfrontSettled =
+                settlement.cash + settlement.bank + settlement.points;
+              if (upfrontSettled > 0) {
+                await this.journalService.generatePaymentReceivedJournal(
+                  {
+                    tenantId: data.tenant_id,
+                    sourceId: saleId,
+                    amount: upfrontSettled,
+                    settlement,
+                    currencyId: data.currency_id,
+                    entryDate: saleDate,
+                    description: `Abono inicial de apartado - ${saleId}`,
+                  },
+                  txn,
+                );
+              }
+              return;
+            }
+
             await this.journalService.generateSaleJournal(
               {
                 tenantId: data.tenant_id,
@@ -351,32 +518,12 @@ export class SaleService {
                 subtotalAmount: data.subtotal_amount,
                 taxAmount: data.tax_amount,
                 totalAmount: data.total_amount,
-                entryDate: new Date(data.sale_date),
+                settlement,
+                currencyId: data.currency_id,
+                entryDate: saleDate,
               },
               txn,
             );
-
-            let totalCost = 0;
-            for (const item of items) {
-              const res = await txn.query(
-                `SELECT COALESCE(weighted_avg_cost, cost_price, 0) AS item_cost
-                 FROM general_schema.product_variant
-                 WHERE tenant_id = $1 AND product_variant_id = $2 LIMIT 1`,
-                [data.tenant_id, item.product_variant_id],
-              );
-              if (res.rows.length > 0) {
-                const itemCost = Number(res.rows[0].item_cost);
-                await txn.query(
-                  `UPDATE pos_schema.sale_item
-                   SET cost_price_at_sale = $1
-                   WHERE sale_id = $2 AND product_variant_id = $3 AND tenant_id = $4`,
-                  [itemCost, saleId, item.product_variant_id, item.tenant_id],
-                );
-                if (itemCost > 0) {
-                  totalCost += itemCost * item.quantity;
-                }
-              }
-            }
 
             if (totalCost > 0) {
               await this.journalService.generateSaleCogsJournal(
@@ -384,18 +531,13 @@ export class SaleService {
                   tenantId: data.tenant_id,
                   saleId,
                   totalCost,
-                  entryDate: new Date(data.sale_date),
+                  entryDate: saleDate,
                 },
                 txn,
               );
             }
-          } catch (accountingError) {
-            // Log but don't fail the sale — accounting is secondary
-            this.logger.error(
-              `Error generating journal entries for sale ${saleId}: ${(accountingError as Error).message}`,
-            );
-          }
-        }
+          },
+        );
 
         await txn.commit();
       } catch (txnError) {
@@ -406,26 +548,12 @@ export class SaleService {
       // Accumulate loyalty points — non-blocking, must not fail the sale
       if (data.tenant_customer_id) {
         try {
-          const { rows: programRows } = await this.db.query(
-            loyaltyScore.getActiveProgramForTenant,
-            [data.tenant_id],
-          );
-          const program = programRows[0];
-          if (program && data.total_amount >= Number(program.minimum_purchase_for_points)) {
-            const earnBase =
-              isCredit || isApartado
-                ? Math.min(upfront, data.total_amount)
-                : data.total_amount;
-            const pointsEarned = Math.floor(
-              earnBase * Number(program.points_earned_per_currency_unit),
-            );
-            if (pointsEarned > 0) {
-              await this.db.query(loyaltyScore.upsertEarned, [
-                data.tenant_id,
-                data.tenant_customer_id,
-                pointsEarned,
-              ]);
-            }
+          if (earnedPoints > 0) {
+            await this.db.query(loyaltyScore.upsertEarned, [
+              data.tenant_id,
+              data.tenant_customer_id,
+              earnedPoints,
+            ]);
           }
           // Deduct redeemed points from any points-redemption payment rows
           const redeemedPoints = (data.payments ?? []).reduce(
@@ -447,27 +575,12 @@ export class SaleService {
         }
       }
 
-      if (data.has_electronic_invoice) {
-        try {
-          await this.eInvoiceService.createEInvoiceForSale(saleId);
-        } catch (eInvoiceError) {
-          this.logger.error(
-            `E-invoice generation failed for sale ${saleId}: ${(eInvoiceError as Error).message}`,
-          );
-          return {
-            saleId,
-            eInvoiceWarning: 'No se pudo generar la factura electrónica',
-          };
-        }
-      }
-
       return { saleId };
     } catch (error) {
       if (error instanceof BadRequestException) throw error;
-      this.logger.error(
-        `Error creating full sale: ${(error as Error).message}`,
-      );
-      throw new SaleCreationError();
+      const message = (error as Error).message;
+      this.logger.error(`Error creating full sale: ${message}`);
+      throw new SaleCreationError(message);
     }
   }
 
@@ -476,19 +589,22 @@ export class SaleService {
     return result.rows;
   }
 
-  async getAllSalesByTenant(tenantId: string, limit = 100, offset = 0) {
+  async getAllSalesByTenant(
+    tenantId: string,
+    limit = 100,
+    offset = 0,
+    dateFrom?: string,
+    dateTo?: string,
+  ) {
     return paginate({
       dbClient: this.db,
       table: `
         (SELECT s.sale_id, s.sale_date, s.total_amount, s.subtotal_amount, s.tax_amount,
-          s.is_completed, s.has_electronic_invoice, s.is_refunded, s.tenant_customer_id,
+          s.is_completed, s.is_refunded, s.tenant_customer_id,
           s.created_at, b.branch_id, b.branch_name, c.currency_code, c.symbol, b.tenant_id,
           (SELECT rt.return_transaction_id FROM pos_schema.return_transaction rt
-            LEFT JOIN pos_schema.digital_sale_invoice dsi
-              ON dsi.digital_sale_invoice_id = rt.digital_sale_invoice_id
-            LEFT JOIN pos_schema.electronic_sale_invoice esi
-              ON esi.electronic_sale_invoice_id = rt.electronic_sale_invoice_id
-            WHERE dsi.sale_id = s.sale_id OR esi.sale_id = s.sale_id LIMIT 1
+            INNER JOIN pos_schema.invoice inv ON inv.invoice_id = rt.invoice_id
+            WHERE inv.sale_id = s.sale_id LIMIT 1
           ) AS return_transaction_id
         FROM pos_schema.sale s
         INNER JOIN general_schema.branch b USING(branch_id)
@@ -502,7 +618,6 @@ export class SaleService {
         'subtotal_amount',
         'tax_amount',
         'is_completed',
-        'has_electronic_invoice',
         'is_refunded',
         'branch_id',
         'branch_name',
@@ -513,7 +628,12 @@ export class SaleService {
         'return_transaction_id',
       ],
       pkFields: ['sale_id'],
-      where: { tenant_id: tenantId },
+      where: {
+        tenant_id: tenantId,
+        ...(dateFrom || dateTo
+          ? { sale_date: { gte: dateFrom, lte: dateTo } }
+          : {}),
+      },
       options: { limit, offset, sortBy: 'created_at', order: 'DESC' },
     });
   }

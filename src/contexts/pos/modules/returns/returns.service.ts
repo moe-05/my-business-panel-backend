@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
-import Database from '@crane-technologies/database';
+import Database from '@resonance-components/datahandler';
 import {
   BulkUpdateProducts,
   ReturnProduct,
@@ -14,6 +14,9 @@ import {
 } from './dto/return_transaction.dto';
 import { bulkReturns, posQueries } from '@pos/pos.queries';
 import { FindReturnsDto } from './dto/find_returns.dto';
+import { TenantScopeService } from '@/common/tenant/tenant-scope.service';
+import { AccountingJournalService } from '@/contexts/finances/modules/accounting/accounting-journal.service';
+import Decimal from 'decimal.js';
 
 const { returns } = posQueries;
 
@@ -24,7 +27,6 @@ interface SaleContextRow {
   subtotal_amount: string;
   tax_amount: string;
   total_amount: string;
-  has_electronic_invoice: boolean;
   is_completed: boolean;
   branch_id: string;
   branch_name: string | null;
@@ -35,33 +37,84 @@ interface SaleContextRow {
   last_name: string | null;
   document_number: string | null;
   customer_email: string | null;
-  digital_sale_invoice_id: string | null;
+  invoice_id: string | null;
   digital_invoiced_at: Date | null;
   digital_subtotal: string | null;
   digital_tax: string | null;
   digital_total: string | null;
-  electronic_sale_invoice_id: string | null;
-  electronic_key_number: string | null;
-  electronic_consecutive: string | null;
-  electronic_status_id: number | null;
-  electronic_created_at: Date | null;
 }
 
 @Injectable()
 export class ReturnsService {
-  constructor(@Inject(DATABASE) private readonly db: Database) {}
+  constructor(
+    @Inject(DATABASE) private readonly db: Database,
+    private readonly tenantScope: TenantScopeService,
+    private readonly journalService: AccountingJournalService,
+  ) {}
+
+  /** Saldo que el cliente aun debe de la venta; 0 si no tiene CxC. */
+  private async receivableBalance(saleId: string): Promise<number> {
+    const { rows } = await this.db.query(returns.getReceivableBalance, [
+      saleId,
+    ]);
+    return Number(rows[0]?.balance ?? 0);
+  }
 
   /**
-   * Returns the full refund context for a given sale: sale info, customer,
-   * digital invoice (always exists for completed sales), electronic invoice
-   * (when has_electronic_invoice = true), and the line items.
+   * Neto e IVA de lo devuelto (FNZ-X-04). Si el precio de la linea ya incluye
+   * IVA, el IVA es total * tasa / (100 + tasa); si no, total * tasa / 100.
    */
-  async getSaleRefundContext(saleId: string) {
-    const ctxResult = await this.db.query(returns.getSaleContext, [saleId]);
+  private async splitReturnedTax(
+    lines: Array<{ sale_item_id: string; total: number }>,
+  ): Promise<{ net: number; tax: number }> {
+    const { rows } = await this.db.query(returns.getLineTaxInfo, [
+      lines.map((l) => l.sale_item_id),
+    ]);
+    const info = new Map<string, { tax_rate: number; includes_iva: boolean }>(
+      rows.map((r: any) => [r.sale_item_id, r]),
+    );
+    let net = new Decimal(0);
+    let tax = new Decimal(0);
+    for (const l of lines) {
+      const i = info.get(l.sale_item_id);
+      const rate = new Decimal(i?.tax_rate ?? 0);
+      const total = new Decimal(l.total);
+      if (i?.includes_iva) {
+        const lineTax = total.mul(rate).div(rate.plus(100));
+        tax = tax.plus(lineTax);
+        net = net.plus(total.minus(lineTax));
+      } else {
+        net = net.plus(total);
+        tax = tax.plus(total.mul(rate).div(100));
+      }
+    }
+    return { net: net.toDecimalPlaces(2).toNumber(), tax: tax.toDecimalPlaces(2).toNumber() };
+  }
+
+  /**
+   * Contexto de la venta acotado al tenant (scopeTenantId null = superusuario
+   * de plataforma). Una venta de otra empresa responde 404 como una inexistente.
+   */
+  private async loadSaleContext(
+    saleId: string,
+    scopeTenantId: string | null,
+  ): Promise<SaleContextRow> {
+    const ctxResult = await this.db.query(returns.getSaleContext, [
+      saleId,
+      scopeTenantId,
+    ]);
     if (!ctxResult.rows.length) {
       throw new NotFoundException(`Sale not found: ${saleId}`);
     }
-    const row: SaleContextRow = ctxResult.rows[0];
+    return ctxResult.rows[0];
+  }
+
+  /**
+   * Returns the full refund context for a given sale: sale info, customer,
+   * invoice (always exists for completed sales), and the line items.
+   */
+  async getSaleRefundContext(saleId: string, scopeTenantId: string | null) {
+    const row = await this.loadSaleContext(saleId, scopeTenantId);
 
     const itemsResult = await this.db.query(returns.getSaleItemsForRefund, [
       saleId,
@@ -75,7 +128,6 @@ export class ReturnsService {
         subtotal_amount: Number(row.subtotal_amount),
         tax_amount: Number(row.tax_amount),
         total_amount: Number(row.total_amount),
-        has_electronic_invoice: row.has_electronic_invoice,
         is_completed: row.is_completed,
         branch_id: row.branch_id,
         branch_name: row.branch_name,
@@ -92,25 +144,15 @@ export class ReturnsService {
             email: row.customer_email,
           }
         : null,
-      digital_invoice: row.digital_sale_invoice_id
+      invoice: row.invoice_id
         ? {
-            digital_sale_invoice_id: row.digital_sale_invoice_id,
+            invoice_id: row.invoice_id,
             invoiced_at: row.digital_invoiced_at,
             subtotal_amount: Number(row.digital_subtotal ?? 0),
             tax_amount: Number(row.digital_tax ?? 0),
             total_amount: Number(row.digital_total ?? 0),
           }
         : null,
-      electronic_invoice:
-        row.has_electronic_invoice && row.electronic_sale_invoice_id
-          ? {
-              electronic_sale_invoice_id: row.electronic_sale_invoice_id,
-              key_number: row.electronic_key_number,
-              consecutive_number: row.electronic_consecutive,
-              status_id: row.electronic_status_id,
-              created_at: row.electronic_created_at,
-            }
-          : null,
       items: itemsResult.rows.map((it: any) => ({
         sale_item_id: it.sale_item_id,
         product_variant_id: it.product_variant_id,
@@ -119,17 +161,19 @@ export class ReturnsService {
         available_quantity: Number(it.available_quantity),
         unit_price: Number(it.unit_price),
         total_price: Number(it.total_price),
-        digital_sale_invoice_item_id: it.digital_sale_invoice_item_id,
-        electronic_sale_invoice_item_id: it.electronic_sale_invoice_item_id,
+        invoice_item_id: it.invoice_item_id,
       })),
     };
   }
 
   /**
    * Creates a partial return for a sale. Auto-sets return_date server-side.
-   * Resolves both digital and electronic invoice IDs from the sale.
+   * Resolves the invoice ID from the sale.
    */
-  async createPartialRefund(data: ReturnTransactionDto) {
+  async createPartialRefund(
+    data: ReturnTransactionDto,
+    scopeTenantId: string | null,
+  ) {
     const {
       sale_id,
       return_products,
@@ -145,23 +189,38 @@ export class ReturnsService {
     }
 
     // Resolve invoice references and customer from the sale
-    const ctxResult = await this.db.query(returns.getSaleContext, [sale_id]);
-    if (!ctxResult.rows.length) {
-      throw new NotFoundException(`Sale not found: ${sale_id}`);
-    }
-    const ctx: SaleContextRow = ctxResult.rows[0];
+    const ctx = await this.loadSaleContext(sale_id, scopeTenantId);
 
-    if (!ctx.digital_sale_invoice_id) {
+    // Las lineas devueltas deben ser de ESTA venta: sin esto se podrian
+    // descontar lineas de ventas de otras empresas (el trigger de devolucion
+    // reconcilia por sale_item_id).
+    const itemIds = [...new Set(return_products.map((p) => p.sale_item_id))];
+    const owned = await this.db.query(returns.countSaleItemsOfSale, [
+      sale_id,
+      itemIds,
+    ]);
+    if ((owned.rows[0]?.total ?? 0) !== itemIds.length) {
       throw new BadRequestException(
-        'La venta no tiene factura digital asociada — no se puede reembolsar',
+        'Alguna linea a reembolsar no pertenece a la venta indicada',
+      );
+    }
+
+    // Un cliente enviado por el cliente HTTP debe ser del tenant de la venta.
+    if (data.tenant_customer_id) {
+      await this.tenantScope.assertOwnedByTenant(
+        'customer',
+        data.tenant_customer_id,
+        ctx.tenant_id,
+      );
+    }
+
+    if (!ctx.invoice_id) {
+      throw new BadRequestException(
+        'La venta no tiene factura asociada — no se puede reembolsar',
       );
     }
 
     const tenantCustomerId = data.tenant_customer_id ?? ctx.tenant_customer_id;
-    const electronicId =
-      ctx.has_electronic_invoice && ctx.electronic_sale_invoice_id
-        ? ctx.electronic_sale_invoice_id
-        : null;
 
     // Compute total refund amount from line items
     const totalRefund = return_products.reduce((acc, p) => {
@@ -171,12 +230,21 @@ export class ReturnsService {
       return acc + lineTotal;
     }, 0);
 
-    await this.db.query('BEGIN');
+    // FNZ-X-04: neto, IVA y CxC se leen antes de insertar la devolucion; el
+    // trigger update_on_return reescribe la venta, la factura y la CxC.
+    const { net, tax } = await this.splitReturnedTax(
+      return_products.map((p) => ({
+        sale_item_id: p.sale_item_id,
+        total: Number((p.total_price ?? p.quantity * p.unit_price).toFixed(2)),
+      })),
+    );
+    const balanceBefore = await this.receivableBalance(sale_id);
+
+    const txn = await this.db.transaction();
     try {
       // 1. Create return_transaction header (server sets return_date)
-      const headerRes = await this.db.query(returns.newTransaction, [
-        ctx.digital_sale_invoice_id,
-        electronicId,
+      const headerRes = await txn.query(returns.newTransaction, [
+        ctx.invoice_id,
         tenantCustomerId ?? null,
         Number(totalRefund.toFixed(2)),
         refund_method ?? null,
@@ -189,7 +257,7 @@ export class ReturnsService {
         headerRes.rows[0].return_transaction_id;
 
       // 2. Bulk insert return_product rows. The update_on_return trigger
-      //    handles all reconciliation (sale_item, digital_sale_invoice_item,
+      //    handles all reconciliation (sale_item, invoice_item,
       //    invoice totals, sale totals).
       const productRows: ReturnProduct[] = return_products.map((p) => ({
         quantity: p.quantity,
@@ -201,16 +269,36 @@ export class ReturnsService {
       }));
 
       const bulk = this.bulkInsertReturns(productRows, returnTransactionId);
-      await this.db.query(bulk.query, bulk.values);
+      await txn.query(bulk.query, bulk.values);
 
-      await this.db.query('COMMIT');
+      // Asiento de la devolucion: secundario (no tumba el reembolso).
+      await this.journalService.trySecondary(
+        txn,
+        `devolucion ${returnTransactionId}`,
+        () =>
+          this.journalService.generateReturnJournal(
+            {
+              tenantId: ctx.tenant_id,
+              returnId: returnTransactionId,
+              currencyId: ctx.currency_code === 'USD' ? 2 : 1,
+              netAmount: net,
+              taxAmount: tax,
+              receivableCredit: Math.min(balanceBefore, net + tax),
+              refundMethodId: refund_method ?? null,
+              entryDate: new Date(),
+            },
+            txn,
+          ),
+      );
+
+      await txn.commit();
       return {
         message: 'Reembolso parcial registrado correctamente',
         return_transaction_id: returnTransactionId,
         total_refund_amount: Number(totalRefund.toFixed(2)),
       };
     } catch (error) {
-      await this.db.query('ROLLBACK');
+      await txn.rollback();
       throw new InternalServerErrorException(
         error instanceof Error ? error.message : 'Error al registrar reembolso',
       );
@@ -222,29 +310,29 @@ export class ReturnsService {
    * record. Invoices are preserved with the is_refunded flag on the sale
    * serving as the authoritative cancelled indicator.
    */
-  async processFullRefund(saleId: string, description: string) {
-    const ctxResult = await this.db.query(returns.getSaleContext, [saleId]);
-    if (!ctxResult.rows.length) {
-      throw new NotFoundException(`Sale not found: ${saleId}`);
-    }
-    const ctx: SaleContextRow = ctxResult.rows[0];
+  async processFullRefund(
+    saleId: string,
+    description: string,
+    scopeTenantId: string | null,
+  ) {
+    const ctx = await this.loadSaleContext(saleId, scopeTenantId);
 
-    if (!ctx.digital_sale_invoice_id) {
+    if (!ctx.invoice_id) {
       throw new BadRequestException(
-        'La venta no tiene factura digital asociada — no se puede reembolsar',
+        'La venta no tiene factura asociada — no se puede reembolsar',
       );
     }
 
-    const electronicId =
-      ctx.has_electronic_invoice && ctx.electronic_sale_invoice_id
-        ? ctx.electronic_sale_invoice_id
-        : null;
+    // Reembolso completo: se revierte lo que queda facturado (la factura ya
+    // refleja devoluciones parciales previas).
+    const net = Number(ctx.digital_subtotal ?? ctx.subtotal_amount);
+    const tax = Number(ctx.digital_tax ?? ctx.tax_amount);
+    const balanceBefore = await this.receivableBalance(saleId);
 
-    await this.db.query('BEGIN');
+    const txn = await this.db.transaction();
     try {
-      const headerRes = await this.db.query(returns.newTransaction, [
-        ctx.digital_sale_invoice_id,
-        electronicId,
+      const headerRes = await txn.query(returns.newTransaction, [
+        ctx.invoice_id,
         ctx.tenant_customer_id ?? null,
         Number(ctx.total_amount),
         null,
@@ -256,15 +344,35 @@ export class ReturnsService {
       const returnTransactionId: string =
         headerRes.rows[0].return_transaction_id;
 
-      await this.db.query(returns.markSaleRefunded, [saleId]);
+      await txn.query(returns.markSaleRefunded, [saleId]);
 
-      await this.db.query('COMMIT');
+      await this.journalService.trySecondary(
+        txn,
+        `reembolso completo ${returnTransactionId}`,
+        () =>
+          this.journalService.generateReturnJournal(
+            {
+              tenantId: ctx.tenant_id,
+              returnId: returnTransactionId,
+              currencyId: ctx.currency_code === 'USD' ? 2 : 1,
+              netAmount: net,
+              taxAmount: tax,
+              receivableCredit: Math.min(balanceBefore, net + tax),
+              refundMethodId: null,
+              entryDate: new Date(),
+              description: `Reembolso completo de venta - ${saleId}`,
+            },
+            txn,
+          ),
+      );
+
+      await txn.commit();
       return {
         message: 'Reembolso completo registrado',
         return_transaction_id: returnTransactionId,
       };
     } catch (error) {
-      await this.db.query('ROLLBACK');
+      await txn.rollback();
       throw new InternalServerErrorException(
         error instanceof Error
           ? error.message
@@ -273,10 +381,15 @@ export class ReturnsService {
     }
   }
 
-  async getReturnDetail(returnTransactionId: string) {
-    const [headerResult, productsResult] = await Promise.all([
-      this.db.query(returns.getById, [returnTransactionId]),
-      this.db.query(returns.getProducts, [returnTransactionId]),
+  async getReturnDetail(
+    returnTransactionId: string,
+    scopeTenantId: string | null,
+  ) {
+    // Primero la cabecera acotada al tenant; los productos solo se leen si la
+    // devolucion es del tenant.
+    const headerResult = await this.db.query(returns.getById, [
+      returnTransactionId,
+      scopeTenantId,
     ]);
 
     if (!headerResult.rows.length) {
@@ -285,13 +398,20 @@ export class ReturnsService {
       );
     }
 
+    const productsResult = await this.db.query(returns.getProducts, [
+      returnTransactionId,
+    ]);
+
     return {
       transaction: headerResult.rows[0],
       products: productsResult.rows,
     };
   }
 
-  async findReturns(findReturnsDto: FindReturnsDto) {
+  async findReturns(
+    findReturnsDto: FindReturnsDto,
+    scopeTenantId: string | null,
+  ) {
     const { rows } = await this.db.query(returns.find, [
       findReturnsDto.invoice_id,
       findReturnsDto.tenant_customer_id,
@@ -299,6 +419,7 @@ export class ReturnsService {
       findReturnsDto.refund_method,
       findReturnsDto.date_from,
       findReturnsDto.date_to,
+      scopeTenantId,
     ]);
     return { results: rows };
   }

@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { TardinessService } from './tardiness.service';
 import {
@@ -6,17 +6,30 @@ import {
   getTardinessByBranchDoc,
   getTardinessByDateRangeDoc,
 } from '@/docs/contexts/hr/tardiness';
+import { AuthenticationGuard } from '@/common/guards/authentication.guard';
+import { Session } from '@/common/decorators/session.decorator';
+import { IUserSession } from '@/common/interfaces/user_session.interface';
+import { TenantScopeService } from '@/common/tenant/tenant-scope.service';
+import { RateLimitGuard } from '@/common/rate-limit/rate-limit.guard';
 
 @ApiTags('Tardiness')
 @Controller('tardiness')
+@UseGuards(AuthenticationGuard, RateLimitGuard)
 export class TardinessController {
-  constructor(private readonly tardinessService: TardinessService) {}
+  constructor(
+    private readonly tardinessService: TardinessService,
+    private readonly tenantScope: TenantScopeService,
+  ) {}
 
   @ApiOperation(getTardinessByEmployeeDoc.operation)
   @ApiResponse(getTardinessByEmployeeDoc.responses[200])
   @ApiResponse(getTardinessByEmployeeDoc.responses[401])
   @Get('employee/:employeeId')
-  async getTardinessByEmployee(@Param('employeeId') employeeId: string) {
+  async getTardinessByEmployee(
+    @Session() session: IUserSession,
+    @Param('employeeId') employeeId: string,
+  ) {
+    await this.tenantScope.assertOwns('employee', employeeId, session);
     return this.tardinessService.getTardinessByEmployee(employeeId);
   }
 
@@ -24,7 +37,11 @@ export class TardinessController {
   @ApiResponse(getTardinessByBranchDoc.responses[200])
   @ApiResponse(getTardinessByBranchDoc.responses[401])
   @Get('branch/:branchId')
-  async getTardinessByBranch(@Param('branchId') branchId: string) {
+  async getTardinessByBranch(
+    @Session() session: IUserSession,
+    @Param('branchId') branchId: string,
+  ) {
+    await this.tenantScope.assertOwns('branch', branchId, session);
     return this.tardinessService.getTardinessByBranch(branchId);
   }
 
@@ -33,10 +50,12 @@ export class TardinessController {
   @ApiResponse(getTardinessByDateRangeDoc.responses[401])
   @Get('period')
   async getTardinessByDateRange(
+    @Session() session: IUserSession,
     @Query('start') startDate: string,
     @Query('end') endDate: string,
     @Query('branchId') branchId: string,
   ) {
+    await this.tenantScope.assertOwns('branch', branchId, session);
     return this.tardinessService.getTardinessByDateRange(
       startDate,
       endDate,

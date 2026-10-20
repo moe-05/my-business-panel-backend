@@ -1,5 +1,5 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import Database from '@crane-technologies/database';
+import Database from '@resonance-components/datahandler';
 import { paginate } from '../utilities/paginator';
 export type { PaginationResult } from '../utilities/paginator';
 
@@ -10,6 +10,15 @@ export interface PaginateConfig {
   columns: string[];
   pkFields: string[];
   whereFields?: string[];
+  /** Columna sobre la que aplicar el filtro de rango de fechas
+   *  (?date_from=&date_to=), si el endpoint lo soporta. */
+  dateField?: string;
+  /**
+   * Columna de tenant de la tabla/subconsulta. Si se define, el resultado
+   * se filtra SIEMPRE por el tenant de la sesion (request.user): un id de
+   * recurso en la URL nunca basta para leer datos de otra empresa.
+   */
+  tenantField?: string;
 }
 
 export const PaginatedResult = createParamDecorator(
@@ -36,6 +45,18 @@ export const PaginatedResult = createParamDecorator(
           where[field] = value;
         }
       });
+    }
+    if (config.tenantField) {
+      const tenantId = request.user?.tenant_id;
+      if (!tenantId) throw new Error('Paginacion con tenantField sin sesion');
+      where[config.tenantField] = tenantId;
+    }
+    if (config.dateField) {
+      const dateFrom = request.query.date_from;
+      const dateTo = request.query.date_to;
+      if (dateFrom || dateTo) {
+        where[config.dateField] = { gte: dateFrom, lte: dateTo };
+      }
     }
 
     const result = await paginate({

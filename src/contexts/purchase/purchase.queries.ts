@@ -1,10 +1,11 @@
-import { createQueries } from '@crane-technologies/database';
+import { createQueries } from '@resonance-components/datahandler';
 
 const purchaseOrderListSelect = `
   SELECT
     po.purchase_order_id,
     po.purchase_order_date,
     po.expected_delivery_date,
+    po.payment_due_date,
     po.purchase_order_status_id,
     pos.status_name AS purchase_order_status_name,
     s.supplier_id,
@@ -127,7 +128,7 @@ export const purchaseQueryDefs = {
   purchase: {
     createPurchaseOrder: `
       SELECT purchase_schema.create_purchase_order(
-        $1, $2, $3, $4, $5, $6
+        $1, $2, $3, $4, $5, $6, $7
       ) AS purchase_order_id
     `,
 
@@ -158,6 +159,27 @@ export const purchaseQueryDefs = {
         ON b.branch_id = w.branch_id
       WHERE po.purchase_order_id = $1
       LIMIT 1
+    `,
+
+    getInvoiceAccess: `
+      SELECT
+        si.supplier_invoice_id,
+        si.purchase_order_id,
+        po.purchase_order_status_id,
+        b.tenant_id
+      FROM purchase_schema.supplier_invoice si
+      INNER JOIN purchase_schema.purchase_order po
+        ON po.purchase_order_id = si.purchase_order_id
+      INNER JOIN inventory_schema.warehouse w
+        ON w.warehouse_id = po.warehouse_id
+      INNER JOIN general_schema.branch b
+        ON b.branch_id = w.branch_id
+      WHERE si.supplier_invoice_id = $1
+      LIMIT 1
+    `,
+
+    updateSupplierInvoice: `
+      SELECT purchase_schema.update_supplier_invoice($1, $2, $3)
     `,
 
     updateStatus: `
@@ -225,6 +247,7 @@ export const purchaseQueryDefs = {
         po.purchase_order_id,
         po.purchase_order_date,
         po.expected_delivery_date,
+        po.payment_due_date,
         po.purchase_order_status_id,
         pos.status_name AS purchase_order_status_name,
         s.supplier_id,
@@ -362,6 +385,8 @@ export const purchaseQueryDefs = {
             SELECT
               gr.goods_receipt_id,
               gr.received_date,
+              gr.status,
+              gr.confirmed_at,
               gr.subtotal_amount,
               gr.tax_amount,
               gr.total_amount,
@@ -481,6 +506,80 @@ export const purchaseQueryDefs = {
     `,
   },
 
+  goodsReceipt: {
+    start: `
+      SELECT purchase_schema.start_goods_receipt($1) AS goods_receipt_id
+    `,
+
+    getAccess: `
+      SELECT
+        gr.goods_receipt_id,
+        gr.purchase_order_id,
+        gr.status,
+        b.tenant_id
+      FROM purchase_schema.goods_receipt gr
+      INNER JOIN purchase_schema.purchase_order po
+        ON po.purchase_order_id = gr.purchase_order_id
+      INNER JOIN inventory_schema.warehouse w
+        ON w.warehouse_id = po.warehouse_id
+      INNER JOIN general_schema.branch b
+        ON b.branch_id = w.branch_id
+      WHERE gr.goods_receipt_id = $1
+      LIMIT 1
+    `,
+
+    updateItems: `
+      SELECT purchase_schema.update_goods_receipt_items($1, $2, $3)
+    `,
+
+    confirm: `
+      SELECT purchase_schema.confirm_goods_receipt($1)
+    `,
+
+    cancel: `
+      SELECT purchase_schema.cancel_goods_receipt($1)
+    `,
+
+    getWithItems: `
+      SELECT
+        gr.goods_receipt_id,
+        gr.purchase_order_id,
+        gr.received_date,
+        gr.status,
+        gr.confirmed_at,
+        gr.subtotal_amount,
+        gr.tax_amount,
+        gr.total_amount,
+        gr.created_at,
+        gr.updated_at,
+        COALESCE((
+          SELECT json_agg(item_row ORDER BY item_row.created_at)
+          FROM (
+            SELECT
+              gri.goods_receipt_item_id,
+              gri.product_variant_id,
+              pv.sku,
+              pv.variant_name,
+              gri.quantity_received,
+              poi.quantity_ordered,
+              gri.created_at,
+              gri.updated_at
+            FROM purchase_schema.goods_receipt_item gri
+            JOIN general_schema.product_variant pv
+              ON pv.tenant_id = gri.tenant_id
+             AND pv.product_variant_id = gri.product_variant_id
+            LEFT JOIN purchase_schema.purchase_order_item poi
+              ON poi.purchase_order_id = gr.purchase_order_id
+             AND poi.product_variant_id = gri.product_variant_id
+            WHERE gri.goods_receipt_id = gr.goods_receipt_id
+          ) item_row
+        ), '[]'::json) AS items
+      FROM purchase_schema.goods_receipt gr
+      WHERE gr.goods_receipt_id = $1
+      LIMIT 1
+    `,
+  },
+
   suppliers: {
     create: `
       INSERT INTO purchase_schema.supplier (
@@ -567,13 +666,15 @@ export const purchaseQueryDefs = {
       INSERT INTO purchase_schema.purchase_order_payment
         (purchase_account_payable_id, amount_paid, payment_method_id, currency_id, payment_reference)
       VALUES
-        ($1, $2, $3, COALESCE($4, 1), $5)
+        ($1, $2, $3, COALESCE($4, 2), $5)
       RETURNING purchase_order_payment_id
     `,
 
     getPaymentAmountForJournal: `
       SELECT
         pop.amount_paid,
+        pop.currency_id,
+        pop.payment_method_id,
         b.tenant_id,
         po.purchase_order_id
       FROM purchase_schema.purchase_order_payment pop
@@ -732,6 +833,125 @@ export const purchaseQueryDefs = {
     `,
   },
 
+  disputes: {
+    create: `
+      INSERT INTO purchase_schema.purchase_dispute(
+        purchase_order_id,
+        supplier_invoice_id,
+        tenant_id,
+        dispute_type,
+        description
+      ) VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+    `,
+
+    getOrderAccessForDispute: `
+      SELECT
+        po.purchase_order_id,
+        b.tenant_id
+      FROM purchase_schema.purchase_order po
+      INNER JOIN inventory_schema.warehouse w
+        ON w.warehouse_id = po.warehouse_id
+      INNER JOIN general_schema.branch b
+        ON b.branch_id = w.branch_id
+      WHERE po.purchase_order_id = $1
+      LIMIT 1
+    `,
+
+    listByOrder: `
+      SELECT *
+      FROM purchase_schema.purchase_dispute
+      WHERE purchase_order_id = $1
+      ORDER BY created_at DESC
+    `,
+
+    listByTenant: `
+      SELECT *
+      FROM purchase_schema.purchase_dispute
+      WHERE tenant_id = $1
+      ORDER BY created_at DESC
+    `,
+
+    getAccessById: `
+      SELECT dispute_id, tenant_id, status
+      FROM purchase_schema.purchase_dispute
+      WHERE dispute_id = $1
+      LIMIT 1
+    `,
+
+    resolve: `
+      UPDATE purchase_schema.purchase_dispute
+      SET status = 'RESOLVED',
+          resolution_notes = $1,
+          resolved_at = CURRENT_TIMESTAMP,
+          notify_supplier_pending = FALSE,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE dispute_id = $2
+      RETURNING *
+    `,
+  },
+
+  supplierCredits: {
+    // Proveedor debe pertenecer al tenant que crea la nota -- validado en el
+    // service antes de insertar. Ver migrations/purchase/035.
+    getSupplierAccess: `
+      SELECT supplier_id, added_by AS tenant_id
+      FROM purchase_schema.supplier
+      WHERE supplier_id = $1
+      LIMIT 1
+    `,
+
+    create: `
+      INSERT INTO purchase_schema.supplier_credit(
+        tenant_id, supplier_id, source_note_id, original_amount, remaining_amount
+      ) VALUES ($1, $2, $3, $4, $4)
+      RETURNING *
+    `,
+
+    listBySupplier: `
+      SELECT *
+      FROM purchase_schema.supplier_credit
+      WHERE supplier_id = $1
+        AND tenant_id = $2
+        AND status = 'AVAILABLE'
+      ORDER BY created_at ASC
+    `,
+
+    getAccessById: `
+      SELECT supplier_credit_id, tenant_id, supplier_id, remaining_amount, status
+      FROM purchase_schema.supplier_credit
+      WHERE supplier_credit_id = $1
+      LIMIT 1
+    `,
+
+    // La aplicacion reutiliza purchase_order_payment (metodo 'supplier_credit')
+    // para que recalc_account_payable_on_payment() recalcule el balance sin
+    // duplicar esa logica -- ver payments.insertPayment.
+    recordApplication: `
+      INSERT INTO purchase_schema.supplier_credit_application(
+        supplier_credit_id, purchase_account_payable_id, purchase_order_payment_id,
+        amount_applied, applied_by
+      ) VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+    `,
+
+    decrementRemaining: `
+      UPDATE purchase_schema.supplier_credit
+      SET remaining_amount = remaining_amount - $2,
+          status = CASE WHEN remaining_amount - $2 <= 0 THEN 'APPLIED' ELSE 'AVAILABLE' END,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE supplier_credit_id = $1
+      RETURNING *
+    `,
+
+    getSupplierCreditPaymentMethodId: `
+      SELECT payment_method_id
+      FROM general_schema.payment_method
+      WHERE name = 'supplier_credit'
+      LIMIT 1
+    `,
+  },
+
   catalog: {
     getOrderStatuses: `
       SELECT
@@ -757,7 +977,7 @@ export const purchaseQueryDefs = {
         name,
         description
       FROM general_schema.payment_method
-      WHERE name <> 'loyalty_points'
+      WHERE name NOT IN ('loyalty_points', 'supplier_credit')
       ORDER BY payment_method_id ASC
     `,
 
@@ -771,27 +991,13 @@ export const purchaseQueryDefs = {
       ORDER BY currency_id ASC
     `,
 
+    // Tasa efectiva del tenant (base global + su diferencial), fuente unica
+    // de verdad -- ver general_schema.get_effective_exchange_rate. Antes
+    // leia exchange_rate directo, ignoraba el diferencial y hardcodeaba
+    // to_currency_id = 1.
     getLatestExchangeRate: `
-      SELECT
-        er.exchange_rate_id,
-        er.from_currency_id,
-        fc.currency_code AS from_currency_code,
-        fc.currency_name AS from_currency_name,
-        fc.symbol        AS from_currency_symbol,
-        er.to_currency_id,
-        tc.currency_code AS to_currency_code,
-        tc.currency_name AS to_currency_name,
-        tc.symbol        AS to_currency_symbol,
-        er.rate,
-        er.effective_date,
-        er.updated_at
-      FROM general_schema.exchange_rate er
-      JOIN general_schema.currency fc ON fc.currency_id = er.from_currency_id
-      JOIN general_schema.currency tc ON tc.currency_id = er.to_currency_id
-      WHERE er.from_currency_id = $1
-        AND er.to_currency_id   = 1
-      ORDER BY er.effective_date DESC
-      LIMIT 1
+      SELECT base_rate, delta, effective_rate, base_at, delta_at
+      FROM general_schema.get_effective_exchange_rate($1::uuid)
     `,
   },
 };

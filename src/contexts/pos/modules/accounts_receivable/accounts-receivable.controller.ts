@@ -5,20 +5,22 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthenticationGuard } from '@/common/guards/authentication.guard';
-import { RoleAuthorizationGuard } from '@/common/guards/role_authorization.guard';
-import { RequiredRole } from '@/common/decorators/role_metadata.decorator';
+import { LevelAuthorizationGuard } from '@/common/guards/level_authorization.guard';
+import { RequiredLevel } from '@/common/decorators/level_metadata.decorator';
 import { Session } from '@/common/decorators/session.decorator';
 import { IUserSession } from '@/common/interfaces/user_session.interface';
 import { AccountsReceivableService } from './accounts-receivable.service';
 import { CreateCollectionDto } from './dto/create-collection.dto';
 import { UpdateCollectionDto } from './dto/update-collection.dto';
+import { RateLimitGuard } from '@/common/rate-limit/rate-limit.guard';
 
 @ApiTags('Accounts Receivable')
-@UseGuards(AuthenticationGuard)
+@UseGuards(AuthenticationGuard, RateLimitGuard)
 @Controller('pos/receivables')
 export class AccountsReceivableController {
   constructor(
@@ -27,8 +29,16 @@ export class AccountsReceivableController {
 
   @ApiOperation({ summary: 'Listar cuentas por cobrar' })
   @Get()
-  findAll(@Session() session: IUserSession) {
-    return this.accountsReceivableService.getAccountsReceivable(session);
+  findAll(
+    @Session() session: IUserSession,
+    @Query('page') page = '1',
+    @Query('limit') limit = '50',
+  ) {
+    return this.accountsReceivableService.getAccountsReceivable(
+      session,
+      parseInt(page),
+      parseInt(limit),
+    );
   }
 
   @ApiOperation({ summary: 'Obtener catálogos para el módulo CxC' })
@@ -38,8 +48,8 @@ export class AccountsReceivableController {
   }
 
   @ApiOperation({ summary: 'Registrar cobro sobre una cuenta por cobrar' })
-  @UseGuards(RoleAuthorizationGuard)
-  @RequiredRole('admin', 'manager')
+  @UseGuards(LevelAuthorizationGuard)
+  @RequiredLevel(2)
   @Post('collection')
   registerCollection(
     @Body() dto: CreateCollectionDto,
@@ -49,8 +59,8 @@ export class AccountsReceivableController {
   }
 
   @ApiOperation({ summary: 'Actualizar cobro registrado' })
-  @UseGuards(RoleAuthorizationGuard)
-  @RequiredRole('admin', 'manager')
+  @UseGuards(LevelAuthorizationGuard)
+  @RequiredLevel(2)
   @Patch('collection/:id')
   updateCollection(
     @Param('id') id: string,

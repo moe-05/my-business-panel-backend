@@ -31,6 +31,19 @@ export interface ExpenseFromDb {
   updated_at: string;
 }
 
+export interface ExpenseHistoryRow extends ExpenseFromDb {
+  branch_name: string;
+  is_fixed: boolean;
+  created_by_email: string | null;
+}
+
+export interface PaginatedExpenses {
+  results: ExpenseHistoryRow[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export interface FiscalPeriodFromDb {
   period_id: string;
   tenant_id: string;
@@ -46,21 +59,36 @@ export interface FiscalPeriodFromDb {
 // ANALYTICS
 // -------------------------------------------------------
 
-export interface ExpenseFixedVsVariableAnalytic {
+// Analiticos vigentes (handlers analytics*): montos en USD y VES con la tasa
+// de la fecha de cada gasto o venta (FNZ-X-02).
+export interface FixedVsVariableAnalytic {
   is_fixed: boolean;
-  expense_type: string; // 'Fijo' | 'Variable'
-  total_amount: string;
+  expense_type: string;
+  total_usd: string;
+  total_ves: string;
 }
 
-export interface ExpenseCategoryAnalytic {
+export interface CategoryAnalytic {
   category_id: string;
   category_name: string;
   account_code: string;
-  total_amount: string;
+  total_usd: string;
+  total_ves: string;
 }
 
-export interface SalesVsExpensesPoint {
+export interface SalesVsExpensesAnalytic {
   period: string;
-  total_sales: string;
-  total_expenses: string;
+  total_sales_usd: string;
+  total_sales_ves: string;
+  total_expenses_usd: string;
+  total_expenses_ves: string;
+}
+
+export interface PayrollAnalytic {
+  paysheet_count: number;
+  /** Costo de nomina: total devengado (o el neto si el devengado quedo en 0). */
+  gross_total_usd: string;
+  gross_total_ves: string;
+  net_total_usd: string;
+  net_total_ves: string;
 }

@@ -1,6 +1,6 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
-import Database from '@crane-technologies/database';
+import Database from '@resonance-components/datahandler';
 import { hrQueries } from '@hr/hr.queries';
 import type {
   CreateDutiesTypeDto,
@@ -18,9 +18,9 @@ export class DutiesTypeService {
     return result.rows;
   }
 
-  async create(data: CreateDutiesTypeDto) {
+  async create(tenantId: string, data: CreateDutiesTypeDto) {
     const result = await this.db.query(dutiesType.create, [
-      data.tenant_id,
+      tenantId,
       data.name,
       data.description ?? null,
     ]);

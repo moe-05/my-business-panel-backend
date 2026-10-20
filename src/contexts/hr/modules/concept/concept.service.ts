@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
-import Database from '@crane-technologies/database';
+import Database from '@resonance-components/datahandler';
 import { hrQueries } from '@hr/hr.queries';
 import { PayrollConceptRow } from '../payroll/interface/payroll-db.interface';
 import { NewConceptDto } from './dto/newConcept.dto';
@@ -22,9 +22,13 @@ export class ConceptService {
     if (existing.rows.length === 0) throw new Error('Concept not found');
 
     const result = await this.db.query(concept.reactivate, [conceptId]);
-    if (result.rows.length === 0) throw new Error('Error reactivating concept.');
+    if (result.rows.length === 0)
+      throw new Error('Error reactivating concept.');
 
-    return { message: 'Concepto reactivado correctamente', concept: result.rows[0] };
+    return {
+      message: 'Concepto reactivado correctamente',
+      concept: result.rows[0],
+    };
   }
 
   async createNewConcept(data: NewConceptDto) {

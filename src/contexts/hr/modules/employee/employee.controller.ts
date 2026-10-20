@@ -13,7 +13,13 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { EmployeeService } from './employee.service';
 import { NewEmployeeDto } from './dto/newEmployeeDto.dto';
 import { UpdateEmployeeDto } from './dto/updateEmployee.dto';
+import {
+  TerminateEmployeeDto,
+  UpdateTerminationDto,
+} from './dto/terminateEmployee.dto';
 import { AuthenticationGuard } from '@/common/guards/authentication.guard';
+import { Session } from '@/common/decorators/session.decorator';
+import { IUserSession } from '@/common/interfaces/user_session.interface';
 import {
   getEmployeesByTenantDoc,
   getEmployeeByIdDoc,
@@ -22,15 +28,25 @@ import {
   deactivateEmployeeDoc,
   deleteEmployeeDoc,
 } from '@/docs/contexts/hr/employee';
+import { TenantScopeService } from '@/common/tenant/tenant-scope.service';
+import { RateLimitGuard } from '@/common/rate-limit/rate-limit.guard';
+import { RateLimit } from '@/common/rate-limit/rate-limit.decorator';
 
 @ApiTags('Employee')
 @Controller('employee')
-@UseGuards(AuthenticationGuard)
+@UseGuards(AuthenticationGuard, RateLimitGuard)
 export class EmployeeController {
-  constructor(private readonly employeeService: EmployeeService) {}
+  constructor(
+    private readonly employeeService: EmployeeService,
+    private readonly tenantScope: TenantScopeService,
+  ) {}
 
   @Get('user/:user_id')
-  async getEmployeeByUserId(@Param('user_id') user_id: string) {
+  async getEmployeeByUserId(
+    @Session() session: IUserSession,
+    @Param('user_id') user_id: string,
+  ) {
+    await this.tenantScope.assertOwns('user', user_id, session);
     return this.employeeService.getEmployeeByUserId(user_id);
   }
 
@@ -40,11 +56,13 @@ export class EmployeeController {
   // same tenant.
   @Get('availability')
   async checkAvailability(
+    @Session() session: IUserSession,
     @Query('field') field: string,
     @Query('value') value: string,
     @Query('tenant_id') tenantId?: string,
     @Query('exclude_id') excludeId?: string,
   ) {
+    tenantId = this.tenantScope.resolveRequestedTenant(session, tenantId);
     return this.employeeService.checkAvailability(
       field,
       value,
@@ -57,7 +75,11 @@ export class EmployeeController {
   @ApiResponse(getEmployeesByTenantDoc.responses[200])
   @ApiResponse(getEmployeesByTenantDoc.responses[401])
   @Get(':tenant_id')
-  async getEmployeesByTenant(@Param('tenant_id') tenant_id: string) {
+  async getEmployeesByTenant(
+    @Session() session: IUserSession,
+    @Param('tenant_id') tenant_id: string,
+  ) {
+    tenant_id = this.tenantScope.resolveRequestedTenant(session, tenant_id);
     return this.employeeService.getEmployeesByTenant(tenant_id);
   }
 
@@ -66,7 +88,11 @@ export class EmployeeController {
   @ApiResponse(getEmployeeByIdDoc.responses[401])
   @ApiResponse(getEmployeeByIdDoc.responses[404])
   @Get('detail/:id')
-  async getEmployeeById(@Param('id') id: string) {
+  async getEmployeeById(
+    @Session() session: IUserSession,
+    @Param('id') id: string,
+  ) {
+    await this.tenantScope.assertOwns('employee', id, session);
     return this.employeeService.getEmployeeById(id);
   }
 
@@ -75,7 +101,26 @@ export class EmployeeController {
   @ApiResponse(createEmployeeDoc.responses[400])
   @ApiResponse(createEmployeeDoc.responses[401])
   @Post()
-  async createEmployee(@Body() data: NewEmployeeDto) {
+  async createEmployee(
+    @Session() session: IUserSession,
+    @Body() data: NewEmployeeDto,
+  ) {
+    data.tenant_id = this.tenantScope.resolveRequestedTenant(
+      session,
+      data.tenant_id,
+    );
+    await this.tenantScope.assertOwnedByTenant(
+      'branch',
+      data.branch_id,
+      data.tenant_id,
+    );
+    if (data.contractData?.turn_id) {
+      await this.tenantScope.assertOwnedByTenant(
+        'turn',
+        data.contractData.turn_id,
+        data.tenant_id,
+      );
+    }
     return this.employeeService.createEmployeeWithContract(data);
   }
 
@@ -86,10 +131,36 @@ export class EmployeeController {
   @ApiResponse(updateEmployeeDoc.responses[404])
   @Patch(':id')
   async updateEmployee(
+    @Session() session: IUserSession,
     @Param('id') id: string,
     @Body() data: UpdateEmployeeDto,
   ) {
+    await this.tenantScope.assertOwns('employee', id, session);
+    // un empleado no cambia de empresa
+    delete data.tenant_id;
+    if (data.branch_id)
+      await this.tenantScope.assertOwns('branch', data.branch_id, session);
     return this.employeeService.updateEmployeeInfo(id, data);
+  }
+
+  @Post(':id/terminate')
+  async terminateEmployee(
+    @Param('id') id: string,
+    @Body() data: TerminateEmployeeDto,
+    @Session() user: IUserSession,
+  ) {
+    await this.tenantScope.assertOwns('employee', id, user);
+    return this.employeeService.terminate(id, user.tenant_id, data);
+  }
+
+  @Patch(':id/termination')
+  async updateTermination(
+    @Param('id') id: string,
+    @Body() data: UpdateTerminationDto,
+    @Session() user: IUserSession,
+  ) {
+    await this.tenantScope.assertOwns('employee', id, user);
+    return this.employeeService.updateTermination(id, user.tenant_id, data);
   }
 
   @ApiOperation(deactivateEmployeeDoc.operation)
@@ -97,7 +168,11 @@ export class EmployeeController {
   @ApiResponse(deactivateEmployeeDoc.responses[401])
   @ApiResponse(deactivateEmployeeDoc.responses[404])
   @Patch('deactivate/:id')
-  async deactivateEmployee(@Param('id') id: string) {
+  async deactivateEmployee(
+    @Session() session: IUserSession,
+    @Param('id') id: string,
+  ) {
+    await this.tenantScope.assertOwns('employee', id, session);
     return this.employeeService.deactivateEmployee(id);
   }
 
@@ -106,7 +181,12 @@ export class EmployeeController {
   @ApiResponse(deleteEmployeeDoc.responses[401])
   @ApiResponse(deleteEmployeeDoc.responses[404])
   @Delete(':id')
-  async deleteEmployee(@Param('id') id: string) {
+  @RateLimit('sensitive')
+  async deleteEmployee(
+    @Session() session: IUserSession,
+    @Param('id') id: string,
+  ) {
+    await this.tenantScope.assertOwns('employee', id, session);
     return this.employeeService.deleteEmployee(id);
   }
 }

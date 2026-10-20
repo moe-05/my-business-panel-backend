@@ -17,9 +17,12 @@ export class NewSingleSaleDto {
   @IsUUID()
   branch_id!: string;
 
-  @IsOptional()
+  @IsNotEmpty({
+    message:
+      'La venta requiere un cliente registrado (venta anonima no permitida)',
+  })
   @IsUUID()
-  tenant_customer_id?: string | null;
+  tenant_customer_id!: string;
 
   @IsOptional()
   @IsUUID()
@@ -52,10 +55,6 @@ export class NewSingleSaleDto {
 
   @IsBoolean()
   is_completed!: boolean;
-
-  @IsOptional()
-  @IsBoolean()
-  has_electronic_invoice?: boolean;
 }
 
 export class FullSaleDto {
@@ -67,13 +66,15 @@ export class FullSaleDto {
   @IsNumber()
   currency_id!: number;
 
-  @IsNotEmpty()
-  @IsUUID()
-  tenant_id!: string;
+  // El tenant NO viaja en el body: se toma de la sesion (SaleService.createFullSale).
+  // Un tenant_id enviado por el cliente lo descarta el ValidationPipe.
 
-  @IsOptional()
+  @IsNotEmpty({
+    message:
+      'La venta requiere un cliente registrado (venta anonima no permitida)',
+  })
   @IsUUID()
-  tenant_customer_id?: string | null;
+  tenant_customer_id!: string;
 
   @IsOptional()
   @IsUUID()
@@ -106,10 +107,6 @@ export class FullSaleDto {
   @IsNotEmpty()
   @IsArray()
   items!: Item[];
-
-  @IsOptional()
-  @IsBoolean()
-  has_electronic_invoice?: boolean;
 
   @IsOptional()
   @IsUUID()

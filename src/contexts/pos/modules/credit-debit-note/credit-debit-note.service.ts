@@ -1,0 +1,272 @@
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { DATABASE } from '@/contexts/general/modules/db/db.provider';
+import Database from '@resonance-components/datahandler';
+import Decimal from 'decimal.js';
+import { AccountingJournalService } from '@/contexts/finances/modules/accounting/accounting-journal.service';
+import { posQueries } from '@pos/pos.queries';
+import { purchaseQueries } from '@purchase/purchase.queries';
+import {
+  CreateCreditDebitNoteDto,
+  VoidCreditDebitNoteDto,
+} from './dto/credit-debit-note.dto';
+import {
+  CreditDebitNote,
+  InvoiceContextForNote,
+} from './interface/credit-debit-note.interface';
+
+const { creditDebitNote } = posQueries;
+const { supplierCredits, catalog } = purchaseQueries;
+
+/**
+ * Notas de credito/debito sobre facturas de venta (MBP_Cambios_CR_a_Venezuela.md,
+ * seccion 5 -- POS). La factura original nunca se edita ni anula; la nota es
+ * un registro de ajuste aparte, auditable. Si la venta tiene cuenta por
+ * cobrar abierta, un trigger de DB (apply_credit_debit_note_to_ar,
+ * migrations/pos/032) refleja el ajuste en lo que el cliente aun debe --
+ * este service no toca account_receivable directamente.
+ */
+@Injectable()
+export class CreditDebitNoteService {
+  constructor(
+    @Inject(DATABASE) private readonly db: Database,
+    private readonly journalService: AccountingJournalService,
+  ) {}
+
+  async create(
+    tenantId: string,
+    userId: string,
+    dto: CreateCreditDebitNoteDto,
+  ): Promise<CreditDebitNote> {
+    const ctxRes = await this.db.query(creditDebitNote.getInvoiceContext, [
+      dto.invoice_id,
+    ]);
+    const ctx: InvoiceContextForNote | undefined = ctxRes.rows[0];
+
+    if (!ctx || ctx.tenant_id !== tenantId) {
+      throw new NotFoundException(`Factura ${dto.invoice_id} no encontrada.`);
+    }
+
+    if (dto.note_type === 'credit') {
+      const sumsRes = await this.db.query(creditDebitNote.sumActiveByInvoice, [
+        dto.invoice_id,
+      ]);
+      const sums = sumsRes.rows[0] as {
+        total_credit: string;
+        total_debit: string;
+      };
+
+      // Saldo creditable: lo facturado, menos creditos ya aplicados, mas
+      // debitos ya aplicados (un debito sube el techo -- son cargos
+      // adicionales que tambien podrian acreditarse despues).
+      const creditableBalance = new Decimal(ctx.total_amount)
+        .minus(sums.total_credit)
+        .plus(sums.total_debit);
+
+      if (new Decimal(dto.amount).greaterThan(creditableBalance.plus(0.01))) {
+        throw new BadRequestException(
+          `El monto del credito (${dto.amount}) excede el saldo facturado disponible ` +
+            `(${creditableBalance.toFixed(2)}). Revise las notas ya aplicadas a esta factura.`,
+        );
+      }
+    }
+
+    // El credito de proveedor vive en purchase_schema, cuya moneda base es
+    // USD (ver utils/purchase.ts BASE_CURRENCY en el frontend) -- pero
+    // credit_debit_note.amount se captura en bolivares, igual que el resto
+    // de pos_schema (moneda base historica). Sin convertir aqui, el credito
+    // quedaria mezclando Bs. con el balance en USD de la cuenta por pagar.
+    let supplierCreditUsdAmount: string | null = null;
+    if (dto.reason_kind === 'mercancia_danada' && dto.note_type === 'credit') {
+      const supplierAccessRes = await this.db.query(
+        supplierCredits.getSupplierAccess,
+        [dto.supplier_id],
+      );
+      const supplierAccess = supplierAccessRes.rows[0] as
+        | { supplier_id: string; tenant_id: string }
+        | undefined;
+
+      if (!supplierAccess || supplierAccess.tenant_id !== tenantId) {
+        throw new NotFoundException(
+          `Proveedor ${dto.supplier_id} no encontrado.`,
+        );
+      }
+
+      const rateRes = await this.db.query(catalog.getLatestExchangeRate, [
+        tenantId,
+      ]);
+      const effectiveRate = rateRes.rows[0]?.effective_rate;
+      if (!effectiveRate || Number(effectiveRate) <= 0) {
+        throw new BadRequestException(
+          'No hay tasa de cambio USD -> Bs. configurada para el tenant; no se puede calcular el credito de proveedor en dolares.',
+        );
+      }
+      supplierCreditUsdAmount = new Decimal(dto.amount)
+        .div(effectiveRate)
+        .toFixed(2);
+    }
+
+    // FNZ-X-04: neto / IVA de la nota y lo que el cliente aun debe, leidos
+    // antes de insertar (el trigger ajusta la CxC al insertar la nota).
+    const { rows: jRows } = await this.db.query(
+      creditDebitNote.getJournalContext,
+      [dto.invoice_id],
+    );
+    const jctx = jRows[0] as
+      | {
+          subtotal_amount: number;
+          total_amount: number;
+          currency_id: number;
+          receivable_balance: number | null;
+        }
+      | undefined;
+    const noteCurrencyId = Number(
+      dto.currency_id ?? jctx?.currency_id ?? 1,
+    );
+    const gross = new Decimal(dto.amount);
+    // El monto de la nota incluye IVA en la misma proporcion que su factura.
+    const net =
+      jctx && jctx.total_amount > 0
+        ? gross.mul(jctx.subtotal_amount).div(jctx.total_amount)
+        : gross;
+    const tax = gross.minus(net);
+    // La CxC solo se compara con la nota si estan en la misma moneda.
+    const receivableCredit =
+      jctx?.receivable_balance != null &&
+      noteCurrencyId === Number(jctx.currency_id)
+        ? Math.min(Number(jctx.receivable_balance), gross.toNumber())
+        : 0;
+
+    const txn = await this.db.transaction();
+    try {
+      const result = await txn.query(creditDebitNote.create, [
+        tenantId,
+        dto.invoice_id,
+        dto.note_type,
+        dto.reason_kind,
+        dto.description ?? null,
+        dto.amount,
+        dto.currency_id ?? null,
+        userId,
+      ]);
+      const note = result.rows[0] as CreditDebitNote;
+
+      // Vinculo con Compras (MBP_Cambios_CR_a_Venezuela.md, seccion 5): el
+      // monto de una nota de credito por mercancia danada queda disponible
+      // como credito de proveedor, aplicable en la proxima orden de compra.
+      if (supplierCreditUsdAmount !== null) {
+        await txn.query(supplierCredits.create, [
+          tenantId,
+          dto.supplier_id,
+          note.note_id,
+          supplierCreditUsdAmount,
+        ]);
+      }
+
+      // Asiento de la nota: secundario (no tumba la nota).
+      await this.journalService.trySecondary(
+        txn,
+        `nota ${note.note_id}`,
+        () =>
+          this.journalService.generateNoteJournal(
+            {
+              tenantId,
+              noteId: note.note_id,
+              noteType: dto.note_type,
+              currencyId: noteCurrencyId,
+              netAmount: net.toDecimalPlaces(2).toNumber(),
+              taxAmount: tax.toDecimalPlaces(2).toNumber(),
+              receivableCredit,
+              entryDate: new Date(),
+            },
+            txn,
+          ),
+      );
+
+      await txn.commit();
+      return note;
+    } catch (error) {
+      await txn.rollback();
+      throw error;
+    }
+  }
+
+  async listByInvoice(
+    tenantId: string,
+    invoiceId: string,
+  ): Promise<CreditDebitNote[]> {
+    const ctxRes = await this.db.query(creditDebitNote.getInvoiceContext, [
+      invoiceId,
+    ]);
+    const ctx: InvoiceContextForNote | undefined = ctxRes.rows[0];
+    if (!ctx || ctx.tenant_id !== tenantId) {
+      throw new NotFoundException(`Factura ${invoiceId} no encontrada.`);
+    }
+
+    const result = await this.db.query(creditDebitNote.listByInvoice, [
+      invoiceId,
+    ]);
+    return result.rows;
+  }
+
+  async listByTenant(tenantId: string) {
+    const result = await this.db.query(creditDebitNote.listByTenant, [
+      tenantId,
+    ]);
+    return result.rows;
+  }
+
+  async voidNote(
+    tenantId: string,
+    noteId: string,
+    _dto: VoidCreditDebitNoteDto,
+  ): Promise<CreditDebitNote> {
+    const existing = await this.db.query(creditDebitNote.getById, [noteId]);
+    const row = existing.rows[0] as
+      | { note_id: string; tenant_id: string; is_voided: boolean }
+      | undefined;
+
+    if (!row || row.tenant_id !== tenantId) {
+      throw new NotFoundException(`Nota ${noteId} no encontrada.`);
+    }
+    if (row.is_voided) {
+      throw new BadRequestException('Esta nota ya esta anulada.');
+    }
+
+    const txn = await this.db.transaction();
+    try {
+      const result = await txn.query(creditDebitNote.void, [noteId]);
+      // Anular la nota revierte su asiento (si lo tiene).
+      await this.journalService.trySecondary(
+        txn,
+        `anulacion nota ${noteId}`,
+        async () => {
+          const when = new Date();
+          const desc = `Anulacion de nota - ${noteId}`;
+          // La nota es de credito o de debito: se revierte el asiento que exista.
+          for (const source of ['CREDIT_NOTE', 'DEBIT_NOTE']) {
+            const id = await this.journalService.reverseEntryBySource(
+              tenantId,
+              source,
+              noteId,
+              when,
+              desc,
+              txn,
+            );
+            if (id) return id;
+          }
+          return null;
+        },
+      );
+      await txn.commit();
+      return result.rows[0];
+    } catch (error) {
+      await txn.rollback();
+      throw error;
+    }
+  }
+}

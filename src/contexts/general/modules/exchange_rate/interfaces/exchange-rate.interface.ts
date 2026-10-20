@@ -1,19 +1,35 @@
-export interface ExchangeRate {
-  exchange_rate_id: string;
+/**
+ * Tasa vigente aplicable a un tenant. Con auto_update: base global + su
+ * diferencial. Sin auto_update: su ultima tasa manual (manual_rate).
+ */
+export interface EffectiveExchangeRate {
+  base_rate: string | null;
+  delta: string;
+  effective_rate: string | null;
+  base_at: string | null;
+  delta_at: string | null;
+  auto_update: boolean;
+  manual_rate: string | null;
+  manual_at: string | null;
   from_currency_id: number;
   to_currency_id: number;
-  rate: string | number;
-  effective_date: string;
-  source: string | null;
-  created_at: string;
-  updated_at: string;
 }
 
-export interface ExchangeRateWithCurrencies extends ExchangeRate {
-  from_currency_code: string;
-  from_currency_name?: string;
-  from_currency_symbol: string;
-  to_currency_code: string;
-  to_currency_name?: string;
-  to_currency_symbol: string;
+/** Fila del historial: un cambio de tasa base o de diferencial. */
+export interface ExchangeRateLedgerEntry {
+  tenant_id: string;
+  effective_at: string;
+  change_kind: 'base' | 'delta';
+  source: string | null;
+  base_rate: string;
+  delta: string;
+  effective_rate: string;
+  created_at: string;
+}
+
+/** Respuesta de https://ve.dolarapi.com/v1/dolares/oficial (tasa BCV). */
+export interface DolarApiOficialResponse {
+  fuente: string;
+  promedio: number;
+  fechaActualizacion: string;
 }

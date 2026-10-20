@@ -1,18 +1,16 @@
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
-import Database from '@crane-technologies/database';
+import Database from '@resonance-components/datahandler';
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  ActiveDeductionRow,
   EmployeePayrollData,
-  HistoricalEarnings,
-  // Holidays,
-  HoursWorked,
   Incapacities,
+  OvertimeSummary,
   PayrollConceptRow,
-  YearlySalary,
 } from '../interface/payroll-db.interface';
 import { hrQueries } from '@hr/hr.queries';
 
-const { payroll } = hrQueries;
+const { payroll, overtimeRecord } = hrQueries;
 
 @Injectable()
 export class PayrollRepository {
@@ -35,42 +33,18 @@ export class PayrollRepository {
     return concepts.rows;
   }
 
-  async getHoursWorked(
+  /** Horas con recargo del periodo por empleado/tipo (Arts. 117, 118, 120). */
+  async getOvertimeSummary(
     branchId: string,
     periodStart: string,
     periodEnd: string,
-  ): Promise<HoursWorked[]> {
-    const res = await this.db.query(payroll.getHoursWorked, [
+  ): Promise<OvertimeSummary[]> {
+    const res = await this.db.query(overtimeRecord.sumWeightedByBranchPeriod, [
       branchId,
       periodStart,
       periodEnd,
     ]);
     return res.rows;
-  }
-
-  async getHistoricalEarnings(branchId: string): Promise<HistoricalEarnings[]> {
-    const res = await this.db.query(payroll.getHistorycalPayrolls, [branchId]);
-
-    return res.rows;
-  }
-
-  async getYearlySalary(branchId: string): Promise<YearlySalary[]> {
-    const res = await this.db.query(payroll.getAguinaldos, [branchId]);
-    return res.rows;
-  }
-
-  async getHolidays() {
-    const res = await this.db.query(payroll.getHolidays);
-
-    if (res.rows.length === 0) return [];
-
-    return res.rows.map((h) => {
-      const dateObj =
-        h.holiday_date instanceof Date
-          ? h.holiday_date
-          : new Date(h.holiday_date);
-      return dateObj.toISOString().split('T')[0];
-    });
   }
 
   async getIncapacities(
@@ -97,6 +71,16 @@ export class PayrollRepository {
           ? r.period_end.toISOString().split('T')[0]
           : String(r.period_end).split('T')[0],
     }));
+  }
+
+  /** Deducciones individuales activas de la sucursal (Arts. 152, 154, 412, 413). */
+  async getActiveDeductionsForBranch(
+    branchId: string,
+  ): Promise<ActiveDeductionRow[]> {
+    const res = await this.db.query(payroll.getActiveDeductionsForBranch, [
+      branchId,
+    ]);
+    return res.rows;
   }
 
   async getSuspentionInPeriod(periodStart: string, periodEnd: string) {

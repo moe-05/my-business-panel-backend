@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import Database from '@crane-technologies/database';
+import Database from '@resonance-components/datahandler';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
 import { Warehouse } from './interfaces/warehouse.interface';
 import { CreateWarehouseDto } from './dto/create_warehouse.dto';
@@ -125,6 +125,7 @@ export class WarehouseService {
     tenant_id: string,
     search?: string,
     group_id?: string,
+    include_catalog?: boolean,
   ): Promise<InventoryItem[]> {
     const tenant = this.state.getTenant(tenant_id);
     if (!tenant)
@@ -141,7 +142,13 @@ export class WarehouseService {
 
     const { rows } = await this.db.query(
       inventoryQueries.listInventoryByWarehouse,
-      [warehouse_id, tenant_id, search ?? null, group_id ?? null],
+      [
+        warehouse_id,
+        tenant_id,
+        search ?? null,
+        group_id ?? null,
+        include_catalog ?? false,
+      ],
     );
     return rows as InventoryItem[];
   }

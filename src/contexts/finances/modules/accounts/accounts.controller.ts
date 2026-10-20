@@ -2,14 +2,28 @@ import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AccountsService } from './accounts.service';
 import { AuthenticationGuard } from '@/common/guards/authentication.guard';
+import { RoleAuthorizationGuard } from '@/common/guards/role_authorization.guard';
+import { RequiredRole } from '@/common/decorators/role_metadata.decorator';
+import { FINANCE_READ_ROLES } from '@/contexts/finances/finances.roles';
 import { Session } from '@/common/decorators/session.decorator';
 import { IUserSession } from '@/common/interfaces/user_session.interface';
+import { TenantScopeService } from '@/common/tenant/tenant-scope.service';
+import {
+  AccountListQueryDto,
+  AccountsOverviewQueryDto,
+} from './dto/accounts-query.dto';
+import { RateLimitGuard } from '@/common/rate-limit/rate-limit.guard';
+import { RateLimit } from '@/common/rate-limit/rate-limit.decorator';
 
 @ApiTags('Finances - Accounts')
-@UseGuards(AuthenticationGuard)
+@UseGuards(AuthenticationGuard, RateLimitGuard, RoleAuthorizationGuard)
+@RequiredRole(...FINANCE_READ_ROLES)
 @Controller('finances/accounts')
 export class AccountsController {
-  constructor(private readonly accountsService: AccountsService) {}
+  constructor(
+    private readonly accountsService: AccountsService,
+    private readonly tenantScope: TenantScopeService,
+  ) {}
 
   @ApiOperation({
     summary: 'Resumen consolidado de cuentas por pagar y por cobrar',
@@ -17,38 +31,44 @@ export class AccountsController {
   @ApiResponse({ status: 200, description: 'Resumen de cuentas obtenido' })
   @ApiResponse({ status: 401, description: 'No autenticado' })
   @Get()
-  getAccountsOverview(@Session() session: IUserSession) {
-    return this.accountsService.getAccountsOverview(session);
+  @RateLimit('report')
+  getAccountsOverview(
+    @Session() session: IUserSession,
+    @Query() query: AccountsOverviewQueryDto,
+  ) {
+    const tenantId = this.tenantScope.resolveRequestedTenant(
+      session,
+      query.tenantId,
+    );
+    return this.accountsService.getAccountsOverview(tenantId, query.branchId);
   }
 
   @ApiOperation({ summary: 'Lista filtrada de cuentas por pagar' })
   @ApiResponse({ status: 200, description: 'Lista obtenida' })
   @Get('payables')
   getPayablesList(
-    @Query('status') status?: string,
-    @Query('sort_by') sort_by?: string,
-    @Query('sort_dir') sort_dir?: string,
-    @Session() session?: IUserSession,
+    @Session() session: IUserSession,
+    @Query() query: AccountListQueryDto,
   ) {
-    return this.accountsService.getPayablesList(
-      { status, sort_by, sort_dir },
-      session!,
+    const tenantId = this.tenantScope.resolveRequestedTenant(
+      session,
+      query.tenantId,
     );
+    return this.accountsService.getPayablesList(query, tenantId);
   }
 
   @ApiOperation({ summary: 'Lista filtrada de cuentas por cobrar' })
   @ApiResponse({ status: 200, description: 'Lista obtenida' })
   @Get('receivables')
   getReceivablesList(
-    @Query('status') status?: string,
-    @Query('sort_by') sort_by?: string,
-    @Query('sort_dir') sort_dir?: string,
-    @Session() session?: IUserSession,
+    @Session() session: IUserSession,
+    @Query() query: AccountListQueryDto,
   ) {
-    return this.accountsService.getReceivablesList(
-      { status, sort_by, sort_dir },
-      session!,
+    const tenantId = this.tenantScope.resolveRequestedTenant(
+      session,
+      query.tenantId,
     );
+    return this.accountsService.getReceivablesList(query, tenantId);
   }
 
   @ApiOperation({ summary: 'Pagos realizados de una cuenta por pagar' })

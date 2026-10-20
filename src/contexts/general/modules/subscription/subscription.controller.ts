@@ -6,7 +6,14 @@ import {
   RawBodyRequest,
   Req,
   Res,
+  UseGuards,
 } from '@nestjs/common';
+import { AuthenticationGuard } from '@/common/guards/authentication.guard';
+import { RoleAuthorizationGuard } from '@/common/guards/role_authorization.guard';
+import { RequiredRole } from '@/common/decorators/role_metadata.decorator';
+import { Session } from '@/common/decorators/session.decorator';
+import { IUserSession } from '@/common/interfaces/user_session.interface';
+import { TenantScopeService } from '@/common/tenant/tenant-scope.service';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SubscriptionService } from './subscription.service';
 import { NewSubscriptionDto } from './dto/newSubscription.dto';
@@ -15,18 +22,36 @@ import {
   createSubscriptionDoc,
   handleWebhookDoc,
 } from '@/docs/contexts/general/subscription';
+import { RateLimitGuard } from '@/common/rate-limit/rate-limit.guard';
+import { RateLimit } from '@/common/rate-limit/rate-limit.decorator';
 
 @ApiTags('Subscription')
 @Controller('subscription')
 export class SubscriptionController {
-  constructor(private readonly subscriptionService: SubscriptionService) {}
+  constructor(
+    private readonly subscriptionService: SubscriptionService,
+    private readonly tenantScope: TenantScopeService,
+  ) {}
 
   @ApiOperation(createSubscriptionDoc.operation)
   @ApiResponse(createSubscriptionDoc.responses[201])
   @ApiResponse(createSubscriptionDoc.responses[400])
   @ApiResponse(createSubscriptionDoc.responses[401])
+  // Cobra al cliente de Stripe del tenant: solo admin de ese tenant (o el
+  // superusuario de plataforma). El webhook de abajo es publico a proposito
+  // (se autentica con la firma de Stripe).
+  @UseGuards(AuthenticationGuard, RateLimitGuard, RoleAuthorizationGuard)
+  @RequiredRole('superuser', 'admin')
   @Post('create')
-  async createSubscription(@Body() req: NewSubscriptionDto) {
+  @RateLimit('sensitive')
+  async createSubscription(
+    @Session() session: IUserSession,
+    @Body() req: NewSubscriptionDto,
+  ) {
+    req.tenant_id = this.tenantScope.resolveRequestedTenant(
+      session,
+      req.tenant_id,
+    );
     return this.subscriptionService.createSubscription(req);
   }
 
@@ -34,6 +59,8 @@ export class SubscriptionController {
   @ApiResponse(handleWebhookDoc.responses[200])
   @ApiResponse(handleWebhookDoc.responses[400])
   @Post('webhook')
+  @UseGuards(RateLimitGuard)
+  @RateLimit('webhook')
   async handleWebhook(
     @Req() req: RawBodyRequest<any>,
     @Headers('stripe-signature') signature: string,

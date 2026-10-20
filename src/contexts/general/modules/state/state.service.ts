@@ -3,7 +3,7 @@ import { IRole } from '@/common/interfaces/role.interface';
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { config as dotenvConfig } from 'dotenv';
 import { DATABASE } from '../db/db.provider';
-import Database from '@crane-technologies/database';
+import Database from '@resonance-components/datahandler';
 import { generalQueries } from '@general/general.queries';
 import { InvalidRoleError } from '@/common/errors/invalid_role.error';
 import { ITenant } from '@/common/interfaces/tenant.interface';
@@ -90,5 +90,18 @@ export class StateService implements OnModuleInit {
       parseInt(process.env.PASSWORD_SALT_ROUNDS as string),
     );
     this.constants.set('JWT_EXPIRES_IN', process.env.JWT_EXPIRES_IN);
+    this.constants.set(
+      'JWT_ACCESS_SECRET',
+      process.env.JWT_ACCESS_SECRET ?? process.env.JWT_SECRET,
+    );
+    this.constants.set(
+      'JWT_ACCESS_EXPIRATION',
+      process.env.JWT_ACCESS_EXPIRATION ?? '15m',
+    );
+    this.constants.set('JWT_REFRESH_SECRET', process.env.JWT_REFRESH_SECRET);
+    this.constants.set(
+      'JWT_REFRESH_EXPIRATION',
+      process.env.JWT_REFRESH_EXPIRATION ?? '7d',
+    );
   }
 }

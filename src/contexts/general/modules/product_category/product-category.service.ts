@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 // import { ProductCategory } from './interface/product_category.interface';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
-import Database from '@crane-technologies/database';
+import Database from '@resonance-components/datahandler';
 import { generalQueries } from '@general/general.queries';
 
 const { productCategory } = generalQueries;
@@ -25,18 +25,6 @@ export class ProductCategoryService {
       limit,
       offset,
     ]);
-    return categories.rows;
-  }
-
-  async getAllCategoriesByCabysCode(
-    cabysCode: string | null,
-    limit: number,
-    offset: number,
-  ) {
-    const categories = await this.db.query(
-      productCategory.allPaginatedByCabysCode,
-      [cabysCode || null, limit, offset],
-    );
     return categories.rows;
   }
 

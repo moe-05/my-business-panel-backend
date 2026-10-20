@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DATABASE } from '../../../general/modules/db/db.provider';
-import Database from '@crane-technologies/database';
+import Database from '@resonance-components/datahandler';
 import { expenseQueries } from './expense.queries';
 import {
   CreateExpenseCategoryDto,
@@ -18,11 +18,12 @@ import {
   CategoryAnalytic,
   ExpenseCategoryFromDb,
   ExpenseFromDb,
+  ExpenseHistoryRow,
   FixedVsVariableAnalytic,
   FiscalPeriodFromDb,
-  ExpenseFixedVsVariableAnalytic,
-  ExpenseCategoryAnalytic,
-  SalesVsExpensesPoint,
+  PaginatedExpenses,
+  PayrollAnalytic,
+  SalesVsExpensesAnalytic,
 } from './interface/expense.interface';
 import { AccountingJournalService } from '../accounting/accounting-journal.service';
 
@@ -141,6 +142,48 @@ export class ExpenseService {
     return rows[0];
   }
 
+  async getExpensesPaginated(
+    tenantId: string,
+    options: {
+      branchId?: string | null;
+      start?: string | null;
+      end?: string | null;
+      page?: number;
+      limit?: number;
+    },
+  ): Promise<PaginatedExpenses> {
+    const page = Math.max(1, Number(options.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(options.limit) || 20));
+    const offset = (page - 1) * limit;
+    const branchId = options.branchId || null;
+    const start = options.start || null;
+    const end = options.end || null;
+
+    const [{ rows }, { rows: countRows }] = await Promise.all([
+      this.db.query(expenseQueries.getExpensesPaginated, [
+        tenantId,
+        branchId,
+        start,
+        end,
+        limit,
+        offset,
+      ]),
+      this.db.query(expenseQueries.countExpensesPaginated, [
+        tenantId,
+        branchId,
+        start,
+        end,
+      ]),
+    ]);
+
+    return {
+      results: rows as ExpenseHistoryRow[],
+      total: countRows[0]?.total ?? 0,
+      page,
+      limit,
+    };
+  }
+
   async getExpensesByDateRange(
     tenantId: string,
     startDate: string,
@@ -156,10 +199,36 @@ export class ExpenseService {
   async createExpense(
     data: CreateExpenseDto,
   ): Promise<{ expenseId: string; entryId?: string }> {
+    // FNZ-GA-08: el total se deriva en el servidor.
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const amount = round2(Number(data.amount));
+    const taxAmount = round2(Number(data.tax_amount ?? 0));
+    const totalAmount = round2(amount + taxAmount);
+    if (
+      data.total_amount !== undefined &&
+      Math.abs(Number(data.total_amount) - totalAmount) > 0.01
+    ) {
+      throw new BadRequestException(
+        'El total del gasto debe ser igual al monto mas el IVA',
+      );
+    }
+
     const category = await this.getCategoryById(
       data.category_id,
       data.tenant_id,
     );
+
+    // FNZ-GA-09: no se registran gastos en un periodo fiscal cerrado.
+    const { rows: closed } = await this.db.query(
+      expenseQueries.getClosedPeriodForDate,
+      // expense_date llega como fecha (00:00 UTC): se pasa como YYYY-MM-DD.
+      [data.tenant_id, new Date(data.expense_date).toISOString().slice(0, 10)],
+    );
+    if (closed.length) {
+      throw new BadRequestException(
+        `El periodo fiscal "${closed[0].name}" esta cerrado: no se pueden registrar gastos con esa fecha`,
+      );
+    }
 
     const txn = await this.db.transaction();
     try {
@@ -168,9 +237,9 @@ export class ExpenseService {
         data.branch_id,
         data.category_id,
         data.description ?? null,
-        data.amount,
-        data.tax_amount ?? 0,
-        data.total_amount,
+        amount,
+        taxAmount,
+        totalAmount,
         data.currency_id,
         new Date(data.expense_date),
         data.payment_method ?? 'CASH',
@@ -180,17 +249,21 @@ export class ExpenseService {
       ]);
       const expenseId = rows[0].expense_id;
 
-      let entryId: string | undefined;
+      // FNZ-GA-09: el gasto y su asiento son atomicos. Si el asiento falla,
+      // el gasto no se guarda (antes quedaba registrado sin asiento y
+      // contabilidad y reportes no cuadraban).
+      let entryId: string;
       try {
         entryId = await this.journalService.generateExpenseJournal(
           {
             tenantId: data.tenant_id,
             expenseId,
             accountCode: category.account_code,
-            subtotalAmount: data.amount,
-            taxAmount: data.tax_amount ?? 0,
-            totalAmount: data.total_amount,
+            subtotalAmount: amount,
+            taxAmount,
+            totalAmount,
             paymentMethod: data.payment_method ?? 'CASH',
+            currencyId: data.currency_id,
             entryDate: new Date(data.expense_date),
             description: data.description,
           },
@@ -199,6 +272,10 @@ export class ExpenseService {
       } catch (journalError) {
         this.logger.error(
           `Error generating journal for expense ${expenseId}: ${(journalError as Error).message}`,
+        );
+        throw new BadRequestException(
+          'No se pudo registrar el asiento contable del gasto: ' +
+            (journalError as Error).message,
         );
       }
 
@@ -220,10 +297,11 @@ export class ExpenseService {
     tenantId: string,
     start: string,
     end: string,
+    branchId?: string | null,
   ): Promise<FixedVsVariableAnalytic[]> {
     const { rows } = await this.db.query(
       expenseQueries.analyticsFixedVsVariable,
-      [tenantId, start, end],
+      [tenantId, start, end, branchId ?? null],
     );
     return rows;
   }
@@ -232,10 +310,11 @@ export class ExpenseService {
     tenantId: string,
     start: string,
     end: string,
+    branchId?: string | null,
   ): Promise<CategoryAnalytic[]> {
     const { rows } = await this.db.query(
       expenseQueries.analyticsFixedBreakdown,
-      [tenantId, start, end],
+      [tenantId, start, end, branchId ?? null],
     );
     return rows;
   }
@@ -244,10 +323,11 @@ export class ExpenseService {
     tenantId: string,
     start: string,
     end: string,
+    branchId?: string | null,
   ): Promise<CategoryAnalytic[]> {
     const { rows } = await this.db.query(
       expenseQueries.analyticsVariableBreakdown,
-      [tenantId, start, end],
+      [tenantId, start, end, branchId ?? null],
     );
     return rows;
   }
@@ -257,12 +337,27 @@ export class ExpenseService {
     start: string,
     end: string,
     branchId?: string | null,
-  ): Promise<SalesVsExpensesPoint[]> {
+  ): Promise<SalesVsExpensesAnalytic[]> {
     const { rows } = await this.db.query(
       expenseQueries.analyticsSalesVsExpenses,
       [tenantId, start, end, branchId ?? null],
     );
     return rows;
+  }
+
+  async getAnalyticsPayroll(
+    tenantId: string,
+    start: string,
+    end: string,
+    branchId?: string | null,
+  ): Promise<PayrollAnalytic> {
+    const { rows } = await this.db.query(expenseQueries.analyticsPayroll, [
+      tenantId,
+      start,
+      end,
+      branchId ?? null,
+    ]);
+    return rows[0] as PayrollAnalytic;
   }
 
   // -------------------------------------------------------
@@ -295,71 +390,5 @@ export class ExpenseService {
     if (!rows.length)
       throw new BadRequestException('Período no encontrado o ya está cerrado');
     return rows[0].period_id;
-  }
-
-  // -------------------------------------------------------
-  // ANALYTICS
-  // -------------------------------------------------------
-
-  async getFixedVsVariableSummary(
-    tenantId: string,
-    start: string,
-    end: string,
-  ): Promise<ExpenseFixedVsVariableAnalytic[]> {
-    const { rows } = await this.db.query(
-      expenseQueries.getFixedVsVariableSummary,
-      [tenantId, start, end],
-    );
-    return rows;
-  }
-
-  async getFixedCategoryBreakdown(
-    tenantId: string,
-    start: string,
-    end: string,
-  ): Promise<ExpenseCategoryAnalytic[]> {
-    const { rows } = await this.db.query(
-      expenseQueries.getFixedCategoryBreakdown,
-      [tenantId, start, end],
-    );
-    return rows;
-  }
-
-  async getVariableCategoryBreakdown(
-    tenantId: string,
-    start: string,
-    end: string,
-  ): Promise<ExpenseCategoryAnalytic[]> {
-    const { rows } = await this.db.query(
-      expenseQueries.getVariableCategoryBreakdown,
-      [tenantId, start, end],
-    );
-    return rows;
-  }
-
-  async getSalesVsExpenses(
-    tenantId: string,
-    start: string,
-    end: string,
-    branchId?: string | null,
-  ): Promise<SalesVsExpensesPoint[]> {
-    const diffDays = Math.round(
-      (new Date(end).getTime() - new Date(start).getTime()) / 86_400_000,
-    );
-    const granularity: 'day' | 'week' | 'month' =
-      diffDays <= 30 ? 'day' : diffDays <= 90 ? 'week' : 'month';
-
-    const query = expenseQueries.getSalesVsExpenses.replace(
-      /\{\{GRANULARITY\}\}/g,
-      granularity,
-    );
-
-    const { rows } = await this.db.query(query, [
-      tenantId,
-      start,
-      end,
-      branchId ?? null,
-    ]);
-    return rows;
   }
 }

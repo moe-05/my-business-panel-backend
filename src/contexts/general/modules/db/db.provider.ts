@@ -1,11 +1,24 @@
-import Database, { DatabaseConfig } from '@crane-technologies/database';
+import Database, { DatabaseConfig } from '@resonance-components/datahandler';
+import { types as pgTypes } from 'pg';
 import { queries } from '@/queries';
 import { ConfigService } from '@nestjs/config';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { seedCabysIfNeeded } from './cabys.seeder';
 
 export const DATABASE = 'DATABASE';
+
+/**
+ * OID 1082 = DATE. Por defecto node-postgres convierte una columna DATE
+ * en un objeto Date de JS a medianoche LOCAL del proceso; al serializar
+ * la respuesta a JSON (toISOString) el valor se corre hacia atras tantas
+ * horas como tenga de offset la zona del servidor, y una fecha sin hora
+ * termina mostrandose un dia antes en el cliente.
+ *
+ * Una fecha de calendario (ingreso, egreso, vigencia, feriado) no tiene
+ * zona horaria: se devuelve tal cual la guarda Postgres, 'YYYY-MM-DD'.
+ * Los TIMESTAMP (OID 1114/1184) si conservan su parseo normal.
+ */
+pgTypes.setTypeParser(pgTypes.builtins.DATE, (value: string) => value);
 
 let db: Database | null = null;
 
@@ -197,7 +210,7 @@ export const dbProvider = {
   useFactory: async (configService: ConfigService) => {
     const isLocal = configService.get<string>('NODE_ENV') !== 'production';
     const config: DatabaseConfig = {
-      connectionString: configService.get<string>('DB_CONNECTION'),
+      connectionString: configService.get<string>('DATABASE_URL'),
       max: Number(configService.get<number>('MAX_POOL_SIZE')) || 10,
       ssl: isLocal ? false : { rejectUnauthorized: false },
     };
@@ -205,7 +218,6 @@ export const dbProvider = {
     db = Database.getInstance(config, queries);
 
     await bootstrapIfNeeded(db);
-    await seedCabysIfNeeded(db);
 
     return db;
   },

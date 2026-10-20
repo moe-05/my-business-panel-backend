@@ -1,6 +1,11 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { DATABASE } from '@/contexts/general/modules/db/db.provider';
-import Database from '@crane-technologies/database';
+import Database from '@resonance-components/datahandler';
 import {
   Employee,
   IEmployee,
@@ -10,6 +15,10 @@ import { hrQueries } from '@hr/hr.queries';
 import { NewEmployeeDto, NewSingleEmployeeDto } from './dto/newEmployeeDto.dto';
 import { CreateFullEmployeeError } from '@/common/errors/create_full_employee.error';
 import { UpdateEmployeeDto } from './dto/updateEmployee.dto';
+import {
+  TerminateEmployeeDto,
+  UpdateTerminationDto,
+} from './dto/terminateEmployee.dto';
 
 const { employee } = hrQueries;
 
@@ -177,7 +186,8 @@ export class EmployeeService {
 
   async updateEmployeeInfo(employee_id: string, data: UpdateEmployeeDto) {
     const existingEmp = await this.db.query(employee.getById, [employee_id]);
-    if (existingEmp.rows.length === 0) return new Error('Employee not found.');
+    if (existingEmp.rows.length === 0)
+      throw new NotFoundException(`Empleado ${employee_id} no encontrado.`);
 
     const {
       first_name,
@@ -203,7 +213,9 @@ export class EmployeeService {
     ]);
 
     if (updatedEmp.rowCount === 0)
-      return new Error('Error updating employee info. Check input data.');
+      throw new BadRequestException(
+        'Error updating employee info. Check input data.',
+      );
 
     return {
       message: 'Employee info updated successfully',
@@ -213,7 +225,8 @@ export class EmployeeService {
 
   async deactivateEmployee(employee_id: string) {
     const existingEmp = await this.db.query(employee.getById, [employee_id]);
-    if (existingEmp.rows.length === 0) return new Error('Employee not found.');
+    if (existingEmp.rows.length === 0)
+      throw new NotFoundException(`Empleado ${employee_id} no encontrado.`);
 
     await this.db.query(employee.deactivate, [employee_id]);
 
@@ -222,9 +235,77 @@ export class EmployeeService {
     };
   }
 
+  /** Registra el egreso del empleado (Arts. 92, 142.f, 145 LOTTT). */
+  async terminate(
+    employee_id: string,
+    tenant_id: string,
+    data: TerminateEmployeeDto,
+  ) {
+    const existingEmp = await this.db.query(employee.getTerminationInfo, [
+      employee_id,
+    ]);
+    if (
+      existingEmp.rows.length === 0 ||
+      existingEmp.rows[0].tenant_id !== tenant_id
+    )
+      throw new NotFoundException(`Empleado ${employee_id} no encontrado.`);
+
+    if (data.termination_date < existingEmp.rows[0].hire_date) {
+      throw new BadRequestException(
+        'La fecha de egreso no puede ser anterior a la fecha de ingreso.',
+      );
+    }
+
+    const result = await this.db.query(employee.terminate, [
+      data.termination_date,
+      data.termination_type,
+      data.termination_reason ?? null,
+      employee_id,
+      tenant_id,
+    ]);
+
+    return {
+      message: 'Egreso registrado correctamente',
+      employee: result.rows[0],
+    };
+  }
+
+  async updateTermination(
+    employee_id: string,
+    tenant_id: string,
+    data: UpdateTerminationDto,
+  ) {
+    const existing = await this.db.query(employee.getTerminationInfo, [
+      employee_id,
+    ]);
+    if (!existing.rows.length || existing.rows[0].tenant_id !== tenant_id)
+      throw new NotFoundException(`Empleado ${employee_id} no encontrado.`);
+
+    const terminationDate = existing.rows[0].termination_date;
+    if (!terminationDate) {
+      throw new BadRequestException(
+        'El empleado no tiene un egreso registrado.',
+      );
+    }
+
+    const result = await this.db.query(employee.terminate, [
+      terminationDate,
+      data.termination_type,
+      data.termination_reason ?? null,
+      employee_id,
+      tenant_id,
+    ]);
+
+    return {
+      message: 'Causal de egreso actualizada',
+      employee: result.rows[0],
+    };
+  }
+
   async deleteEmployee(employee_id: string) {
     const existingEmp = await this.db.query(employee.getById, [employee_id]);
-    if (existingEmp.rows.length === 0) return new Error('Employee not found.');
+    if (existingEmp.rows.length === 0)
+      throw new NotFoundException(`Empleado ${employee_id} no encontrado.`);
 
     await this.db.query(employee.delete, [employee_id]);
 
